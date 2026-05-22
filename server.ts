@@ -18,6 +18,30 @@ async function startServer() {
     apiKey: process.env.MAILERSEND_API_KEY || "mlsn.088bce1b07dd2c743107ce5f55f73d492ca96cad89ed46bba24fd8773b67856b",
   });
 
+  function parseMailerSendError(error: any): string {
+    if (!error) return "Erro desconhecido ao enviar e-mail.";
+    
+    if (error.body) {
+      const body = error.body;
+      if (body.message) {
+        if (body.message.includes("Unauthenticated") || body.message.includes("Unauthorized")) {
+          return "Erro de Autenticação com MailerSend (401): A sua chave de API do MailerSend é inválida ou expirou. Por favor, configure uma nova chave MAILERSEND_API_KEY ativa em seu menu de Configurações (Settings -> Secrets) ou em seu arquivo de ambiente.";
+        }
+        return `Erro de API do MailerSend: ${body.message}`;
+      }
+      return `Erro retornado pelo MailerSend: ${JSON.stringify(body)}`;
+    }
+    
+    if (error.message) {
+      if (error.message.includes("Unauthenticated") || error.message.includes("unauthenticated") || error.message.includes("401")) {
+        return "Erro de Autenticação com MailerSend (401): A sua chave de API do MailerSend é inválida ou expirou. Por favor, adicione uma chave MAILERSEND_API_KEY válida e ativa em suas Configurações (Settings -> Secrets).";
+      }
+      return error.message;
+    }
+    
+    return typeof error === "object" ? JSON.stringify(error) : String(error);
+  }
+
   // API Route to send the manual
   app.post("/api/send-manual", async (req, res) => {
     const { email, name } = req.body;
@@ -64,9 +88,9 @@ async function startServer() {
 
       await mailersend.email.send(emailParams);
       res.json({ success: true });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending email:", error);
-      res.status(500).json({ error: "Failed to send email" });
+      res.status(500).json({ error: parseMailerSendError(error) });
     }
   });
 
@@ -135,7 +159,7 @@ async function startServer() {
       res.json({ success: true });
     } catch (error: any) {
       console.error("Error sending contact email via MailerSend:", error);
-      res.status(500).json({ error: error?.message || "Ocorreu um erro no servidor ao enviar a mensagem." });
+      res.status(500).json({ error: parseMailerSendError(error) });
     }
   });
 
