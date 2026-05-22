@@ -15,8 +15,8 @@ async function startServer() {
   app.use(express.json());
 
   const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
-  // Remove any spaces from the password to handle "pzgt qsjc ieuy ojit" or similar formats safely
-  const SMTP_PASS = (process.env.SMTP_PASS || "pzgt qsjc ieuy ojit").replace(/\s+/g, "");
+  // Remove any spaces from the password to handle app credentials safely. No fallback to prevent credentials leaks.
+  const SMTP_PASS = (process.env.SMTP_PASS || "").replace(/\s+/g, "");
 
   const smtpTransporter = nodemailer.createTransport({
     service: "gmail",
@@ -27,9 +27,12 @@ async function startServer() {
   });
 
   function parseSMTPError(error: any): string {
+    if (!SMTP_PASS) {
+      return "Erro de Configuração: A variável de ambiente 'SMTP_PASS' não está configurada! Por favor, adicione-a em suas Configurações do AI Studio (Settings -> Secrets).";
+    }
     if (!error) return "Erro desconhecido ao enviar e-mail pelo servidor SMTP.";
     if (error.code === 'EAUTH') {
-      return "Erro de Autenticação SMTP (Gmail): Credenciais inválidas. Verifique se o e-mail e a Palavra-passe de Aplicação de 16 caracteres estão configurados corretamente.";
+      return "Erro de Autenticação SMTP (Gmail): Credenciais inválidas. Verifique se o e-mail e a Palavra-passe de Aplicação de 16 caracteres estão configurados corretamente nas Configurações (Settings -> Secrets).";
     }
     return error.message || String(error);
   }
