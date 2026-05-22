@@ -70,6 +70,76 @@ async function startServer() {
     }
   });
 
+  // API Route to handle contact form submissions securely via MailerSend
+  app.post("/api/send-contact", async (req, res) => {
+    const { name, email, subject, message } = req.body;
+
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: "Nome, e-mail e mensagem são campos obrigatórios." });
+    }
+
+    try {
+      const sentFrom = new Sender("MS_N5X99D@trial-351bpgw53p84zqx8.mlsender.net", "Portfólio Andrew Lemos");
+      
+      // Enviando para ambos os e-mails para garantir compatibilidade e entrega em modo Trial do MailerSend
+      const recipients = [
+        new Recipient("andrewlemos@gmail.com", "Andrew Lemos"),
+        new Recipient("andrewfmlemos@gmail.com", "Andrew Lemos")
+      ];
+
+      const emailParams = new EmailParams()
+        .setFrom(sentFrom)
+        .setTo(recipients)
+        .setReplyTo(sentFrom)
+        .setSubject(`Mensagem de Contato: ${subject}`)
+        .setHtml(`
+          <div style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e5e5e5; border-radius: 20px; background-color: #fbfbf9;">
+            <h2 style="color: #8d6e63; border-bottom: 2px solid #8d6e63; padding-bottom: 10px; margin-top: 0; font-family: 'Georgia', serif;">Nova Mensagem do Portfólio</h2>
+            <p style="font-size: 16px; margin: 15px 0; color: #555;">
+              Você tem um novo contato de visitante interessado no seu trabalho de entalhe em madeira:
+            </p>
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 15px;">
+              <tr>
+                <td style="padding: 8px 0; font-weight: bold; width: 100px; color: #666;">Nome:</td>
+                <td style="padding: 8px 0; color: #111; font-weight: bold;">${name}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; font-weight: bold; color: #666;">E-mail:</td>
+                <td style="padding: 8px 0; color: #111;"><a href="mailto:${email}" style="color: #8d6e63; text-decoration: underline;">${email}</a></td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; font-weight: bold; color: #666;">Assunto:</td>
+                <td style="padding: 8px 0; color: #111;">${subject}</td>
+              </tr>
+            </table>
+
+            <div style="background-color: #ffffff; padding: 20px; border-radius: 12px; border-left: 4px solid #8d6e63; margin: 20px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+              <h4 style="margin: 0 0 10px 0; color: #8d6e63; font-family: 'Georgia', serif; font-size: 14px; text-transform: uppercase; tracking: 0.05em;">Conteúdo da Mensagem:</h4>
+              <p style="margin: 0; font-size: 15px; line-height: 1.6; white-space: pre-wrap; color: #222;">${message}</p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0 10px 0;">
+              <a href="mailto:${email}?subject=Re: ${encodeURIComponent(subject)}" 
+                 style="background-color: #8d6e63; color: white; padding: 14px 28px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 15px; display: inline-block; transition: background-color 0.2s;">
+                RECONECTAR & RESPONDER AGORA
+              </a>
+            </div>
+
+            <p style="font-size: 11px; color: #999; text-align: center; margin-top: 30px; border-top: 1px solid #eee; padding-top: 15px;">
+              Mensagem processada pelo servidor do seu Portfólio de Arte Online.
+            </p>
+          </div>
+        `)
+        .setText(`Nova Mensagem do Portfólio!\n\nNome: ${name}\nE-mail: ${email}\nAssunto: ${subject}\n\nMensagem:\n${message}\n\nResponder para: ${email}`);
+
+      await mailersend.email.send(emailParams);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error sending contact email via MailerSend:", error);
+      res.status(500).json({ error: error?.message || "Ocorreu um erro no servidor ao enviar a mensagem." });
+    }
+  });
+
   // API Route for secure Chatbot (Gemini)
   app.post("/api/chat", async (req, res) => {
     const { message, history } = req.body;

@@ -20,7 +20,8 @@ import {
   ExternalLink,
   ArrowRight,
   MessageCircle,
-  Send
+  Send,
+  Linkedin
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { cn } from './lib/utils';
@@ -697,6 +698,7 @@ const RecommendedProductsSection = () => {
 
 const AdminDashboard = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'products' | 'leads'>('products');
@@ -705,10 +707,13 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
-      if (u && u.email === 'andrewfmlemos@gmail.com') {
+      // Aceita tanto a conta andrewfmlemos@gmail.com como andrewlemos@gmail.com gerenciando produtos com sucesso
+      if (u && (u.email === 'andrewfmlemos@gmail.com' || u.email === 'andrewlemos@gmail.com')) {
         setUser(u);
+        setIsOpen(true);
       } else {
         setUser(null);
+        setIsOpen(false);
       }
     });
     return () => unsubscribe();
@@ -799,8 +804,8 @@ const AdminDashboard = () => {
       <div className="fixed bottom-20 right-6 z-[90]">
         <button 
           onClick={handleLogin}
-          className="bg-brand-ink text-white p-3 rounded-full shadow-lg hover:scale-110 transition-all"
-          title="Admin Login"
+          className="bg-brand-ink text-white p-3 rounded-full shadow-lg hover:scale-110 transition-all flex items-center justify-center animate-bounce"
+          title="Login do Administrador"
         >
           <Hammer className="w-5 h-5" />
         </button>
@@ -808,8 +813,29 @@ const AdminDashboard = () => {
     );
   }
 
+  if (!isOpen) {
+    return (
+      <div className="fixed bottom-20 right-6 z-[90] flex flex-col gap-2 items-center">
+        <button 
+          onClick={() => setIsOpen(true)}
+          className="bg-brand-wood text-white p-3 rounded-full shadow-lg hover:scale-110 transition-all flex items-center justify-center"
+          title="Abrir Painel Admin"
+        >
+          <Hammer className="w-5 h-5 animate-pulse" />
+        </button>
+        <button 
+          onClick={handleLogout}
+          className="bg-red-500 hover:bg-red-600 text-white text-[10px] px-2 py-1 rounded-full shadow-md hover:scale-105 transition-all font-medium uppercase tracking-wider"
+          title="Sair da Conta"
+        >
+          Sair
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col">
         <div className="p-6 border-b flex justify-between items-center bg-brand-paper">
           <div className="flex gap-6">
@@ -922,8 +948,8 @@ const AdminDashboard = () => {
           )}
         </div>
         <button 
-          onClick={() => setUser(null)} 
-          className="p-4 text-center text-sm text-gray-400 border-t"
+          onClick={() => setIsOpen(false)} 
+          className="p-4 text-center text-sm text-gray-400 border-t hover:bg-gray-100 transition-colors"
         >
           Fechar Painel
         </button>
@@ -933,6 +959,52 @@ const AdminDashboard = () => {
 };
 
 const Contact = () => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [subject, setSubject] = useState('Encomenda de Obra');
+  const [message, setMessage] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [status, setStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleSendContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      setStatus({ type: 'error', text: 'Por favor, preencha todos os campos obrigatórios (Nome, E-mail e Mensagem).' });
+      return;
+    }
+
+    setIsSending(true);
+    setStatus(null);
+
+    try {
+      const res = await fetch('/api/send-contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          subject,
+          message: message.trim()
+        })
+      });
+
+      if (res.ok) {
+        setStatus({ type: 'success', text: 'Mensagem enviada com sucesso! Andrew responderá em breve.' });
+        setName('');
+        setEmail('');
+        setMessage('');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Não foi possível enviar a mensagem no momento. Tente novamente.');
+      }
+    } catch (err: any) {
+      console.error("Erro ao enviar contato:", err);
+      setStatus({ type: 'error', text: err.message || 'Houve um problema de rede ou servidor ao enviar seu contato.' });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   return (
     <section id="contact" className="section-padding bg-white">
       <div className="max-w-7xl mx-auto">
@@ -943,54 +1015,144 @@ const Contact = () => {
               Disponível para encomendas personalizadas, projetos de escultura, aulas e parcerias artísticas. Entre em contato para orçamentos ou dúvidas.
             </p>
             
-            <div className="space-y-8">
-              <div className="flex items-center gap-6">
-                <div className="w-14 h-14 bg-brand-paper rounded-2xl flex items-center justify-center text-brand-wood">
+            <div className="space-y-5">
+              {/* Card E-mail */}
+              <a 
+                href="mailto:andrewlemos@gmail.com"
+                className="flex items-center gap-6 p-4 rounded-3xl hover:bg-brand-paper transition-all group"
+              >
+                <div className="w-14 h-14 bg-brand-paper group-hover:bg-white rounded-2xl flex items-center justify-center text-brand-wood shadow-sm transition-colors border border-brand-wood/5">
                   <Mail className="w-6 h-6" />
                 </div>
                 <div>
-                  <div className="text-sm text-gray-400 uppercase tracking-widest mb-1">Email</div>
-                  <div className="text-xl font-medium">andrewlemos@gmail.com</div>
+                  <div className="text-sm text-gray-400 uppercase tracking-widest mb-1">E-mail</div>
+                  <div className="text-lg md:text-xl font-medium text-brand-ink group-hover:text-brand-wood transition-colors">andrewlemos@gmail.com</div>
                 </div>
-              </div>
-              <div className="flex items-center gap-6">
-                <div className="w-14 h-14 bg-brand-paper rounded-2xl flex items-center justify-center text-brand-wood">
+              </a>
+
+              {/* Card Instagram */}
+              <a 
+                href="https://www.instagram.com/andrewlemos.art"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-6 p-4 rounded-3xl hover:bg-brand-paper transition-all group"
+              >
+                <div className="w-14 h-14 bg-brand-paper group-hover:bg-white rounded-2xl flex items-center justify-center text-brand-wood shadow-sm transition-colors border border-brand-wood/5">
                   <Instagram className="w-6 h-6" />
                 </div>
                 <div>
                   <div className="text-sm text-gray-400 uppercase tracking-widest mb-1">Instagram</div>
-                  <div className="text-xl font-medium">@andrewlemos.art</div>
+                  <div className="text-lg md:text-xl font-medium text-brand-ink group-hover:text-brand-wood transition-colors">@andrewlemos.art</div>
                 </div>
-              </div>
+              </a>
+
+              {/* Card LinkedIn */}
+              <a 
+                href="https://www.linkedin.com/in/andrew-lemos-bb65b927a"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-6 p-4 rounded-3xl hover:bg-brand-paper transition-all group"
+              >
+                <div className="w-14 h-14 bg-brand-paper group-hover:bg-white rounded-2xl flex items-center justify-center text-brand-wood shadow-sm transition-colors border border-brand-wood/5">
+                  <Linkedin className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-400 uppercase tracking-widest mb-1">LinkedIn</div>
+                  <div className="text-lg md:text-xl font-medium text-brand-ink group-hover:text-brand-wood transition-colors">Andrew Lemos</div>
+                </div>
+              </a>
+
+              {/* Card WhatsApp */}
+              <a 
+                href="https://wa.me/5519998107110?text=Olá%20Andrew!%20Vi%20o%20seu%20portfólio%20e%20gostaria%20de%20conversar."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-6 p-4 rounded-3xl hover:bg-brand-paper transition-all group"
+              >
+                <div className="w-14 h-14 bg-brand-paper group-hover:bg-white rounded-2xl flex items-center justify-center text-brand-wood shadow-sm transition-colors border border-brand-wood/5">
+                  <MessageCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-400 uppercase tracking-widest mb-1">WhatsApp</div>
+                  <div className="text-lg md:text-xl font-medium text-brand-ink group-hover:text-brand-wood transition-colors">(19) 99810-7110</div>
+                </div>
+              </a>
             </div>
           </div>
 
-          <form className="bg-brand-paper p-10 md:p-12 rounded-[2.5rem] space-y-6">
+          <form onSubmit={handleSendContact} className="bg-brand-paper p-10 md:p-12 rounded-[2.5rem] space-y-6 shadow-sm border border-brand-wood/5">
             <div className="grid md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-500 ml-1">Nome</label>
-                <input type="text" className="w-full bg-white border-none rounded-2xl p-4 focus:ring-2 focus:ring-brand-wood outline-none" placeholder="Seu nome" />
+                <label className="text-sm font-medium text-gray-500 ml-1">Nome *</label>
+                <input 
+                  type="text" 
+                  required
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className="w-full bg-white border-none rounded-2xl p-4 focus:ring-2 focus:ring-brand-wood outline-none" 
+                  placeholder="Seu nome" 
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-500 ml-1">Email</label>
-                <input type="email" className="w-full bg-white border-none rounded-2xl p-4 focus:ring-2 focus:ring-brand-wood outline-none" placeholder="seu@email.com" />
+                <label className="text-sm font-medium text-gray-500 ml-1">Email *</label>
+                <input 
+                  type="email" 
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="w-full bg-white border-none rounded-2xl p-4 focus:ring-2 focus:ring-brand-wood outline-none" 
+                  placeholder="seu@email.com" 
+                />
               </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-500 ml-1">Assunto</label>
-              <select className="w-full bg-white border-none rounded-2xl p-4 focus:ring-2 focus:ring-brand-wood outline-none appearance-none">
-                <option>Encomenda de Obra</option>
-                <option>Aulas de Arte</option>
-                <option>Parceria</option>
-                <option>Outro</option>
+              <select 
+                value={subject}
+                onChange={e => setSubject(e.target.value)}
+                className="w-full bg-white border-none rounded-2xl p-4 focus:ring-2 focus:ring-brand-wood outline-none appearance-none"
+              >
+                <option value="Encomenda de Obra">Encomenda de Obra</option>
+                <option value="Aulas de Arte">Aulas de Arte</option>
+                <option value="Parceria">Parceria</option>
+                <option value="Outro">Outro</option>
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-500 ml-1">Mensagem</label>
-              <textarea rows={4} className="w-full bg-white border-none rounded-2xl p-4 focus:ring-2 focus:ring-brand-wood outline-none resize-none" placeholder="Como posso ajudar?"></textarea>
+              <label className="text-sm font-medium text-gray-500 ml-1">Mensagem *</label>
+              <textarea 
+                rows={4} 
+                required
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                className="w-full bg-white border-none rounded-2xl p-4 focus:ring-2 focus:ring-brand-wood outline-none resize-none" 
+                placeholder="Como posso ajudar?"
+              ></textarea>
             </div>
-            <button className="w-full bg-brand-ink text-white py-5 rounded-2xl font-medium hover:bg-brand-wood transition-all shadow-lg">
-              Enviar Mensagem
+
+            {status && (
+              <div className={cn(
+                "p-4 rounded-2xl text-sm leading-relaxed", 
+                status.type === 'success' ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+              )}>
+                {status.text}
+              </div>
+            )}
+
+            <button 
+              type="submit"
+              disabled={isSending}
+              className="w-full bg-brand-ink text-white py-5 rounded-2xl font-medium hover:bg-brand-wood disabled:bg-gray-400 disabled:cursor-not-allowed transition-all shadow-lg flex items-center justify-center gap-2"
+            >
+              {isSending ? (
+                <>
+                  <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Enviando...
+                </>
+              ) : 'Enviar Mensagem'}
             </button>
           </form>
         </div>
@@ -1014,13 +1176,16 @@ const Footer = () => {
         <div className="flex gap-6">
           {[
             { icon: Instagram, href: 'https://www.instagram.com/andrewlemos.art' },
-            { icon: Facebook, href: '#' },
+            { icon: Linkedin, href: 'https://www.linkedin.com/in/andrew-lemos-bb65b927a' },
+            { icon: MessageCircle, href: 'https://wa.me/5519998107110?text=Olá%20Andrew!%20Vi%20o%20seu%20portfólio%20e%20gostaria%20de%20conversar.' },
             { icon: Youtube, href: 'https://www.youtube.com/@DoL%C3%A1pisaoA%C3%A7o' },
           ].map((social, i) => (
             <a 
               key={i} 
               href={social.href} 
-              className="w-12 h-12 rounded-full border border-brand-wood/20 flex items-center justify-center text-brand-wood hover:bg-brand-wood hover:text-white transition-all"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-12 h-12 rounded-full border border-brand-wood/20 flex items-center justify-center text-brand-wood hover:bg-brand-wood hover:text-white transition-all animate-fade-in"
             >
               <social.icon className="w-5 h-5" />
             </a>
