@@ -474,8 +474,19 @@ const ClassesSection = () => {
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Não foi possível enviar o e-mail do manual no momento.');
+        let errorText = '';
+        try {
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            errorText = data.error || '';
+          } catch {
+            errorText = text ? (text.length > 200 ? text.substring(0, 200) + '...' : text) : '';
+          }
+        } catch {
+          errorText = 'Erro de leitura do corpo da resposta.';
+        }
+        throw new Error(errorText || `Erro Servidor Vercel (Status ${res.status}): Não foi possível enviar o e-mail do manual no momento.`);
       }
 
       setIsSuccess(true);
@@ -1005,8 +1016,19 @@ const Contact = () => {
         setEmail('');
         setMessage('');
       } else {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Não foi possível enviar a mensagem no momento. Tente novamente.');
+        let errorText = '';
+        try {
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            errorText = data.error || '';
+          } catch {
+            errorText = text ? (text.length > 200 ? text.substring(0, 200) + '...' : text) : '';
+          }
+        } catch {
+          errorText = 'Erro de leitura do corpo da resposta.';
+        }
+        throw new Error(errorText || `Erro Servidor Vercel (Status ${res.status}): Não foi possível enviar a mensagem no momento. Tente novamente.`);
       }
     } catch (err: any) {
       console.error("Erro ao enviar contato:", err);

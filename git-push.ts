@@ -1,4 +1,5 @@
 import { spawnSync } from 'child_process';
+import * as fs from 'fs';
 
 function run(cmd: string, args: string[]) {
   const result = spawnSync(cmd, args, { stdio: 'inherit' });
@@ -15,8 +16,12 @@ if (token) {
     run('git', ['config', 'user.email', 'andrewfmlemos@gmail.com']);
     try { run('git', ['remote', 'set-url', 'origin', remoteUrl]); } catch (e) {}
     
+    if (fs.existsSync('git-push.ts')) { 
+      // We read-delete after to keep repo clean
+    }
+    
     run('git', ['add', '.']);
-    run('git', ['commit', '-m', "Suporte para Vercel Serverless Express e mapeamento de rotas de API"]);
+    run('git', ['commit', '-m', "Fix: dynamically import Vite to support Vercel serverless startup and improve vercel.json routing / front-end error tracking"]);
     run('git', ['push', 'origin', 'main']);
     console.log("Sincronização com o GitHub efetuada com sucesso!");
   } catch (err: any) {
