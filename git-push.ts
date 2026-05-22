@@ -51,7 +51,7 @@ if (token) {
     
     run('git', ['add', '.']);
     
-    run('git', ['commit', '-m', "Fix: set new minimalist pencil and chisel drawing as the site favicon and update index.html"]);
+    run('git', ['commit', '-m', "Fix: replace pulsing admin hammer with a quiet, static, ultra-discreet lock icon"]);
     
     run('git', ['push', 'origin', 'main']);
     console.log("Sincronização com o GitHub efetuada com sucesso!");

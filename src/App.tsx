@@ -20,7 +20,8 @@ import {
   ExternalLink,
   ArrowRight,
   MessageCircle,
-  Send
+  Send,
+  Lock
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { cn } from './lib/utils';
@@ -824,13 +825,13 @@ const AdminDashboard = () => {
 
   if (!user) {
     return (
-      <div className="fixed bottom-20 right-6 z-[90]">
+      <div className="fixed bottom-24 right-5 z-[90]">
         <button 
           onClick={handleLogin}
-          className="bg-brand-ink text-white p-3 rounded-full shadow-lg hover:scale-110 transition-all flex items-center justify-center animate-bounce"
-          title="Login do Administrador"
+          className="bg-brand-paper/70 backdrop-blur-sm border border-brand-wood/10 text-brand-wood/30 hover:text-brand-wood/80 p-2 rounded-full shadow-sm hover:bg-brand-paper hover:shadow transition-all flex items-center justify-center cursor-pointer"
+          title="Restrito"
         >
-          <Hammer className="w-5 h-5" />
+          <Lock className="w-3.5 h-3.5" />
         </button>
       </div>
     );
@@ -838,18 +839,18 @@ const AdminDashboard = () => {
 
   if (!isOpen) {
     return (
-      <div className="fixed bottom-20 right-6 z-[90] flex flex-col gap-2 items-center">
+      <div className="fixed bottom-24 right-5 z-[90] flex flex-col gap-1.5 items-center">
         <button 
           onClick={() => setIsOpen(true)}
-          className="bg-brand-wood text-white p-3 rounded-full shadow-lg hover:scale-110 transition-all flex items-center justify-center"
-          title="Abrir Painel Admin"
+          className="bg-brand-wood/80 backdrop-blur-sm text-white p-2 rounded-full shadow-sm hover:bg-brand-wood hover:scale-105 transition-all flex items-center justify-center cursor-pointer"
+          title="Painel Administrador"
         >
-          <Hammer className="w-5 h-5 animate-pulse" />
+          <Lock className="w-3.5 h-3.5" />
         </button>
         <button 
           onClick={handleLogout}
-          className="bg-red-500 hover:bg-red-600 text-white text-[10px] px-2 py-1 rounded-full shadow-md hover:scale-105 transition-all font-medium uppercase tracking-wider"
-          title="Sair da Conta"
+          className="bg-red-500/80 hover:bg-red-600/95 text-white text-[8px] px-2 py-0.5 rounded-full shadow-sm hover:scale-105 transition-all font-medium uppercase tracking-wider"
+          title="Sair"
         >
           Sair
         </button>
