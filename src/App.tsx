@@ -147,39 +147,40 @@ const Navbar = () => {
 
 const Hero = () => {
   return (
-    <section id="home" className="relative h-[90vh] flex items-center justify-center overflow-hidden bg-brand-paper pt-24">
+    <section id="home" className="relative min-h-screen md:h-[95vh] lg:h-[90vh] flex items-center justify-center overflow-hidden bg-brand-paper pt-32 pb-16 md:py-0">
       <div className="absolute inset-0 z-0 opacity-10">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]"></div>
       </div>
       
-      <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center z-10">
+      <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-8 md:gap-12 items-center z-10 w-full">
         <motion.div 
           initial={{ opacity: 0, x: -50 }}
           whileInView={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.8 }}
           viewport={{ once: true }}
+          className="flex flex-col justify-center"
         >
-          <span className="inline-block text-brand-wood font-medium tracking-[0.2em] uppercase mb-4 text-sm">
+          <span className="inline-block text-brand-wood font-medium tracking-[0.2em] uppercase mb-2 md:mb-4 text-xs sm:text-sm">
             Artista Plástico & Escultor
           </span>
-          <h1 className="text-5xl md:text-7xl font-serif leading-tight mb-6">
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-serif leading-tight mb-4 md:mb-6">
             Andrew <br />
             <span className="italic text-brand-wood">Lemos</span>
           </h1>
-          <p className="text-lg text-gray-600 max-w-md mb-8 leading-relaxed">
+          <p className="text-base sm:text-lg text-gray-600 max-w-md mb-6 md:mb-8 leading-relaxed">
             Transformando madeira, clay e grafite em expressões vivas da natureza.
           </p>
           <div className="flex gap-4">
             <a 
               href="#gallery" 
-              className="bg-brand-wood text-white px-8 py-4 rounded-full font-medium hover:bg-brand-clay transition-all flex items-center gap-2 group shadow-lg shadow-brand-wood/20"
+              className="bg-brand-wood text-white px-6 sm:px-8 py-3.5 sm:py-4 rounded-full font-medium hover:bg-brand-clay transition-all flex items-center gap-2 group shadow-lg shadow-brand-wood/20 text-sm sm:text-base"
             >
               Ver Obras
               <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </a>
             <a 
               href="#contact" 
-              className="border border-brand-wood text-brand-wood px-8 py-4 rounded-full font-medium hover:bg-brand-wood hover:text-white transition-all"
+              className="border border-brand-wood text-brand-wood px-6 sm:px-8 py-3.5 sm:py-4 rounded-full font-medium hover:bg-brand-wood hover:text-white transition-all text-sm sm:text-base"
             >
               Contato
             </a>
@@ -191,7 +192,7 @@ const Hero = () => {
           whileInView={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1 }}
           viewport={{ once: true }}
-          className="relative aspect-[4/5] md:aspect-square max-h-[50vh] md:max-h-[60vh] mx-auto"
+          className="relative aspect-[4/5] md:aspect-square max-h-[35vh] sm:max-h-[45vh] md:max-h-[60vh] w-full max-w-xs md:max-w-none mx-auto mt-6 md:mt-0"
         >
           <div className="absolute -inset-4 border border-brand-wood/20 rounded-2xl rotate-3"></div>
           <div className="absolute -inset-4 border border-brand-wood/20 rounded-2xl -rotate-3"></div>

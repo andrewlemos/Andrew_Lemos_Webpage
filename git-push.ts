@@ -1,4 +1,6 @@
 import { spawnSync } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
 
 function run(cmd: string, args: string[]) {
   const result = spawnSync(cmd, args, { stdio: 'inherit' });
@@ -7,16 +9,50 @@ function run(cmd: string, args: string[]) {
   }
 }
 
+function removeDirRecursive(dirPath: string) {
+  if (fs.existsSync(dirPath)) {
+    fs.readdirSync(dirPath).forEach((file) => {
+      const curPath = path.join(dirPath, file);
+      if (fs.lstatSync(curPath).isDirectory()) {
+        removeDirRecursive(curPath);
+      } else {
+        fs.unlinkSync(curPath);
+      }
+    });
+    fs.rmdirSync(dirPath);
+  }
+}
+
 const token = process.env.GITHUB_TOKEN;
 if (token) {
   const remoteUrl = `https://${token}@github.com/andrewlemos/Andrew_Lemos_Webpage.git`;
   try {
+    console.log("Reconfigurando repositório com branch principal como 'main'...");
+    
+    if (fs.existsSync('.git')) {
+      removeDirRecursive('.git');
+    }
+    
+    run('git', ['init']);
     run('git', ['config', 'user.name', 'Andrew Lemos']);
     run('git', ['config', 'user.email', 'andrewfmlemos@gmail.com']);
-    try { run('git', ['remote', 'set-url', 'origin', remoteUrl]); } catch (e) {}
+    
+    // Rename default branch to main
+    run('git', ['branch', '-m', 'main']);
+    
+    run('git', ['remote', 'add', 'origin', remoteUrl]);
+    
+    console.log("Buscando histórico remoto...");
+    run('git', ['fetch', 'origin', 'main']);
+    
+    // Point soft reset to main
+    console.log("Sincronizando referências com origin/main...");
+    run('git', ['reset', '--soft', 'origin/main']);
     
     run('git', ['add', '.']);
-    run('git', ['commit', '-m', "Fix: bundle server endpoints natively in /api/index.ts to avoid Vercel filesystem tracing/compilation failures"]);
+    
+    run('git', ['commit', '-m', "Style: optimize mobile hero dimensions, spacing and typography to prevent viewport overflow and header logo overlap"]);
+    
     run('git', ['push', 'origin', 'main']);
     console.log("Sincronização com o GitHub efetuada com sucesso!");
   } catch (err: any) {
