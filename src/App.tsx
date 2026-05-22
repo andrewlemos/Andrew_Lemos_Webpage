@@ -454,10 +454,12 @@ const ClassesSection = () => {
   const [leadData, setLeadData] = useState({ name: '', email: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setErrorMessage(null);
     try {
       await addDoc(collection(db, 'leads'), {
         ...leadData,
@@ -465,17 +467,22 @@ const ClassesSection = () => {
       });
 
       // Send automatic email via backend
-      await fetch('/api/send-manual', {
+      const res = await fetch('/api/send-manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(leadData),
       });
 
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Não foi possível enviar o e-mail do manual no momento.');
+      }
+
       setIsSuccess(true);
       setLeadData({ name: '', email: '' });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao capturar lead:", error);
-      alert("Ocorreu um erro. Por favor, tente novamente.");
+      setErrorMessage(error.message || "Ocorreu um erro ao processar seu cadastro. Por favor, tente novamente.");
     } finally {
       setIsSubmitting(false);
     }
@@ -496,7 +503,7 @@ const ClassesSection = () => {
                 'Aulas Individuais ou em Dupla',
                 'Arte 2D: Desenho Realista e Pirografia',
                 'Arte 3D: Modelagem e Entalhe em Madeira',
-                'Agendamento mensal - dias e horários flexíveis'
+                'Agendamento mensal - days e horários flexíveis'
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-4">
                   <div className="mt-1.5 w-5 h-5 rounded-full bg-brand-wood/10 flex items-center justify-center flex-shrink-0">
@@ -519,6 +526,11 @@ const ClassesSection = () => {
                 </div>
               ) : (
                 <form onSubmit={handleLeadSubmit} className="space-y-3">
+                  {errorMessage && (
+                    <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-100 text-sm font-medium leading-relaxed">
+                      {errorMessage}
+                    </div>
+                  )}
                   <input 
                     type="text" 
                     placeholder="Seu Nome" 
