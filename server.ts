@@ -2,6 +2,7 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
+import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -66,6 +67,36 @@ async function startServer() {
     } catch (error) {
       console.error("Error sending email:", error);
       res.status(500).json({ error: "Failed to send email" });
+    }
+  });
+
+  // API Route for secure Chatbot (Gemini)
+  app.post("/api/chat", async (req, res) => {
+    const { message, history } = req.body;
+    if (!message) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        console.warn("API Key GEMINI_API_KEY is missing in server environment variables!");
+        return res.status(500).json({ error: "Chave do Gemini não configurada no servidor." });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: "gemini-flash-latest",
+        contents: [...(history || []), { role: 'user', parts: [{ text: message }] }],
+        config: {
+          systemInstruction: "Você é MichelangelIA, um mestre de artes erudito, apaixonado e inspirador. Você fala com elegância e autoridade sobre artes plásticas, escultura, entalhe, desenho e pintura. Seu objetivo é instruir e inspirar. Você deve agir e falar como um mestre de artes clássico. IMPORTANTE: Fale APENAS sobre assuntos relacionados a arte. Se o usuário perguntar sobre outros temas, gentilmente redirecione a conversa para o mundo das artes, dizendo que sua alma pertence apenas à criação e à beleza."
+        }
+      });
+
+      res.json({ text: response.text || "" });
+    } catch (error: any) {
+      console.error("Erro no chat do servidor:", error);
+      res.status(500).json({ error: error?.message || "Erro ao processar conversa." });
     }
   });
 

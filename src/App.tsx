@@ -1087,32 +1087,63 @@ const Chatbot = () => {
     setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
     setIsLoading(true);
 
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      
-      const chatHistory = messages
-        .filter((m, i) => !(i === 0 && m.role === 'model'))
-        .map(m => ({
-          role: m.role === 'user' ? 'user' : 'model',
-          parts: [{ text: m.text }],
-        }));
+    const chatHistory = messages
+      .filter((m, i) => !(i === 0 && m.role === 'model'))
+      .map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.text }],
+      }));
 
-      const response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
-        contents: [...chatHistory, { role: 'user', parts: [{ text: userMessage }] }],
-        config: {
-          systemInstruction: "Você é MichelangelIA, um mestre de artes erudito, apaixonado e inspirador. Você fala com elegância e autoridade sobre artes plásticas, escultura, entalhe, desenho e pintura. Seu objetivo é instruir e inspirar. Você deve agir e falar como um mestre de artes clássico. IMPORTANTE: Fale APENAS sobre assuntos relacionados a arte. Se o usuário perguntar sobre outros temas, gentilmente redirecione a conversa para o mundo das artes, dizendo que sua alma pertence apenas à criação e à beleza."
-        }
+    let responseText = "";
+    let backendSuccess = false;
+
+    // 1. Tenta se comunicar via Rota Segura do Backend (/api/chat) para proteger a chave de API
+    try {
+      const serverRes = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userMessage, history: chatHistory }),
       });
 
-      const text = response.text || "Minha alma está momentaneamente em silêncio, nobre aprendiz. Tente novamente em breve.";
-      setMessages(prev => [...prev, { role: 'model', text }]);
-    } catch (error) {
-      console.error("Erro no MichelangelIA:", error);
-      setMessages(prev => [...prev, { role: 'model', text: "Desculpe, meus pensamentos se dispersaram. Poderia repetir sua pergunta, caro entusiasta?" }]);
-    } finally {
-      setIsLoading(false);
+      if (serverRes.ok) {
+        const data = await serverRes.json();
+        responseText = data.text;
+        backendSuccess = true;
+      } else if (serverRes.status !== 404) {
+        const data = await serverRes.json().catch(() => ({}));
+        throw new Error(data.error || `Erro de Servidor HTTP ${serverRes.status}`);
+      }
+    } catch (serverErr: any) {
+      console.warn("Rota de chat do servidor falhou ou não existe. Usando fallback no cliente. Detalhes:", serverErr.message);
     }
+
+    // 2. Fallback no cliente: Caso o servidor esteja offline ou em provedor estático puro sem Express (Vercel/Amplify)
+    if (!backendSuccess) {
+      try {
+        const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
+        if (!apiKey) {
+          throw new Error("Chave do Gemini não encontrada. Defina GEMINI_API_KEY em Secrets (AI Studio) ou VITE_GEMINI_API_KEY no painel do Vercel/Amplify.");
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await ai.models.generateContent({
+          model: "gemini-flash-latest",
+          contents: [...chatHistory, { role: 'user', parts: [{ text: userMessage }] }],
+          config: {
+            systemInstruction: "Você é MichelangelIA, um mestre de artes erudito, apaixonado e inspirador. Você fala com elegância e autoridade sobre artes plásticas, escultura, entalhe, desenho e pintura. Seu objetivo é instruir e inspirar. Você deve agir e falar como um mestre de artes clássico. IMPORTANTE: Fale APENAS sobre assuntos relacionados a arte. Se o usuário perguntar sobre outros temas, gentilmente redirecione a conversa para o mundo das artes, dizendo que sua alma pertence apenas à criação e à beleza."
+          }
+        });
+
+        responseText = response.text || "Minha alma está momentaneamente em silêncio, nobre aprendiz. Tente novamente em breve.";
+      } catch (clientErr: any) {
+        console.error("Erro no MichelangelIA (Client-side):", clientErr);
+        const errorMsg = clientErr?.message || String(clientErr);
+        responseText = `Desculpe, meus pensamentos se dispersaram (Erro: ${errorMsg}). Poderia repetir sua pergunta, caro entusiasta?`;
+      }
+    }
+
+    setMessages(prev => [...prev, { role: 'model', text: responseText }]);
+    setIsLoading(false);
   };
 
   return (
