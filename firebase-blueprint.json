@@ -1,0 +1,58 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Affiliate product details",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Product name"
+        },
+        "affiliateLink": {
+          "type": "string",
+          "description": "Affiliate URL"
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "URL of the product image"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["name", "affiliateLink", "imageUrl"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Lead capture for the manual",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["name", "email"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Collection of affiliate products"
+    },
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Collection of captured leads"
+    }
+  }
+}

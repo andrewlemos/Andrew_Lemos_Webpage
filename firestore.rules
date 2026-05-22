@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: products
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required) - Product name
+    //   - affiliateLink: string (required) - Affiliate URL
+    //   - imageUrl: string (required) - URL of the product image
+    //   - createdAt: timestamp (required) - Creation time
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "andrewfmlemos@gmail.com" && request.auth.token.email_verified == true);
+    }
+
+    function isValidProduct(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.affiliateLink is string && data.affiliateLink.matches("^https?://.*") &&
+             data.imageUrl is string && data.imageUrl.size() < 500 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidLead(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.createdAt is timestamp;
+    }
+
+    match /products/{productId} {
+      allow read: if true; // Publicly readable
+      allow create, update, delete: if isAdmin() && isValidProduct(request.resource.data);
+    }
+
+    match /leads/{leadId} {
+      allow create: if isValidLead(request.resource.data);
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}
