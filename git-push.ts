@@ -51,7 +51,7 @@ if (token) {
     
     run('git', ['add', '.']);
     
-    run('git', ['commit', '-m', "Fix: replace pulsing admin hammer with a quiet, static, ultra-discreet lock icon"]);
+    run('git', ['commit', '-m', "Fix: Add Open Graph and Twitter Card metadata to index.html for correct WhatsApp share preview"]);
     
     run('git', ['push', 'origin', 'main']);
     console.log("Sincronização com o GitHub efetuada com sucesso!");
