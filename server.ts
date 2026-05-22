@@ -1,7 +1,7 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
+import nodemailer from "nodemailer";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 
@@ -14,40 +14,24 @@ async function startServer() {
 
   app.use(express.json());
 
-  const mailersend = new MailerSend({
-    apiKey: process.env.MAILERSEND_API_KEY || "mlsn.a53126d7473b64140c5c8e9ba5db2c0677df500d4dfa3aaa89f6439aa6f5c35f",
+  const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
+  // Remove any spaces from the password to handle "pzgt qsjc ieuy ojit" or similar formats safely
+  const SMTP_PASS = (process.env.SMTP_PASS || "pzgt qsjc ieuy ojit").replace(/\s+/g, "");
+
+  const smtpTransporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: SMTP_USER,
+      pass: SMTP_PASS
+    }
   });
 
-  const SENDER_EMAIL = process.env.MAILERSEND_SENDER_EMAIL || "MS_N5X99D@trial-351bpgw53p84zqx8.mlsender.net";
-
-  function parseMailerSendError(error: any): string {
-    if (!error) return "Erro desconhecido ao enviar e-mail.";
-    
-    if (error.body) {
-      const body = error.body;
-      if (body.message) {
-        if (body.message.includes("Unauthenticated") || body.message.includes("Unauthorized")) {
-          return "Erro de Autenticação com MailerSend (401): A sua chave de API do MailerSend é inválida ou expirou. Por favor, configure uma nova chave MAILERSEND_API_KEY ativa em seu menu de Configurações (Settings -> Secrets) ou em seu arquivo de ambiente.";
-        }
-        if (body.message.includes("verified in your account") || body.message.includes("MS42207")) {
-          return `Erro de Domínio do Remetente (422): Sua nova chave funciona! Porém, o e-mail do remetente atual (${SENDER_EMAIL}) pertence ao domínio de outra conta.\n\nPara solucionar:\n1. Acesse o painel MailerSend (dashboard).\n2. Na aba 'Domains', copie seu novo domínio de teste (ex: trial-...mlsender.net).\n3. Adicione o e-mail completo desse novo domínio como a variável de ambiente MAILERSEND_SENDER_EMAIL em suas Configurações (Settings -> Secrets) ou informe-nos o novo domínio para que possamos atualizar o código para você!`;
-        }
-        return `Erro de API do MailerSend: ${body.message}`;
-      }
-      return `Erro retornado pelo MailerSend: ${JSON.stringify(body)}`;
+  function parseSMTPError(error: any): string {
+    if (!error) return "Erro desconhecido ao enviar e-mail pelo servidor SMTP.";
+    if (error.code === 'EAUTH') {
+      return "Erro de Autenticação SMTP (Gmail): Credenciais inválidas. Verifique se o e-mail e a Palavra-passe de Aplicação de 16 caracteres estão configurados corretamente.";
     }
-    
-    if (error.message) {
-      if (error.message.includes("Unauthenticated") || error.message.includes("unauthenticated") || error.message.includes("401")) {
-        return "Erro de Autenticação com MailerSend (401): A sua chave de API do MailerSend é inválida ou expirou. Por favor, adicione uma chave MAILERSEND_API_KEY válida e ativa em suas Configurações (Settings -> Secrets).";
-      }
-      if (error.message.includes("verified in your account") || error.message.includes("MS42207") || error.message.includes("422")) {
-        return `Erro de Domínio do Remetente (422): Sua nova chave funciona! Porém, o e-mail do remetente atual (${SENDER_EMAIL}) pertence ao domínio de outra conta.\n\nPara solucionar:\n- Verifique o domínio atual listado no seu painel MailerSend (ex: trial-xxxxxx.mlsender.net).\n- Adicione a variável de ambiente MAILERSEND_SENDER_EMAIL com o e-mail correspondente (ex: MS_xxxxxx@trial-xxxxxx.mlsender.net) ou nos informe o domínio de envio para ajustarmos no código!`;
-      }
-      return error.message;
-    }
-    
-    return typeof error === "object" ? JSON.stringify(error) : String(error);
+    return error.message || String(error);
   }
 
   // API Route to send the manual
@@ -59,16 +43,13 @@ async function startServer() {
     }
 
     try {
-      const sentFrom = new Sender(SENDER_EMAIL, "Andrew Lemos Art"); // Note: Trial domain from MailerSend usually looks like this
-      const recipients = [new Recipient(email, name)];
-
-      const emailParams = new EmailParams()
-        .setFrom(sentFrom)
-        .setTo(recipients)
-        .setReplyTo(sentFrom)
-        .setSubject("Seu Manual de Entalhe em Madeira chegou! 🎨")
-        .setHtml(`
-          <div style="font-family: serif; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e5e5; rounded: 20px;">
+      await smtpTransporter.sendMail({
+        from: `"Portfólio Andrew Lemos" <${SMTP_USER}>`,
+        to: email,
+        replyTo: SMTP_USER,
+        subject: "Seu Manual de Entalhe em Madeira chegou! 🎨",
+        html: `
+          <div style="font-family: serif; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e5e5; border-radius: 20px;">
             <h1 style="color: #6d4c41;">Olá, ${name}!</h1>
             <p style="font-size: 16px; line-height: 1.6;">
               É um prazer compartilhar com você o meu <b>Manual de Introdução ao Entalhe em Madeira</b>.
@@ -91,18 +72,18 @@ async function startServer() {
               <b>Andrew Lemos</b>
             </p>
           </div>
-        `)
-        .setText(`Olá ${name}, seu manual de entalhe chegou! Baixe aqui: https://ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf`);
+        `,
+        text: `Olá ${name}, seu manual de entalhe chegou! Baixe aqui: https://ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf`
+      });
 
-      await mailersend.email.send(emailParams);
       res.json({ success: true });
     } catch (error: any) {
       console.error("Error sending email:", error);
-      res.status(500).json({ error: parseMailerSendError(error) });
+      res.status(500).json({ error: parseSMTPError(error) });
     }
   });
 
-  // API Route to handle contact form submissions securely via MailerSend
+  // API Route to handle contact form submissions securely via SMTP Gmail
   app.post("/api/send-contact", async (req, res) => {
     const { name, email, subject, message } = req.body;
 
@@ -111,19 +92,12 @@ async function startServer() {
     }
 
     try {
-      const sentFrom = new Sender(SENDER_EMAIL, "Portfólio Andrew Lemos");
-      
-      // Enviando apenas para o e-mail verificado do proprietário da conta MailerSend
-      const recipients = [
-        new Recipient("andrewfmlemos@gmail.com", "Andrew Lemos")
-      ];
-
-      const emailParams = new EmailParams()
-        .setFrom(sentFrom)
-        .setTo(recipients)
-        .setReplyTo(sentFrom)
-        .setSubject(`Mensagem de Contato: ${subject}`)
-        .setHtml(`
+      await smtpTransporter.sendMail({
+        from: `"Portfólio Andrew Lemos de Contato" <${SMTP_USER}>`,
+        to: "andrewfmlemos@gmail.com",
+        replyTo: email,
+        subject: `Mensagem de Contato: ${subject}`,
+        html: `
           <div style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e5e5e5; border-radius: 20px; background-color: #fbfbf9;">
             <h2 style="color: #8d6e63; border-bottom: 2px solid #8d6e63; padding-bottom: 10px; margin-top: 0; font-family: 'Georgia', serif;">Nova Mensagem do Portfólio</h2>
             <p style="font-size: 16px; margin: 15px 0; color: #555;">
@@ -160,14 +134,14 @@ async function startServer() {
               Mensagem processada pelo servidor do seu Portfólio de Arte Online.
             </p>
           </div>
-        `)
-        .setText(`Nova Mensagem do Portfólio!\n\nNome: ${name}\nE-mail: ${email}\nAssunto: ${subject}\n\nMensagem:\n${message}\n\nResponder para: ${email}`);
+        `,
+        text: `Nova Mensagem do Portfólio!\n\nNome: ${name}\nE-mail: ${email}\nAssunto: ${subject}\n\nMensagem:\n${message}\n\nResponder para: ${email}`
+      });
 
-      await mailersend.email.send(emailParams);
       res.json({ success: true });
     } catch (error: any) {
-      console.error("Error sending contact email via MailerSend:", error);
-      res.status(500).json({ error: parseMailerSendError(error) });
+      console.error("Error sending contact email via SMTP:", error);
+      res.status(500).json({ error: parseSMTPError(error) });
     }
   });
 
