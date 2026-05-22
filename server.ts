@@ -81,9 +81,8 @@ async function startServer() {
     try {
       const sentFrom = new Sender("MS_N5X99D@trial-351bpgw53p84zqx8.mlsender.net", "Portfólio Andrew Lemos");
       
-      // Enviando para ambos os e-mails para garantir compatibilidade e entrega em modo Trial do MailerSend
+      // Enviando apenas para o e-mail verificado do proprietário da conta MailerSend
       const recipients = [
-        new Recipient("andrewlemos@gmail.com", "Andrew Lemos"),
         new Recipient("andrewfmlemos@gmail.com", "Andrew Lemos")
       ];
 

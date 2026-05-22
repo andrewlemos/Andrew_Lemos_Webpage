@@ -20,8 +20,7 @@ import {
   ExternalLink,
   ArrowRight,
   MessageCircle,
-  Send,
-  Linkedin
+  Send
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { cn } from './lib/utils';
@@ -707,8 +706,8 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
-      // Aceita tanto a conta andrewfmlemos@gmail.com como andrewlemos@gmail.com gerenciando produtos com sucesso
-      if (u && (u.email === 'andrewfmlemos@gmail.com' || u.email === 'andrewlemos@gmail.com')) {
+      // Apenas a conta andrewfmlemos@gmail.com gerencia produtos com sucesso
+      if (u && u.email === 'andrewfmlemos@gmail.com') {
         setUser(u);
         setIsOpen(true);
       } else {
@@ -1018,7 +1017,7 @@ const Contact = () => {
             <div className="space-y-5">
               {/* Card E-mail */}
               <a 
-                href="mailto:andrewlemos@gmail.com"
+                href="mailto:andrewfmlemos@gmail.com"
                 className="flex items-center gap-6 p-4 rounded-3xl hover:bg-brand-paper transition-all group"
               >
                 <div className="w-14 h-14 bg-brand-paper group-hover:bg-white rounded-2xl flex items-center justify-center text-brand-wood shadow-sm transition-colors border border-brand-wood/5">
@@ -1026,7 +1025,7 @@ const Contact = () => {
                 </div>
                 <div>
                   <div className="text-sm text-gray-400 uppercase tracking-widest mb-1">E-mail</div>
-                  <div className="text-lg md:text-xl font-medium text-brand-ink group-hover:text-brand-wood transition-colors">andrewlemos@gmail.com</div>
+                  <div className="text-lg md:text-xl font-medium text-brand-ink group-hover:text-brand-wood transition-colors">andrewfmlemos@gmail.com</div>
                 </div>
               </a>
 
@@ -1043,22 +1042,6 @@ const Contact = () => {
                 <div>
                   <div className="text-sm text-gray-400 uppercase tracking-widest mb-1">Instagram</div>
                   <div className="text-lg md:text-xl font-medium text-brand-ink group-hover:text-brand-wood transition-colors">@andrewlemos.art</div>
-                </div>
-              </a>
-
-              {/* Card LinkedIn */}
-              <a 
-                href="https://www.linkedin.com/in/andrew-lemos-bb65b927a"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-6 p-4 rounded-3xl hover:bg-brand-paper transition-all group"
-              >
-                <div className="w-14 h-14 bg-brand-paper group-hover:bg-white rounded-2xl flex items-center justify-center text-brand-wood shadow-sm transition-colors border border-brand-wood/5">
-                  <Linkedin className="w-6 h-6" />
-                </div>
-                <div>
-                  <div className="text-sm text-gray-400 uppercase tracking-widest mb-1">LinkedIn</div>
-                  <div className="text-lg md:text-xl font-medium text-brand-ink group-hover:text-brand-wood transition-colors">Andrew Lemos</div>
                 </div>
               </a>
 
@@ -1176,7 +1159,6 @@ const Footer = () => {
         <div className="flex gap-6">
           {[
             { icon: Instagram, href: 'https://www.instagram.com/andrewlemos.art' },
-            { icon: Linkedin, href: 'https://www.linkedin.com/in/andrew-lemos-bb65b927a' },
             { icon: MessageCircle, href: 'https://wa.me/5519998107110?text=Olá%20Andrew!%20Vi%20o%20seu%20portfólio%20e%20gostaria%20de%20conversar.' },
             { icon: Youtube, href: 'https://www.youtube.com/@DoL%C3%A1pisaoA%C3%A7o' },
           ].map((social, i) => (
