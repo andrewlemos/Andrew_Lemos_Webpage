@@ -15,8 +15,10 @@ async function startServer() {
   app.use(express.json());
 
   const mailersend = new MailerSend({
-    apiKey: process.env.MAILERSEND_API_KEY || "mlsn.088bce1b07dd2c743107ce5f55f73d492ca96cad89ed46bba24fd8773b67856b",
+    apiKey: process.env.MAILERSEND_API_KEY || "mlsn.a53126d7473b64140c5c8e9ba5db2c0677df500d4dfa3aaa89f6439aa6f5c35f",
   });
+
+  const SENDER_EMAIL = process.env.MAILERSEND_SENDER_EMAIL || "MS_N5X99D@trial-351bpgw53p84zqx8.mlsender.net";
 
   function parseMailerSendError(error: any): string {
     if (!error) return "Erro desconhecido ao enviar e-mail.";
@@ -27,6 +29,9 @@ async function startServer() {
         if (body.message.includes("Unauthenticated") || body.message.includes("Unauthorized")) {
           return "Erro de Autenticação com MailerSend (401): A sua chave de API do MailerSend é inválida ou expirou. Por favor, configure uma nova chave MAILERSEND_API_KEY ativa em seu menu de Configurações (Settings -> Secrets) ou em seu arquivo de ambiente.";
         }
+        if (body.message.includes("verified in your account") || body.message.includes("MS42207")) {
+          return `Erro de Domínio do Remetente (422): Sua nova chave funciona! Porém, o e-mail do remetente atual (${SENDER_EMAIL}) pertence ao domínio de outra conta.\n\nPara solucionar:\n1. Acesse o painel MailerSend (dashboard).\n2. Na aba 'Domains', copie seu novo domínio de teste (ex: trial-...mlsender.net).\n3. Adicione o e-mail completo desse novo domínio como a variável de ambiente MAILERSEND_SENDER_EMAIL em suas Configurações (Settings -> Secrets) ou informe-nos o novo domínio para que possamos atualizar o código para você!`;
+        }
         return `Erro de API do MailerSend: ${body.message}`;
       }
       return `Erro retornado pelo MailerSend: ${JSON.stringify(body)}`;
@@ -35,6 +40,9 @@ async function startServer() {
     if (error.message) {
       if (error.message.includes("Unauthenticated") || error.message.includes("unauthenticated") || error.message.includes("401")) {
         return "Erro de Autenticação com MailerSend (401): A sua chave de API do MailerSend é inválida ou expirou. Por favor, adicione uma chave MAILERSEND_API_KEY válida e ativa em suas Configurações (Settings -> Secrets).";
+      }
+      if (error.message.includes("verified in your account") || error.message.includes("MS42207") || error.message.includes("422")) {
+        return `Erro de Domínio do Remetente (422): Sua nova chave funciona! Porém, o e-mail do remetente atual (${SENDER_EMAIL}) pertence ao domínio de outra conta.\n\nPara solucionar:\n- Verifique o domínio atual listado no seu painel MailerSend (ex: trial-xxxxxx.mlsender.net).\n- Adicione a variável de ambiente MAILERSEND_SENDER_EMAIL com o e-mail correspondente (ex: MS_xxxxxx@trial-xxxxxx.mlsender.net) ou nos informe o domínio de envio para ajustarmos no código!`;
       }
       return error.message;
     }
@@ -51,7 +59,7 @@ async function startServer() {
     }
 
     try {
-      const sentFrom = new Sender("MS_N5X99D@trial-351bpgw53p84zqx8.mlsender.net", "Andrew Lemos Art"); // Note: Trial domain from MailerSend usually looks like this
+      const sentFrom = new Sender(SENDER_EMAIL, "Andrew Lemos Art"); // Note: Trial domain from MailerSend usually looks like this
       const recipients = [new Recipient(email, name)];
 
       const emailParams = new EmailParams()
@@ -103,7 +111,7 @@ async function startServer() {
     }
 
     try {
-      const sentFrom = new Sender("MS_N5X99D@trial-351bpgw53p84zqx8.mlsender.net", "Portfólio Andrew Lemos");
+      const sentFrom = new Sender(SENDER_EMAIL, "Portfólio Andrew Lemos");
       
       // Enviando apenas para o e-mail verificado do proprietário da conta MailerSend
       const recipients = [
