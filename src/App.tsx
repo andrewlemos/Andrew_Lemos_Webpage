@@ -736,8 +736,30 @@ const AdminDashboard = () => {
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro no login:", error);
+      if (error?.code === 'auth/unauthorized-domain') {
+        alert(
+          "Domínio Não Autorizado no Firebase Auth!\n\n" +
+          `O domínio atual (${window.location.hostname}) não está na lista de domínios autorizados para autenticação.\n\n` +
+          "Para corrigir:\n" +
+          "1. Acesse o Console do Firebase (console.firebase.google.com)\n" +
+          "2. Vá em no menu 'Authentication' -> aba 'Settings' -> seção 'Authorized domains'\n" +
+          `3. Adicione o domínio '${window.location.hostname}' à lista.\n\n` +
+          "Assim, o login com o Google passará a funcionar imediatamente!"
+        );
+      } else if (error?.code === 'auth/popup-blocked') {
+        alert(
+          "Popup Bloqueado pelo Navegador!\n\n" +
+          "Por favor, permita popups neste site para conseguir fazer login com a sua conta Google."
+        );
+      } else {
+        alert(
+          "Erro ao fazer login via Google no Firebase:\n\n" + 
+          (error?.message || error) + 
+          "\n\nCertifique-se de que o provedor Google está ativado no painel Authentication do seu Firebase Console."
+        );
+      }
     }
   };
 
