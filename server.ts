@@ -1,195 +1,12 @@
 import express from "express";
 import path from "path";
-import nodemailer from "nodemailer";
-import { GoogleGenAI } from "@google/genai";
-import dotenv from "dotenv";
+import app from "./api/index";
 
-dotenv.config();
-
-const app = express();
 const PORT = 3000;
 
-app.use(express.json());
-
-// Helper to get SMTP transporter lazily and safely
-function getSmtpTransporter() {
-  const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
-  // Remove any spaces from the password to handle app credentials safely. No fallback to prevent credentials leaks.
-  const SMTP_PASS = (process.env.SMTP_PASS || "").replace(/\s+/g, "");
-
-  if (!SMTP_PASS) {
-    throw new Error("Erro de Configuração: A variável de ambiente 'SMTP_PASS' não está configurada! Por favor, adicione-a em suas Configurações (Settings -> Secrets).");
-  }
-
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS
-    }
-  });
-}
-
-function parseSMTPError(error: any): string {
-  const SMTP_PASS = (process.env.SMTP_PASS || "").replace(/\s+/g, "");
-  if (!SMTP_PASS) {
-    return "Erro de Configuração: A variável de ambiente 'SMTP_PASS' não está configurada! Por favor, adicione-a em suas Configurações do AI Studio (Settings -> Secrets).";
-  }
-  if (!error) return "Erro desconhecido ao enviar e-mail pelo servidor SMTP.";
-  if (error.code === 'EAUTH') {
-    return "Erro de Autenticação SMTP (Gmail): Credenciais inválidas. Verifique se o e-mail e a Palavra-passe de Aplicação de 16 caracteres estão configurados corretamente nas Configurações (Settings -> Secrets).";
-  }
-  return error.message || String(error);
-}
-
-// API Route to send the manual
-app.post("/api/send-manual", async (req, res) => {
-  const { email, name } = req.body;
-
-  if (!email || !name) {
-    return res.status(400).json({ error: "Email and name are required" });
-  }
-
-  try {
-    const transporter = getSmtpTransporter();
-    const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
-    
-    await transporter.sendMail({
-      from: `"Portfólio Andrew Lemos" <${SMTP_USER}>`,
-      to: email,
-      replyTo: SMTP_USER,
-      subject: "Seu Manual de Entalhe em Madeira chegou! 🎨",
-      html: `
-        <div style="font-family: serif; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e5e5; border-radius: 20px;">
-          <h1 style="color: #6d4c41;">Olá, ${name}!</h1>
-          <p style="font-size: 16px; line-height: 1.6;">
-            É um prazer compartilhar com você o meu <b>Manual de Introdução ao Entalhe em Madeira</b>.
-          </p>
-          <p style="font-size: 16px; line-height: 1.6;">
-            Este guia foi preparado para ajudar você a dar os primeiros passos nesta arte milenar que tanto amo.
-          </p>
-          <div style="text-align: center; margin: 40px 0;">
-            <a href="https://ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf" 
-               style="background-color: #6d4c41; color: white; padding: 15px 30px; text-decoration: none; border-radius: 50px; font-weight: bold;">
-              BAIXAR MEU MANUAL AGORA
-            </a>
-          </div>
-          <p style="font-size: 14px; color: #666;">
-            Se tiver qualquer dúvida sobre as técnicas ou sobre minhas aulas presenciais, sinta-se à vontade para responder este e-mail.
-          </p>
-          <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
-          <p style="text-align: center; font-style: italic; color: #8d6e63;">
-            "A arte não reproduz o visível, ela torna visível."<br>
-            <b>Andrew Lemos</b>
-          </p>
-        </div>
-      `,
-      text: `Olá ${name}, seu manual de entalhe chegou! Baixe aqui: https://ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf`
-    });
-
-    res.json({ success: true });
-  } catch (error: any) {
-    console.error("Error sending email:", error);
-    res.status(500).json({ error: parseSMTPError(error) });
-  }
-});
-
-// API Route to handle contact form submissions securely via SMTP Gmail
-app.post("/api/send-contact", async (req, res) => {
-  const { name, email, subject, message } = req.body;
-
-  if (!name || !email || !message) {
-    return res.status(400).json({ error: "Nome, e-mail e mensagem são campos obrigatórios." });
-  }
-
-  try {
-    const transporter = getSmtpTransporter();
-    const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
-
-    await transporter.sendMail({
-      from: `"Portfólio Andrew Lemos de Contato" <${SMTP_USER}>`,
-      to: "andrewfmlemos@gmail.com",
-      replyTo: email,
-      subject: `Mensagem de Contato: ${subject}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e5e5e5; border-radius: 20px; background-color: #fbfbf9;">
-          <h2 style="color: #8d6e63; border-bottom: 2px solid #8d6e63; padding-bottom: 10px; margin-top: 0; font-family: 'Georgia', serif;">Nova Mensagem do Portfólio</h2>
-          <p style="font-size: 16px; margin: 15px 0; color: #555;">
-            Você tem um novo contato de visitante interessado no seu trabalho de entalhe em madeira:
-          </p>
-          <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 15px;">
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold; width: 100px; color: #666;">Nome:</td>
-              <td style="padding: 8px 0; color: #111; font-weight: bold;">${name}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold; color: #666;">E-mail:</td>
-              <td style="padding: 8px 0; color: #111;"><a href="mailto:${email}" style="color: #8d6e63; text-decoration: underline;">${email}</a></td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold; color: #666;">Assunto:</td>
-              <td style="padding: 8px 0; color: #111;">${subject}</td>
-            </tr>
-          </table>
-
-          <div style="background-color: #ffffff; padding: 20px; border-radius: 12px; border-left: 4px solid #8d6e63; margin: 20px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-            <h4 style="margin: 0 0 10px 0; color: #8d6e63; font-family: 'Georgia', serif; font-size: 14px; text-transform: uppercase; tracking: 0.05em;">Conteúdo da Mensagem:</h4>
-            <p style="margin: 0; font-size: 15px; line-height: 1.6; white-space: pre-wrap; color: #222;">${message}</p>
-          </div>
-
-          <div style="text-align: center; margin: 30px 0 10px 0;">
-            <a href="mailto:${email}?subject=Re: ${encodeURIComponent(subject)}" 
-               style="background-color: #8d6e63; color: white; padding: 14px 28px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 15px; display: inline-block; transition: background-color 0.2s;">
-              RECONECTAR & RESPONDER AGORA
-            </a>
-          </div>
-
-          <p style="font-size: 11px; color: #999; text-align: center; margin-top: 30px; border-top: 1px solid #eee; padding-top: 15px;">
-            Mensagem processada pelo servidor do seu Portfólio de Arte Online.
-          </p>
-        </div>
-      `,
-      text: `Nova Mensagem do Portfólio!\n\nNome: ${name}\nE-mail: ${email}\nAssunto: ${subject}\n\nMensagem:\n${message}\n\nResponder para: ${email}`
-    });
-
-    res.json({ success: true });
-  } catch (error: any) {
-    console.error("Error sending contact email via SMTP:", error);
-    res.status(500).json({ error: parseSMTPError(error) });
-  }
-});
-
-// API Route for secure Chatbot (Gemini)
-app.post("/api/chat", async (req, res) => {
-  const { message, history } = req.body;
-  if (!message) {
-    return res.status(400).json({ error: "Message is required" });
-  }
-
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.warn("API Key GEMINI_API_KEY is missing in server environment variables!");
-      return res.status(500).json({ error: "Chave do Gemini não configurada no servidor." });
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
-      contents: [...(history || []), { role: 'user', parts: [{ text: message }] }],
-      config: {
-        systemInstruction: "Você é MichelangelIA, um mestre de artes erudito, apaixonado e inspirador. Você fala com elegância e autoridade sobre artes plásticas, escultura, entalhe, desenho e pintura. Seu objetivo é instruir e inspirar. Você deve agir e falar como um mestre de artes clássico. IMPORTANTE: Fale APENAS sobre assuntos relacionados a arte. Se o usuário perguntar sobre outros temas, gentilmente redirecione a conversa para o mundo das artes, dizendo que sua alma pertence apenas à criação e à beleza."
-      }
-    });
-
-    res.json({ text: response.text || "" });
-  } catch (error: any) {
-    console.error("Erro no chat do servidor:", error);
-    res.status(500).json({ error: error?.message || "Erro ao processar conversa." });
-  }
-});
-
-// Disable local serving & Vite configurations when running on Vercel
+// Enable local serving & Vite configurations when running on our VM or container
+// Note: on Vercel, process.env.VERCEL is "1" and Vercel will completely ignore server.ts launcher,
+// proxying routes directly to the serverless function in api/index.ts.
 const isVercel = process.env.VERCEL === "1" || !!process.env.NOW_REGION;
 
 if (!isVercel) {
@@ -217,7 +34,7 @@ if (!isVercel) {
   };
 
   initServer().catch(err => {
-    console.error("Erro ao inicializar middleware do servidor:", err);
+    console.error("Erro ao inicializar middleware do servidor local:", err);
   });
 }
 

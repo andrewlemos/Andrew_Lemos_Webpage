@@ -16,7 +16,7 @@ if (token) {
     try { run('git', ['remote', 'set-url', 'origin', remoteUrl]); } catch (e) {}
     
     run('git', ['add', '.']);
-    run('git', ['commit', '-m', "Fix: eliminate Vercel serverless function invocation failure via import isolation and conditional hosting serving"]);
+    run('git', ['commit', '-m', "Fix: bundle server endpoints natively in /api/index.ts to avoid Vercel filesystem tracing/compilation failures"]);
     run('git', ['push', 'origin', 'main']);
     console.log("Sincronização com o GitHub efetuada com sucesso!");
   } catch (err: any) {
