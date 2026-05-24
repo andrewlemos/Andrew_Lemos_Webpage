@@ -59,6 +59,32 @@ interface Product {
   createdAt: any;
 }
 
+// --- Helper Functions ---
+
+const normalizeImageUrl = (url?: string): string => {
+  if (!url) return '';
+  let cleaned = url.trim();
+  
+  // Se for uma URL absoluta externa (http, https, data:), retorna como está
+  if (/^(https?:|\/\/|data:)/i.test(cleaned)) {
+    return cleaned;
+  }
+
+  // Remove caminhos incorretos do public/ ou /public/ que podem ter sido gerados no banco
+  if (cleaned.startsWith('/public/')) {
+    cleaned = cleaned.substring(7); // Deixa como '/arquivos/...'
+  } else if (cleaned.startsWith('public/')) {
+    cleaned = '/' + cleaned.substring(7); // Se era 'public/arquivos', vira '/arquivos'
+  }
+  
+  // Garante que caminhos relativos de imagem que pertencem a arquivos comecem com '/'
+  if (cleaned.startsWith('arquivos/')) {
+    cleaned = '/' + cleaned;
+  }
+  
+  return cleaned;
+};
+
 // --- Components ---
 
 const Navbar = () => {
@@ -866,7 +892,7 @@ const RecommendedProductsSection = () => {
               >
                 <div className="relative aspect-square p-8">
                   <img 
-                    src={product.imageUrl} 
+                    src={normalizeImageUrl(product.imageUrl)} 
                     alt={product.name} 
                     className="w-full h-full object-contain"
                     referrerPolicy="no-referrer"
@@ -1264,7 +1290,7 @@ const AdminDashboard = () => {
                       ) : (
                         <div className="flex items-center justify-between gap-4">
                           <div className="relative w-14 h-14 bg-gray-50 border rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center p-1">
-                            <img src={product.imageUrl} className="max-w-full max-h-full object-contain" alt="" />
+                            <img src={normalizeImageUrl(product.imageUrl)} className="max-w-full max-h-full object-contain" alt="" />
                           </div>
                           <div className="flex-grow min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">

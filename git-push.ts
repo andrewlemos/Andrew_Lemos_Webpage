@@ -51,7 +51,7 @@ if (token) {
     
     run('git', ['add', '.']);
     
-    run('git', ['commit', '-m', "Fix: Firestore rule delete failure, enable product ordering, inline editing, and category tags"]);
+    run('git', ['commit', '-m', "Fix: Implement dynamic image URL path normalizer and secure SMTP download links"]);
     
     run('git', ['push', 'origin', 'main']);
     console.log("Sincronização com o GitHub efetuada com sucesso!");

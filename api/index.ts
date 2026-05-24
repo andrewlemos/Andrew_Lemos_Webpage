@@ -57,6 +57,10 @@ app.post("/api/send-manual", async (req, res) => {
     const transporter = getSmtpTransporter();
     const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
     
+    const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const host = req.get('host') || "ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app";
+    const docUrl = `${protocol}://${host}/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf`;
+
     await transporter.sendMail({
       from: `"Portfólio Andrew Lemos" <${SMTP_USER}>`,
       to: email,
@@ -72,7 +76,7 @@ app.post("/api/send-manual", async (req, res) => {
             Este guia foi preparado para ajudar você a dar os primeiros passos nesta arte milenar que tanto amo.
           </p>
           <div style="text-align: center; margin: 40px 0;">
-            <a href="https://ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf" 
+            <a href="${docUrl}" 
                style="display: inline-block; background-color: #6d4c41; color: white; padding: 12px 24px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 14px;">
               Baixar Manual
             </a>
@@ -87,7 +91,7 @@ app.post("/api/send-manual", async (req, res) => {
           </p>
         </div>
       `,
-      text: `Olá ${name}, seu manual de entalhe chegou! Baixe aqui: https://ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf`
+      text: `Olá ${name}, seu manual de entalhe chegou! Baixe aqui: ${docUrl}`
     });
 
     res.json({ success: true });
