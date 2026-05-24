@@ -12,7 +12,7 @@ console.log("Adicionando alterações...");
 run('git', ['add', '.']);
 
 console.log("Criando commit...");
-run('git', ['commit', '-m', 'Fix: Simplify resolveAssetUrl to strictly relative paths for ultimate cross-domain and subfolder compatibility']);
+run('git', ['commit', '-m', 'Revert: Restore src/App.tsx and vite.config.ts to stable version from commit b2f1007']);
 
 console.log("Enviando para o GitHub...");
 run('git', ['push', 'origin', 'main']);

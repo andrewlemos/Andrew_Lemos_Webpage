@@ -59,39 +59,6 @@ interface Product {
   createdAt: any;
 }
 
-// --- Helper Functions ---
-
-const resolveAssetUrl = (url: any): string => {
-  if (!url || typeof url !== 'string') return '';
-  let cleaned = url.trim();
-
-  // Se for uma URL absoluta externa (http, https, data:), retorna como está
-  if (/^(https?:|\/\/|data:)/i.test(cleaned)) {
-    return cleaned;
-  }
-
-  // Remove caminhos do public/ ou /public/ que podem ter sido inseridos
-  if (cleaned.startsWith('/public/')) {
-    cleaned = cleaned.substring(8);
-  } else if (cleaned.startsWith('public/')) {
-    cleaned = cleaned.substring(7);
-  }
-
-  // Remove barra inicial para tornar o caminho relativo de forma robusta
-  if (cleaned.startsWith('/')) {
-    cleaned = cleaned.substring(1);
-  }
-
-  // Retorna um caminho estritamente relativo baseado em './'
-  // Isso funciona em qualquer domínio de produção, subdiretório (ex: GitHub Pages com qualquer caixa alta/baixa),
-  // e também no servidor de desenvolvimento local.
-  return `./${cleaned}`;
-};
-
-const normalizeImageUrl = (url?: any): string => {
-  return resolveAssetUrl(url);
-};
-
 // --- Components ---
 
 const Navbar = () => {
@@ -125,7 +92,7 @@ const Navbar = () => {
         <a href="#home" className="flex items-center gap-2">
           <div className="h-10 md:h-12 flex items-center gap-2">
             <img 
-              src={resolveAssetUrl("/arquivos/LOGO ANDREW.png")} 
+              src="/arquivos/LOGO ANDREW.png" 
               alt="Andrew Lemos Logo" 
               className="h-full w-auto object-contain"
               onError={(e) => {
@@ -237,7 +204,7 @@ const Hero = () => {
           <div className="absolute -inset-4 border border-brand-wood/20 rounded-2xl rotate-3"></div>
           <div className="absolute -inset-4 border border-brand-wood/20 rounded-2xl -rotate-3"></div>
           <img 
-            src={resolveAssetUrl("/arquivos/IMG_20230520_122543_345-1.jpg")}
+            src="/arquivos/IMG_20230520_122543_345-1.jpg"
             alt="Andrew Lemos - Artista Plástico" 
             className="w-full h-full object-cover rounded-2xl shadow-2xl relative z-10"
             referrerPolicy="no-referrer"
@@ -301,7 +268,7 @@ const Biography = () => {
             className="my-12 rounded-3xl overflow-hidden shadow-xl border border-brand-wood/10"
           >
             <img 
-              src={resolveAssetUrl("/arquivos/Premio de Notoriedade Artística (1).png")} 
+              src="/arquivos/Premio de Notoriedade Artística (1).png" 
               alt="Prêmio de Notoriedade Artística" 
               className="w-full h-auto"
               referrerPolicy="no-referrer"
@@ -446,7 +413,7 @@ const Gallery = () => {
               className="group relative overflow-hidden rounded-2xl aspect-[3/4] cursor-pointer shadow-sm hover:shadow-md transition-shadow"
             >
               <img 
-                src={resolveAssetUrl(work.img)} 
+                src={work.img} 
                 alt={work.title} 
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                 referrerPolicy="no-referrer"
@@ -507,7 +474,7 @@ const Gallery = () => {
               className="relative max-w-[90vw] max-h-[80vh] flex flex-col items-center justify-center"
             >
               <img
-                src={resolveAssetUrl(works[selectedIdx].img)}
+                src={works[selectedIdx].img}
                 alt={works[selectedIdx].title}
                 className="max-w-[90vw] max-h-[75vh] md:max-h-[80vh] object-contain rounded-lg shadow-2xl select-text"
                 referrerPolicy="no-referrer"
@@ -582,7 +549,7 @@ const YouTubeSection = () => {
         >
           <div className="aspect-video bg-gray-800 rounded-3xl overflow-hidden shadow-2xl border border-white/10 group">
             <img 
-              src={resolveAssetUrl("/arquivos/WhatsApp Image 2025-03-01 at 18.06.49.jpeg")} 
+              src="/arquivos/WhatsApp Image 2025-03-01 at 18.06.49.jpeg" 
               alt="YouTube Thumbnail" 
               className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700"
               referrerPolicy="no-referrer"
@@ -732,7 +699,7 @@ const ClassesSection = () => {
           </div>
           <div className="relative h-[400px] md:h-auto">
             <img 
-              src={resolveAssetUrl("/arquivos/Apresentação do Canal.jpg")} 
+              src="/arquivos/Apresentação do Canal.jpg" 
               alt="Ateliê Andrew Lemos" 
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
@@ -775,7 +742,7 @@ const OnlineCoursesSection = () => {
             >
               <div className="relative aspect-video">
                 <img 
-                  src={resolveAssetUrl(course.img)} 
+                  src={course.img} 
                   alt={course.title} 
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
@@ -899,7 +866,7 @@ const RecommendedProductsSection = () => {
               >
                 <div className="relative aspect-square p-8">
                   <img 
-                    src={normalizeImageUrl(product.imageUrl)} 
+                    src={product.imageUrl} 
                     alt={product.name} 
                     className="w-full h-full object-contain"
                     referrerPolicy="no-referrer"
@@ -1297,7 +1264,7 @@ const AdminDashboard = () => {
                       ) : (
                         <div className="flex items-center justify-between gap-4">
                           <div className="relative w-14 h-14 bg-gray-50 border rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center p-1">
-                            <img src={normalizeImageUrl(product.imageUrl)} className="max-w-full max-h-full object-contain" alt="" />
+                            <img src={product.imageUrl} className="max-w-full max-h-full object-contain" alt="" />
                           </div>
                           <div className="flex-grow min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
@@ -1657,7 +1624,7 @@ const Publications = () => {
               className="bg-white p-4 rounded-2xl shadow-sm border border-brand-wood/5"
             >
               <div className="aspect-[4/5] rounded-xl overflow-hidden mb-4">
-                <img src={resolveAssetUrl(pub.img)} alt={pub.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                <img src={pub.img} alt={pub.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               </div>
               <h3 className="text-center font-serif text-brand-wood">{pub.title}</h3>
             </motion.div>
