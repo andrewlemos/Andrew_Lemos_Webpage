@@ -73,8 +73,8 @@ app.post("/api/send-manual", async (req, res) => {
           </p>
           <div style="text-align: center; margin: 40px 0;">
             <a href="https://ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf" 
-               style="background-color: #6d4c41; color: white; padding: 15px 30px; text-decoration: none; border-radius: 50px; font-weight: bold;">
-              BAIXAR MEU MANUAL AGORA
+               style="display: inline-block; background-color: #6d4c41; color: white; padding: 12px 24px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 14px;">
+              Baixar Manual
             </a>
           </div>
           <p style="font-size: 14px; color: #666;">
@@ -82,8 +82,8 @@ app.post("/api/send-manual", async (req, res) => {
           </p>
           <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
           <p style="text-align: center; font-style: italic; color: #8d6e63;">
-            "A arte não reproduz o visível, ela torna visível."<br>
-            <b>Andrew Lemos</b>
+            “Vi o anjo no mármore e esculpi até libertá-lo.”<br>
+            <b>Michelangelo</b>
           </p>
         </div>
       `,
