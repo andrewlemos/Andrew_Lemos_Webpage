@@ -11,6 +11,7 @@ import {
   Youtube, 
   Mail, 
   ChevronRight, 
+  ChevronLeft,
   Menu, 
   X, 
   Palette, 
@@ -329,6 +330,8 @@ const Expertise = () => {
 };
 
 const Gallery = () => {
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+
   const works = [
     // Trabalhos em Madeira
     { title: 'Escultura em Madeira', category: 'Madeira', img: '/arquivos/WhatsApp Image 2025-03-01 at 18.06.49.jpeg' },
@@ -355,6 +358,36 @@ const Gallery = () => {
     { title: 'Escultura de Peixe VI', category: 'Madeira', img: '/arquivos/peixe6.jpg' },
   ];
 
+  useEffect(() => {
+    if (selectedIdx !== null) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [selectedIdx]);
+
+  useEffect(() => {
+    if (selectedIdx === null) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedIdx(null);
+      if (e.key === 'ArrowRight') handleNext();
+      if (e.key === 'ArrowLeft') handlePrev();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIdx]);
+
+  const handleNext = () => {
+    setSelectedIdx((prev) => (prev !== null && prev < works.length - 1 ? prev + 1 : 0));
+  };
+
+  const handlePrev = () => {
+    setSelectedIdx((prev) => (prev !== null && prev > 0 ? prev - 1 : works.length - 1));
+  };
+
   return (
     <section id="gallery" className="section-padding bg-white">
       <div className="max-w-7xl mx-auto">
@@ -369,9 +402,10 @@ const Gallery = () => {
               key={idx}
               initial={{ opacity: 0, scale: 0.95 }}
               whileInView={{ opacity: 1, scale: 1 }}
-              transition={{ delay: idx * 0.1 }}
+              transition={{ delay: idx * 0.05 }}
               viewport={{ once: true }}
-              className="group relative overflow-hidden rounded-2xl aspect-[3/4] cursor-pointer"
+              onClick={() => setSelectedIdx(idx)}
+              className="group relative overflow-hidden rounded-2xl aspect-[3/4] cursor-pointer shadow-sm hover:shadow-md transition-shadow"
             >
               <img 
                 src={work.img} 
@@ -393,6 +427,84 @@ const Gallery = () => {
           </button>
         </div>
       </div>
+
+      {/* Lightbox Modal */}
+      <AnimatePresence>
+        {selectedIdx !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md p-4 select-none"
+            onClick={() => setSelectedIdx(null)}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setSelectedIdx(null)}
+              className="absolute top-6 right-6 z-[110] text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-3 rounded-full transition-colors cursor-pointer"
+              title="Fechar"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Prev button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePrev();
+              }}
+              className="absolute left-4 md:left-8 z-[110] text-white/70 hover:text-white bg-white/10 hover:bg-white/25 p-3 rounded-full transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              title="Anterior"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+
+            {/* Image Container with high fidelity */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 180 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-[90vw] max-h-[80vh] flex flex-col items-center justify-center"
+            >
+              <img
+                src={works[selectedIdx].img}
+                alt={works[selectedIdx].title}
+                className="max-w-[90vw] max-h-[75vh] md:max-h-[80vh] object-contain rounded-lg shadow-2xl select-text"
+                referrerPolicy="no-referrer"
+              />
+              
+              {/* Image Description Card below */}
+              <div className="absolute -bottom-16 text-center text-white w-full pointer-events-none md:pointer-events-auto">
+                <span className="text-brand-clay text-xs tracking-wider uppercase font-medium">
+                  {works[selectedIdx].category}
+                </span>
+                <h3 className="text-lg md:text-xl font-serif mt-1">
+                  {works[selectedIdx].title}
+                </h3>
+              </div>
+            </motion.div>
+
+            {/* Next button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNext();
+              }}
+              className="absolute right-4 md:right-8 z-[110] text-white/70 hover:text-white bg-white/10 hover:bg-white/25 p-3 rounded-full transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              title="Próxima"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+
+            {/* Help text on desktop */}
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white/40 text-xs hidden md:block select-none pointer-events-none font-mono">
+              Use ← e → no teclado para navegar, ESC para fechar
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 };

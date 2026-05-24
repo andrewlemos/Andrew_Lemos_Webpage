@@ -14,7 +14,7 @@ function removeDirRecursive(dirPath: string) {
     fs.readdirSync(dirPath).forEach((file) => {
       const curPath = path.join(dirPath, file);
       if (fs.lstatSync(curPath).isDirectory()) {
-        removeDirRecursive(curPath);
+         removeDirRecursive(curPath);
       } else {
         fs.unlinkSync(curPath);
       }
@@ -51,7 +51,7 @@ if (token) {
     
     run('git', ['add', '.']);
     
-    run('git', ['commit', '-m', "Fix: Add Open Graph and Twitter Card metadata to index.html for correct WhatsApp share preview"]);
+    run('git', ['commit', '-m', "Fix: Allow expanding gallery images in a fullscreen high-fidelity lightbox modal with carousel navigation"]);
     
     run('git', ['push', 'origin', 'main']);
     console.log("Sincronização com o GitHub efetuada com sucesso!");
