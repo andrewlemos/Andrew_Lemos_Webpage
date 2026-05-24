@@ -51,7 +51,7 @@ if (token) {
     
     run('git', ['add', '.']);
     
-    run('git', ['commit', '-m', "Fix: Allow expanding gallery images in a fullscreen high-fidelity lightbox modal with carousel navigation"]);
+    run('git', ['commit', '-m', "Fix: relocate all static assets inside /public/arquivos so Vercel can resolve and serve them correctly"]);
     
     run('git', ['push', 'origin', 'main']);
     console.log("Sincronização com o GitHub efetuada com sucesso!");
