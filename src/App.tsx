@@ -22,7 +22,10 @@ import {
   ArrowRight,
   MessageCircle,
   Send,
-  Lock
+  Lock,
+  ArrowUp,
+  ArrowDown,
+  Edit2
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { cn } from './lib/utils';
@@ -51,6 +54,8 @@ interface Product {
   name: string;
   affiliateLink: string;
   imageUrl: string;
+  category?: string;
+  order?: number;
   createdAt: any;
 }
 
@@ -769,8 +774,18 @@ const OnlineCoursesSection = () => {
   );
 };
 
+const PRODUCT_CATEGORIES = [
+  "Entalhe e Escultura em Madeira",
+  "Pintura",
+  "Desenho",
+  "Acabamentos",
+  "Pirografia",
+  "Modelagem"
+];
+
 const RecommendedProductsSection = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState('Todos');
 
   useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
@@ -779,54 +794,106 @@ const RecommendedProductsSection = () => {
         id: doc.id,
         ...doc.data()
       })) as Product[];
-      setProducts(productsData);
+      
+      // Ordenar em memória: order ASC (padrão 99999 caso não definido), e depois createdAt DESC
+      const sorted = [...productsData].sort((a, b) => {
+        const orderA = a.order !== undefined ? a.order : 99999;
+        const orderB = b.order !== undefined ? b.order : 99999;
+        if (orderA !== orderB) return orderA - orderB;
+        const timeA = a.createdAt?.seconds || 0;
+        const timeB = b.createdAt?.seconds || 0;
+        return timeB - timeA;
+      });
+      
+      setProducts(sorted);
     });
     return () => unsubscribe();
   }, []);
 
   if (products.length === 0) return null;
 
+  // Filtrar categorias ativas que tenham pelo menos 1 produto existente, para manter o visual limpo
+  const activeCategories = ['Todos', ...PRODUCT_CATEGORIES.filter(cat => products.some(p => p.category === cat))];
+
+  const filteredProducts = products.filter(product => {
+    if (selectedCategory === 'Todos') return true;
+    return product.category === selectedCategory;
+  });
+
   return (
     <section id="products" className="section-padding bg-brand-paper">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-16">
+        <div className="text-center mb-10">
           <h2 className="text-4xl md:text-5xl font-serif mb-4">Produtos Recomendados</h2>
           <p className="text-gray-500">Materiais e ferramentas que utilizo e recomendo para sua jornada artística.</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8">
-          {products.map((product) => (
-            <motion.div 
-              key={product.id}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="bg-white rounded-3xl overflow-hidden border border-brand-wood/5 flex flex-col h-full hover:shadow-xl transition-all"
-            >
-              <div className="relative aspect-square p-8">
-                <img 
-                  src={product.imageUrl} 
-                  alt={product.name} 
-                  className="w-full h-full object-contain"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div className="p-8 flex flex-col flex-grow">
-                <h3 className="text-xl font-serif mb-3 leading-tight">{product.name}</h3>
-                <div className="flex items-center justify-between mt-auto pt-6 border-t border-brand-wood/10">
-                  <a 
-                    href={product.affiliateLink} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="w-full bg-brand-wood text-white px-6 py-3 rounded-full text-center font-medium hover:bg-brand-clay transition-all"
-                  >
-                    Ver na Loja
-                  </a>
+        {/* Filtros de Categoria */}
+        {activeCategories.length > 2 && (
+          <div className="flex flex-wrap justify-center gap-2 mb-12 max-w-3xl mx-auto">
+            {activeCategories.map(category => (
+              <button
+                key={category}
+                onClick={() => setSelectedCategory(category)}
+                className={cn(
+                  "px-5 py-2.5 rounded-full text-xs font-medium cursor-pointer transition-all duration-300 border",
+                  selectedCategory === category
+                    ? "bg-brand-wood text-white border-brand-wood shadow-md scale-105"
+                    : "bg-white text-gray-500 hover:text-brand-wood hover:bg-brand-wood/5 border-brand-wood/5"
+                )}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {filteredProducts.length === 0 ? (
+          <div className="text-center py-12 text-gray-400 bg-white rounded-3xl border border-brand-wood/5 max-w-md mx-auto">
+            Nenhum produto cadastrado nesta categoria.
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-8">
+            {filteredProducts.map((product) => (
+              <motion.div 
+                key={product.id}
+                layout
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.3 }}
+                className="bg-white rounded-3xl overflow-hidden border border-brand-wood/5 flex flex-col h-full hover:shadow-xl transition-all"
+              >
+                <div className="relative aspect-square p-8">
+                  <img 
+                    src={product.imageUrl} 
+                    alt={product.name} 
+                    className="w-full h-full object-contain"
+                    referrerPolicy="no-referrer"
+                  />
+                  {product.category && (
+                    <span className="absolute top-4 left-4 bg-brand-wood/90 backdrop-blur-sm text-white text-[10px] uppercase tracking-wider font-semibold px-3 py-1.5 rounded-full shadow-sm">
+                      {product.category}
+                    </span>
+                  )}
                 </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+                <div className="p-8 flex flex-col flex-grow bg-brand-paper/10 border-t border-brand-wood/5">
+                  <h3 className="text-lg font-serif mb-4 leading-tight text-brand-ink">{product.name}</h3>
+                  <div className="flex items-center justify-between mt-auto pt-4 border-t border-brand-wood/10">
+                    <a 
+                      href={product.affiliateLink} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="w-full bg-brand-wood text-white px-5 py-2.5 rounded-full text-center text-sm font-medium hover:bg-brand-clay transition-all"
+                    >
+                      Ver na Loja
+                    </a>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -839,7 +906,11 @@ const AdminDashboard = () => {
   const [leads, setLeads] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'products' | 'leads'>('products');
   const [isAdding, setIsAdding] = useState(false);
-  const [formData, setFormData] = useState({ name: '', affiliateLink: '', imageUrl: '' });
+  const [formData, setFormData] = useState({ name: '', affiliateLink: '', imageUrl: '', category: '' });
+
+  // Estados para edição inline de produtos
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState({ name: '', affiliateLink: '', imageUrl: '', category: '' });
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -860,7 +931,19 @@ const AdminDashboard = () => {
     
     const qProducts = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
     const unsubProducts = onSnapshot(qProducts, (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[]);
+      const parsed = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
+      
+      // Ordenar na escuta do Admin exatamente pela mesma regra: order ASC, depois createdAt DESC
+      const sorted = parsed.sort((a, b) => {
+        const orderA = a.order !== undefined ? a.order : 99999;
+        const orderB = b.order !== undefined ? b.order : 99999;
+        if (orderA !== orderB) return orderA - orderB;
+        const timeA = a.createdAt?.seconds || 0;
+        const timeB = b.createdAt?.seconds || 0;
+        return timeB - timeA;
+      });
+      
+      setProducts(sorted);
     });
 
     const qLeads = query(collection(db, 'leads'), orderBy('createdAt', 'desc'));
@@ -911,11 +994,13 @@ const AdminDashboard = () => {
     if (!formData.name || !formData.affiliateLink || !formData.imageUrl) return;
 
     try {
+      const maxOrder = products.reduce((max, p) => (p.order !== undefined && p.order > max ? p.order : max), 0);
       await addDoc(collection(db, 'products'), {
         ...formData,
+        order: maxOrder + 1,
         createdAt: serverTimestamp()
       });
-      setFormData({ name: '', affiliateLink: '', imageUrl: '' });
+      setFormData({ name: '', affiliateLink: '', imageUrl: '', category: '' });
       setIsAdding(false);
     } catch (error) {
       console.error("Erro ao adicionar produto:", error);
@@ -925,13 +1010,72 @@ const AdminDashboard = () => {
 
   const handleDeleteProduct = async (id: string) => {
     if (confirm("Deseja realmente excluir este produto?")) {
-      await deleteDoc(doc(db, 'products', id));
+      try {
+        await deleteDoc(doc(db, 'products', id));
+      } catch (error) {
+        console.error("Erro ao excluir produto:", error);
+        alert("Erro ao excluir o produto do banco.");
+      }
     }
   };
 
   const handleDeleteLead = async (id: string) => {
     if (confirm("Deseja realmente excluir este lead?")) {
-      await deleteDoc(doc(db, 'leads', id));
+      try {
+        await deleteDoc(doc(db, 'leads', id));
+      } catch (error) {
+        console.error("Erro ao excluir lead:", error);
+        alert("Erro ao excluir o lead do banco.");
+      }
+    }
+  };
+
+  const startEditing = (p: Product) => {
+    setEditingId(p.id!);
+    setEditFormData({
+      name: p.name || '',
+      affiliateLink: p.affiliateLink || '',
+      imageUrl: p.imageUrl || '',
+      category: p.category || ''
+    });
+  };
+
+  const handleUpdateProduct = async (id: string) => {
+    if (!editFormData.name || !editFormData.affiliateLink || !editFormData.imageUrl) return;
+    try {
+      await updateDoc(doc(db, 'products', id), {
+        name: editFormData.name,
+        affiliateLink: editFormData.affiliateLink,
+        imageUrl: editFormData.imageUrl,
+        category: editFormData.category
+      });
+      setEditingId(null);
+    } catch (error) {
+      console.error("Erro ao atualizar produto:", error);
+      alert("Erro ao atualizar o produto.");
+    }
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+  };
+
+  const handleMoveProduct = async (index: number, direction: 'up' | 'down') => {
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= products.length) return;
+
+    const currentProduct = products[index];
+    const targetProduct = products[targetIdx];
+
+    const currentOrder = currentProduct.order !== undefined ? currentProduct.order : index;
+    const targetOrder = targetProduct.order !== undefined ? targetProduct.order : targetIdx;
+
+    try {
+      await updateDoc(doc(db, 'products', currentProduct.id!), { order: targetOrder });
+      await updateDoc(doc(db, 'products', targetProduct.id!), { order: currentOrder });
+    } catch (e) {
+      console.error("Erro ao reordenar:", e);
+      alert("Erro ao reordenar produto.");
     }
   };
 
@@ -1009,18 +1153,30 @@ const AdminDashboard = () => {
               {isAdding && (
                 <form onSubmit={handleSubmit} className="mb-12 bg-brand-paper/50 p-6 rounded-2xl border border-brand-wood/10">
                   <div className="grid gap-4">
-                    <input 
-                      type="text" 
-                      placeholder="Nome do Produto" 
-                      className="w-full p-3 rounded-xl border"
-                      value={formData.name}
-                      onChange={e => setFormData({...formData, name: e.target.value})}
-                      required
-                    />
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <input 
+                        type="text" 
+                        placeholder="Nome do Produto" 
+                        className="w-full p-3 rounded-xl border bg-white"
+                        value={formData.name}
+                        onChange={e => setFormData({...formData, name: e.target.value})}
+                        required
+                      />
+                      <select
+                        className="w-full p-3 rounded-xl border bg-white text-gray-700"
+                        value={formData.category}
+                        onChange={e => setFormData({...formData, category: e.target.value})}
+                      >
+                        <option value="">Sem Categoria (Geral)</option>
+                        {PRODUCT_CATEGORIES.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
                     <input 
                       type="url" 
                       placeholder="Link de Afiliado (https://...)" 
-                      className="w-full p-3 rounded-xl border"
+                      className="w-full p-3 rounded-xl border bg-white"
                       value={formData.affiliateLink}
                       onChange={e => setFormData({...formData, affiliateLink: e.target.value})}
                       required
@@ -1028,34 +1184,147 @@ const AdminDashboard = () => {
                     <input 
                       type="text" 
                       placeholder="URL da Imagem (ou caminho /arquivos/...)" 
-                      className="w-full p-3 rounded-xl border"
+                      className="w-full p-3 rounded-xl border bg-white"
                       value={formData.imageUrl}
                       onChange={e => setFormData({...formData, imageUrl: e.target.value})}
                       required
                     />
-                    <button type="submit" className="bg-brand-wood text-white p-3 rounded-xl font-bold">
+                    <button type="submit" className="bg-brand-wood text-white p-3 rounded-xl font-bold hover:bg-brand-clay transition-all cursor-pointer">
                       Salvar Produto
                     </button>
                   </div>
                 </form>
               )}
 
-              <div className="grid sm:grid-cols-2 gap-4">
-                {products.map(product => (
-                  <div key={product.id} className="flex items-center gap-4 p-4 border rounded-2xl">
-                    <img src={product.imageUrl} className="w-16 h-16 object-contain rounded-lg" alt="" />
-                    <div className="flex-grow">
-                      <h4 className="font-bold text-sm">{product.name}</h4>
-                      <p className="text-xs text-gray-400 truncate max-w-[150px]">{product.affiliateLink}</p>
+              <div className="space-y-3">
+                {products.map((product, idx) => {
+                  const isEditing = editingId === product.id;
+                  return (
+                    <div key={product.id} className="p-4 border rounded-2xl bg-white flex flex-col gap-3 shadow-sm hover:shadow transition-shadow">
+                      {isEditing ? (
+                        <div className="grid gap-3 w-full">
+                          <div className="text-xs font-semibold text-brand-wood uppercase tracking-wider">Editar Produto</div>
+                          
+                          <div className="grid sm:grid-cols-2 gap-3">
+                            <input 
+                              type="text" 
+                              placeholder="Nome do Produto" 
+                              className="p-3 border rounded-xl text-sm"
+                              value={editFormData.name}
+                              onChange={e => setEditFormData({...editFormData, name: e.target.value})}
+                              required
+                            />
+                            <select
+                              className="p-3 border rounded-xl text-sm bg-white text-gray-700"
+                              value={editFormData.category}
+                              onChange={e => setEditFormData({...editFormData, category: e.target.value})}
+                            >
+                              <option value="">Sem Categoria (Geral)</option>
+                              {PRODUCT_CATEGORIES.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          <input 
+                            type="url" 
+                            placeholder="Link de Afiliado (https://...)" 
+                            className="p-3 border rounded-xl text-sm w-full"
+                            value={editFormData.affiliateLink}
+                            onChange={e => setEditFormData({...editFormData, affiliateLink: e.target.value})}
+                            required
+                          />
+                          
+                          <input 
+                            type="text" 
+                            placeholder="URL da Imagem (ou /arquivos/...)" 
+                            className="p-3 border rounded-xl text-sm w-full"
+                            value={editFormData.imageUrl}
+                            onChange={e => setEditFormData({...editFormData, imageUrl: e.target.value})}
+                            required
+                          />
+                          
+                          <div className="flex gap-2 justify-end mt-1">
+                            <button 
+                              type="button"
+                              onClick={cancelEditing}
+                              className="px-4 py-2 text-xs text-gray-500 hover:bg-gray-100 rounded-lg cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => handleUpdateProduct(product.id!)}
+                              className="px-4 py-2 text-xs bg-brand-wood text-white rounded-lg hover:bg-brand-clay font-bold cursor-pointer"
+                            >
+                              Salvar Alterações
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="relative w-14 h-14 bg-gray-50 border rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center p-1">
+                            <img src={product.imageUrl} className="max-w-full max-h-full object-contain" alt="" />
+                          </div>
+                          <div className="flex-grow min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <h4 className="font-bold text-sm text-gray-800 truncate">{product.name}</h4>
+                              {product.category && (
+                                <span className="text-[9px] uppercase tracking-wider font-semibold text-brand-wood bg-brand-wood/8 px-2 py-0.5 rounded-full">
+                                  {product.category}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-400 truncate max-w-xs">{product.affiliateLink}</p>
+                          </div>
+                          
+                          {/* Controles de Reordenamento, Edição e Exclusão */}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button 
+                              onClick={() => handleMoveProduct(idx, 'up')}
+                              disabled={idx === 0}
+                              className={cn(
+                                "p-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer",
+                                idx === 0 ? "text-gray-200 cursor-not-allowed" : "text-gray-500 hover:text-brand-wood"
+                              )}
+                              title="Mover para cima"
+                            >
+                              <ArrowUp className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleMoveProduct(idx, 'down')}
+                              disabled={idx === products.length - 1}
+                              className={cn(
+                                "p-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer",
+                                idx === products.length - 1 ? "text-gray-200 cursor-not-allowed" : "text-gray-500 hover:text-brand-wood"
+                              )}
+                              title="Mover para baixo"
+                            >
+                              <ArrowDown className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => startEditing(product)}
+                              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-blue-600 transition-colors cursor-pointer"
+                              title="Editar Produto"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteProduct(product.id!)}
+                              className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors cursor-pointer"
+                              title="Excluir Produto"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <button 
-                      onClick={() => handleDeleteProduct(product.id!)}
-                      className="text-red-400 hover:text-red-600 p-2"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
+                {products.length === 0 && (
+                  <p className="text-center text-gray-400 py-12">Nenhum produto cadastrado ainda.</p>
+                )}
               </div>
             </>
           ) : (

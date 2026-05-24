@@ -51,7 +51,7 @@ if (token) {
     
     run('git', ['add', '.']);
     
-    run('git', ['commit', '-m', "Fix: Adjust email template button text size and update quote to Michelangelo's quote"]);
+    run('git', ['commit', '-m', "Fix: Firestore rule delete failure, enable product ordering, inline editing, and category tags"]);
     
     run('git', ['push', 'origin', 'main']);
     console.log("Sincronização com o GitHub efetuada com sucesso!");
