@@ -12,7 +12,7 @@ console.log("Adicionando alterações...");
 run('git', ['add', '.']);
 
 console.log("Criando commit...");
-run('git', ['commit', '-m', 'Fix: Dynamic browser-based resolveAssetUrl to correctly load local arquivos folder on both root domain and subdirectories']);
+run('git', ['commit', '-m', 'Fix: Simplify resolveAssetUrl to strictly relative paths for ultimate cross-domain and subfolder compatibility']);
 
 console.log("Enviando para o GitHub...");
 run('git', ['push', 'origin', 'main']);

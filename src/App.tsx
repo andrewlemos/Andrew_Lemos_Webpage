@@ -77,29 +77,15 @@ const resolveAssetUrl = (url: any): string => {
     cleaned = cleaned.substring(7);
   }
 
-  // Remove barra inicial para poder concatenar de forma limpa
+  // Remove barra inicial para tornar o caminho relativo de forma robusta
   if (cleaned.startsWith('/')) {
     cleaned = cleaned.substring(1);
   }
 
-  // Determina dinamicamente o caminho base no navegador para garantir que
-  // as imagens locais de arquivos funcionem tanto no ambiente root (Cloud Run / Vercel)
-  // quanto em subdiretórios (como GitHub Pages)
-  let base = '/';
-  if (typeof window !== 'undefined') {
-    const pathname = window.location.pathname;
-    if (pathname.includes('/Andrew_Lemos_Webpage')) {
-      base = '/Andrew_Lemos_Webpage/';
-    }
-  } else {
-    const envBase = import.meta.env.BASE_URL || '/';
-    if (envBase !== './' && envBase !== '.') {
-      base = envBase;
-    }
-  }
-
-  const separator = base.endsWith('/') ? '' : '/';
-  return `${base}${separator}${cleaned}`;
+  // Retorna um caminho estritamente relativo baseado em './'
+  // Isso funciona em qualquer domínio de produção, subdiretório (ex: GitHub Pages com qualquer caixa alta/baixa),
+  // e também no servidor de desenvolvimento local.
+  return `./${cleaned}`;
 };
 
 const normalizeImageUrl = (url?: any): string => {
