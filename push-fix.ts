@@ -8,6 +8,13 @@ function run(cmd: string, args: string[]) {
   return result.status === 0;
 }
 
+console.log("Adicionando alterações...");
 run('git', ['add', '.']);
-run('git', ['commit', '-m', 'Clean up temporary push script']);
+
+console.log("Criando commit...");
+run('git', ['commit', '-m', 'Fix: Dynamic browser-based resolveAssetUrl to correctly load local arquivos folder on both root domain and subdirectories']);
+
+console.log("Enviando para o GitHub...");
 run('git', ['push', 'origin', 'main']);
+
+console.log("Pronto!");

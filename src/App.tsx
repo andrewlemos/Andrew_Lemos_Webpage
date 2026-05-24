@@ -77,15 +77,28 @@ const resolveAssetUrl = (url: any): string => {
     cleaned = cleaned.substring(7);
   }
 
-  // Remove barra inicial para poder concatenar com a BASE_URL de forma limpa e relativa
+  // Remove barra inicial para poder concatenar de forma limpa
   if (cleaned.startsWith('/')) {
     cleaned = cleaned.substring(1);
   }
 
-  // Obtém o BASE_URL da build (Vite). Ex: '/' em desenvolvimento local ou subpastas no GitHub Pages
-  const base = import.meta.env.BASE_URL || '/';
+  // Determina dinamicamente o caminho base no navegador para garantir que
+  // as imagens locais de arquivos funcionem tanto no ambiente root (Cloud Run / Vercel)
+  // quanto em subdiretórios (como GitHub Pages)
+  let base = '/';
+  if (typeof window !== 'undefined') {
+    const pathname = window.location.pathname;
+    if (pathname.includes('/Andrew_Lemos_Webpage')) {
+      base = '/Andrew_Lemos_Webpage/';
+    }
+  } else {
+    const envBase = import.meta.env.BASE_URL || '/';
+    if (envBase !== './' && envBase !== '.') {
+      base = envBase;
+    }
+  }
+
   const separator = base.endsWith('/') ? '' : '/';
-  
   return `${base}${separator}${cleaned}`;
 };
 
