@@ -2,12 +2,129 @@ import express from "express";
 import nodemailer from "nodemailer";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import path from "path";
+import fs from "fs";
 
 dotenv.config();
 
 const app = express();
 
 app.use(express.json());
+
+// Middleware to log incoming requests and responses to server.log for inspection
+app.use((req, res, next) => {
+  const startTime = Date.now();
+  res.on("finish", () => {
+    const duration = Date.now() - startTime;
+    const contentType = res.get("Content-Type") || "none";
+    const logLine = `[${new Date().toISOString()}] ${req.method} ${req.originalUrl} -> Status: ${res.statusCode} | Type: ${contentType} | Time: ${duration}ms\n`;
+    try {
+      fs.appendFileSync(path.join(process.cwd(), "server.log"), logLine);
+    } catch (err) {
+      // Ignore log write errors
+    }
+    console.log(logLine.trim());
+  });
+  next();
+});
+
+// Define MIME types helper for common media files
+const ARQUIVOS_MIME_TYPES: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+  ".pdf": "application/pdf",
+  ".ico": "image/x-icon"
+};
+
+// Resilient middleware to resolve case-sensitivity, NFC/NFD encoding and whitespace issues for /arquivos/* files
+app.get("/arquivos/*", (req, res, next) => {
+  try {
+    const originalPath = req.originalUrl.split("?")[0]; // e.g. "/arquivos/Apresenta%C3%A7%C3%A3o%20do%20Canal.jpg"
+    const decodedPath = decodeURIComponent(originalPath); // e.g. "/arquivos/Apresentação do Canal.jpg"
+    
+    // Strip "/arquivos/" prefix to get the relative filename
+    const cleanedFilename = decodedPath.replace(/^\/?arquivos\/?/, "").trim();
+
+    if (!cleanedFilename) {
+      return next();
+    }
+
+    const searchDirs = [
+      path.join(process.cwd(), "public/arquivos"),
+      path.join(process.cwd(), "dist/arquivos"),
+      path.join(process.cwd(), "arquivos")
+    ];
+
+    // Helper to send file with robust cross-origin and caching headers
+    const sendWithHeaders = (filePath: string, filename: string) => {
+      try {
+        const ext = path.extname(filename).toLowerCase();
+        const contentType = ARQUIVOS_MIME_TYPES[ext] || "application/octet-stream";
+        
+        res.setHeader("Content-Type", contentType);
+        res.setHeader("Cache-Control", "public, max-age=31536000"); // 1 year cache
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "*");
+        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        
+        // Force status 200 OK with whole payload to satisfy iframe sandboxing rules
+        const fileBuffer = fs.readFileSync(filePath);
+        return res.status(200).send(fileBuffer);
+      } catch (err) {
+        console.error("sendWithHeaders failed:", err);
+        return res.status(404).send("File could not be transferred.");
+      }
+    };
+
+    // 1. Direct Lookup Optimization: check if exact file exists first
+    for (const dir of searchDirs) {
+      if (fs.existsSync(dir)) {
+        const directPath = path.join(dir, cleanedFilename);
+        if (fs.existsSync(directPath) && fs.statSync(directPath).isFile()) {
+          return sendWithHeaders(directPath, cleanedFilename);
+        }
+      }
+    }
+
+    // 2. Resilient Directory Scan Fallback (Resolve case sensitivity, encoding variations)
+    const reqNormalizedNFC = cleanedFilename.toLowerCase().normalize("NFC");
+    const reqNormalizedNFD = cleanedFilename.toLowerCase().normalize("NFD");
+
+    for (const dir of searchDirs) {
+      if (fs.existsSync(dir)) {
+        const files = fs.readdirSync(dir);
+        const matchedFile = files.find(f => {
+          const fNormNFC = f.toLowerCase().normalize("NFC");
+          const fNormNFD = f.toLowerCase().normalize("NFD");
+          return fNormNFC === reqNormalizedNFC ||
+                 fNormNFD === reqNormalizedNFD ||
+                 fNormNFC === reqNormalizedNFD ||
+                 fNormNFD === reqNormalizedNFC;
+        });
+
+        if (matchedFile) {
+          const filePath = path.join(dir, matchedFile);
+          if (fs.statSync(filePath).isFile()) {
+            return sendWithHeaders(filePath, matchedFile);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Resilient /arquivos static served encountered an error:", err);
+  }
+  next();
+});
+
+// Servir arquivos estáticos de 'arquivos' de forma altamente resiliente (fallback)
+app.use("/arquivos", express.static(path.join(process.cwd(), "public/arquivos")));
+app.use("/arquivos", express.static(path.join(process.cwd(), "dist/arquivos")));
+app.use("/arquivos", express.static(path.join(process.cwd(), "arquivos")));
 
 // Helper to get SMTP transporter lazily and safely
 function getSmtpTransporter() {
@@ -57,10 +174,6 @@ app.post("/api/send-manual", async (req, res) => {
     const transporter = getSmtpTransporter();
     const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
     
-    const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-    const host = req.get('host') || "ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app";
-    const docUrl = `${protocol}://${host}/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf`;
-
     await transporter.sendMail({
       from: `"Portfólio Andrew Lemos" <${SMTP_USER}>`,
       to: email,
@@ -76,7 +189,7 @@ app.post("/api/send-manual", async (req, res) => {
             Este guia foi preparado para ajudar você a dar os primeiros passos nesta arte milenar que tanto amo.
           </p>
           <div style="text-align: center; margin: 40px 0;">
-            <a href="${docUrl}" 
+            <a href="https://ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf" 
                style="display: inline-block; background-color: #6d4c41; color: white; padding: 12px 24px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 14px;">
               Baixar Manual
             </a>
@@ -91,7 +204,7 @@ app.post("/api/send-manual", async (req, res) => {
           </p>
         </div>
       `,
-      text: `Olá ${name}, seu manual de entalhe chegou! Baixe aqui: ${docUrl}`
+      text: `Olá ${name}, seu manual de entalhe chegou! Baixe aqui: https://ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf`
     });
 
     res.json({ success: true });

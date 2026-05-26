@@ -43,6 +43,27 @@
         }
       },
       "required": ["name", "email"]
+    },
+    "Arquivo": {
+      "title": "Arquivo",
+      "description": "Gallery work/media image addresses",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "img": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["title", "category", "img"]
     }
   },
   "firestore": {
@@ -53,6 +74,10 @@
     "/leads/{leadId}": {
       "schema": "Lead",
       "description": "Collection of captured leads"
+    },
+    "/arquivos/{arquivoId}": {
+      "schema": "Arquivo",
+      "description": "Collection of gallery works and images"
     }
   }
 }
