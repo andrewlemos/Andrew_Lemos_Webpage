@@ -29,7 +29,9 @@ service cloud.firestore {
       return data.name is string && data.name.size() > 0 && data.name.size() < 300 &&
              data.affiliateLink is string && data.affiliateLink.matches("^https?://.*") &&
              data.imageUrl is string && data.imageUrl.size() < 500 &&
-             data.createdAt is timestamp;
+             data.createdAt is timestamp &&
+             (!("category" in data) || (data.category is string && data.category.size() < 100)) &&
+             (!("order" in data) || (data.order is int));
     }
 
     function isValidLead(data) {

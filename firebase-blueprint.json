@@ -17,6 +17,14 @@
           "type": "string",
           "description": "URL of the product image"
         },
+        "category": {
+          "type": "string",
+          "description": "Category of the product (Pintura, Desenho, Pirografia, Modelagem, or Entalhe/Escultura em Madeira)"
+        },
+        "order": {
+          "type": "integer",
+          "description": "Display sort order"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",

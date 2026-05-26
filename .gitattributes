@@ -1,0 +1,13 @@
+# Force Git to treat all media and document files as strict binary data.
+# This prevents line-ending (CRLF / LF) conversions from corrupting image and document bytes.
+
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.gif binary
+*.webp binary
+*.pdf binary
+*.ico binary
+
+# Ensure everything inside public/arquivos is preserved as binary
+/public/arquivos/* binary

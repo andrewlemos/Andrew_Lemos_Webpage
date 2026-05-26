@@ -51,6 +51,8 @@ interface Product {
   name: string;
   affiliateLink: string;
   imageUrl: string;
+  category?: string;
+  order?: number;
   createdAt: any;
 }
 
@@ -841,6 +843,7 @@ const OnlineCoursesSection = () => {
 
 const RecommendedProductsSection = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState('Todos');
 
   useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
@@ -858,47 +861,105 @@ const RecommendedProductsSection = () => {
 
   if (products.length === 0) return null;
 
+  const categories = [
+    'Todos',
+    'Entalhe/Escultura em Madeira',
+    'Pintura',
+    'Desenho',
+    'Pirografia',
+    'Modelagem'
+  ];
+
+  const processedProducts = products.map(p => ({
+    ...p,
+    category: p.category || 'Entalhe/Escultura em Madeira',
+    order: typeof p.order === 'number' && !isNaN(p.order) ? p.order : 9999
+  }));
+
+  const filteredProducts = processedProducts
+    .filter(p => selectedCategory === 'Todos' || p.category === selectedCategory)
+    .sort((a, b) => {
+      if (a.order !== b.order) {
+        return a.order - b.order;
+      }
+      const timeA = a.createdAt?.seconds || 0;
+      const timeB = b.createdAt?.seconds || 0;
+      return timeB - timeA;
+    });
+
   return (
     <section id="products" className="section-padding bg-brand-paper">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-16">
+        <div className="text-center mb-10">
           <h2 className="text-4xl md:text-5xl font-serif mb-4">Produtos Recomendados</h2>
           <p className="text-gray-500">Materiais e ferramentas que utilizo e recomendo para sua jornada artística.</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8">
-          {products.map((product) => (
-            <motion.div 
-              key={product.id}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="bg-white rounded-3xl overflow-hidden border border-brand-wood/5 flex flex-col h-full hover:shadow-xl transition-all"
+        {/* Filtros de categoria */}
+        <div className="flex flex-wrap justify-center gap-2 md:gap-3 mb-12 max-w-4xl mx-auto px-4">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={cn(
+                "px-5 py-2.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 border cursor-pointer",
+                selectedCategory === cat
+                  ? "bg-brand-wood text-white border-brand-wood shadow-md shadow-brand-wood/10"
+                  : "bg-white text-gray-600 border-brand-wood/10 hover:border-brand-wood/40 hover:bg-brand-paper"
+              )}
             >
-              <div className="relative aspect-square p-8">
-                <img 
-                  src={ensureRobustUrl(product.imageUrl)} 
-                  alt={product.name} 
-                  className="w-full h-full object-contain"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div className="p-8 flex flex-col flex-grow">
-                <h3 className="text-xl font-serif mb-3 leading-tight">{product.name}</h3>
-                <div className="flex items-center justify-between mt-auto pt-6 border-t border-brand-wood/10">
-                  <a 
-                    href={product.affiliateLink} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="w-full bg-brand-wood text-white px-6 py-3 rounded-full text-center font-medium hover:bg-brand-clay transition-all"
-                  >
-                    Ver na Loja
-                  </a>
-                </div>
-              </div>
-            </motion.div>
+              {cat}
+            </button>
           ))}
         </div>
+
+        {filteredProducts.length === 0 ? (
+          <div className="text-center py-20 text-gray-400 font-medium">
+            Nenhum produto cadastrado nesta categoria.
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-8">
+            <AnimatePresence mode="popLayout">
+              {filteredProducts.map((product) => (
+                <motion.div 
+                  key={product.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.4 }}
+                  className="bg-white rounded-3xl overflow-hidden border border-brand-wood/5 flex flex-col h-full hover:shadow-xl transition-all"
+                >
+                  <div className="relative aspect-square p-8 flex items-center justify-center bg-gray-50/30">
+                    <img 
+                      src={ensureRobustUrl(product.imageUrl)} 
+                      alt={product.name} 
+                      className="w-full h-full object-contain max-h-[80%]"
+                      referrerPolicy="no-referrer"
+                    />
+                    {/* Badge da categoria */}
+                    <div className="absolute top-4 left-4 bg-brand-paper/90 backdrop-blur-sm border border-brand-wood/5 px-2.5 py-0.5 rounded-full text-[9px] font-bold text-brand-clay/90 tracking-wide uppercase">
+                      {product.category}
+                    </div>
+                  </div>
+                  <div className="p-8 flex flex-col flex-grow">
+                    <h3 className="text-xl font-serif mb-3 leading-tight flex-grow">{product.name}</h3>
+                    <div className="flex items-center justify-between mt-auto pt-6 border-t border-brand-wood/10">
+                      <a 
+                        href={product.affiliateLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full bg-brand-wood text-white px-6 py-3 rounded-full text-center font-medium hover:bg-brand-clay transition-all"
+                      >
+                        Ver na Loja
+                      </a>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -913,7 +974,7 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState<'products' | 'leads' | 'arquivos'>('products');
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingArquivo, setIsAddingArquivo] = useState(false);
-  const [formData, setFormData] = useState({ name: '', affiliateLink: '', imageUrl: '' });
+  const [formData, setFormData] = useState({ name: '', affiliateLink: '', imageUrl: '', category: 'Entalhe/Escultura em Madeira', order: '1' });
   const [arquivoForm, setArquivoForm] = useState({ title: '', category: 'Madeira', img: '' });
 
   useEffect(() => {
@@ -1050,9 +1111,11 @@ const AdminDashboard = () => {
         name: formData.name.trim(),
         affiliateLink: formData.affiliateLink.trim(),
         imageUrl: finalImageUrl,
+        category: formData.category || 'Entalhe/Escultura em Madeira',
+        order: parseInt(formData.order, 10) || 1,
         createdAt: serverTimestamp()
       });
-      setFormData({ name: '', affiliateLink: '', imageUrl: '' });
+      setFormData({ name: '', affiliateLink: '', imageUrl: '', category: 'Entalhe/Escultura em Madeira', order: '1' });
       setIsAdding(false);
     } catch (error) {
       console.error("Erro ao adicionar produto:", error);
@@ -1216,6 +1279,35 @@ const AdminDashboard = () => {
                       onChange={e => setFormData({...formData, imageUrl: e.target.value})}
                       required
                     />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-gray-500 font-medium mb-1">Categoria do Produto</label>
+                        <select
+                          className="w-full p-3 rounded-xl border bg-white"
+                          value={formData.category}
+                          onChange={e => setFormData({...formData, category: e.target.value})}
+                          required
+                        >
+                          <option value="Entalhe/Escultura em Madeira">Entalhe/Escultura em Madeira</option>
+                          <option value="Pintura">Pintura</option>
+                          <option value="Desenho">Desenho</option>
+                          <option value="Pirografia">Pirografia</option>
+                          <option value="Modelagem">Modelagem</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 font-medium mb-1">Ordem de Exibição</label>
+                        <input 
+                          type="number" 
+                          placeholder="Ex: 1" 
+                          className="w-full p-3 rounded-xl border bg-white"
+                          value={formData.order}
+                          onChange={e => setFormData({...formData, order: e.target.value})}
+                          required
+                          min="1"
+                        />
+                      </div>
+                    </div>
                     <button type="submit" className="bg-brand-wood text-white p-3 rounded-xl font-bold">
                       Salvar Produto
                     </button>
@@ -1224,21 +1316,70 @@ const AdminDashboard = () => {
               )}
 
               <div className="grid sm:grid-cols-2 gap-4">
-                {products.map(product => (
-                  <div key={product.id} className="flex items-center gap-4 p-4 border rounded-2xl">
-                    <img src={ensureRobustUrl(product.imageUrl)} className="w-16 h-16 object-contain rounded-lg" alt="" />
-                    <div className="flex-grow">
-                      <h4 className="font-bold text-sm">{product.name}</h4>
-                      <p className="text-xs text-gray-400 truncate max-w-[150px]">{product.affiliateLink}</p>
+                {products.map(product => {
+                  const currentCategory = product.category || 'Entalhe/Escultura em Madeira';
+                  const currentOrder = typeof product.order === 'number' ? product.order : 1;
+                  return (
+                    <div key={product.id} className="flex flex-col gap-2 p-4 border rounded-2xl bg-white">
+                      <div className="flex items-center gap-4">
+                        <img src={ensureRobustUrl(product.imageUrl)} className="w-16 h-16 object-contain rounded-lg flex-shrink-0" alt="" />
+                        <div className="flex-grow min-w-0">
+                          <h4 className="font-bold text-sm truncate">{product.name}</h4>
+                          <p className="text-xs text-gray-400 truncate max-w-[200px]">{product.affiliateLink}</p>
+                        </div>
+                        <button 
+                          onClick={() => handleDeleteProduct(product.id!)}
+                          className="text-red-400 hover:text-red-600 p-2 ml-auto flex-shrink-0"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      
+                      {/* Edição rápida inline */}
+                      <div className="grid grid-cols-2 gap-3 mt-2 pt-2 border-t border-gray-100 text-xs">
+                        <div>
+                          <label className="block text-[10px] text-gray-400 font-medium mb-1">Categoria</label>
+                          <select
+                            value={currentCategory}
+                            onChange={async (e) => {
+                              try {
+                                await updateDoc(doc(db, 'products', product.id!), { category: e.target.value });
+                              } catch (err) {
+                                console.error("Erro ao atualizar categoria do produto:", err);
+                              }
+                            }}
+                            className="w-full p-2 border rounded-lg bg-gray-50 text-gray-700"
+                          >
+                            <option value="Entalhe/Escultura em Madeira">Entalhe/Escultura em Madeira</option>
+                            <option value="Pintura">Pintura</option>
+                            <option value="Desenho">Desenho</option>
+                            <option value="Pirografia">Pirografia</option>
+                            <option value="Modelagem">Modelagem</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-gray-400 font-medium mb-1">Ordem de Exibição</label>
+                          <input
+                            type="number"
+                            value={currentOrder}
+                            min="1"
+                            onChange={async (e) => {
+                              const val = parseInt(e.target.value, 10);
+                              if (!isNaN(val)) {
+                                try {
+                                  await updateDoc(doc(db, 'products', product.id!), { order: val });
+                                } catch (err) {
+                                  console.error("Erro ao atualizar ordem do produto:", err);
+                                }
+                              }
+                            }}
+                            className="w-full p-2 border rounded-lg bg-gray-50 text-gray-700 font-mono"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteProduct(product.id!)}
-                      className="text-red-400 hover:text-red-600 p-2"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           ) : activeTab === 'arquivos' ? (
