@@ -1125,13 +1125,23 @@ const AdminDashboard = () => {
 
   const handleDeleteProduct = async (id: string) => {
     if (confirm("Deseja realmente excluir este produto?")) {
-      await deleteDoc(doc(db, 'products', id));
+      try {
+        await deleteDoc(doc(db, 'products', id));
+      } catch (error) {
+        console.error("Erro ao excluir produto:", error);
+        alert("Erro ao excluir produto. Verifique as permissões ou conexão.");
+      }
     }
   };
 
   const handleDeleteLead = async (id: string) => {
     if (confirm("Deseja realmente excluir este lead?")) {
-      await deleteDoc(doc(db, 'leads', id));
+      try {
+        await deleteDoc(doc(db, 'leads', id));
+      } catch (error) {
+        console.error("Erro ao excluir lead:", error);
+        alert("Erro ao excluir lead. Verifique as permissões ou conexão.");
+      }
     }
   };
 
@@ -1163,7 +1173,12 @@ const AdminDashboard = () => {
 
   const handleDeleteArquivo = async (id: string) => {
     if (confirm("Deseja realmente excluir esta obra da galeria?")) {
-      await deleteDoc(doc(db, 'arquivos', id));
+      try {
+        await deleteDoc(doc(db, 'arquivos', id));
+      } catch (error) {
+        console.error("Erro ao excluir obra da galeria:", error);
+        alert("Erro ao excluir obra de galeria. Verifique as permissões ou conexão.");
+      }
     }
   };
 
