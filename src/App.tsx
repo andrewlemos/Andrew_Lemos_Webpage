@@ -494,9 +494,14 @@ const Gallery = () => {
         </div>
 
         <div className="mt-12 text-center">
-          <button className="text-brand-wood font-medium flex items-center gap-2 mx-auto hover:gap-4 transition-all">
+          <a 
+            href="https://www.instagram.com/andrewlemos.art" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-brand-wood font-medium inline-flex items-center gap-2 mx-auto hover:gap-4 transition-all"
+          >
             Ver portfólio completo no Instagram <ArrowRight className="w-4 h-4" />
-          </button>
+          </a>
         </div>
       </div>
 
