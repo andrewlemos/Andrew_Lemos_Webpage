@@ -1415,16 +1415,14 @@ const AdminDashboard = () => {
                       onChange={e => setArquivoForm({...arquivoForm, title: e.target.value})}
                       required
                     />
-                    <select
-                      className="w-full p-3 rounded-xl border bg-white"
+                    <input 
+                      type="text" 
+                      placeholder="Tipo de Trabalho / Categoria (ex: Madeira, Grafite, Modelagem, Pintura)" 
+                      className="w-full p-3 rounded-xl border"
                       value={arquivoForm.category}
                       onChange={e => setArquivoForm({...arquivoForm, category: e.target.value})}
                       required
-                    >
-                      <option value="Madeira">Madeira</option>
-                      <option value="Grafite">Grafite</option>
-                      <option value="Modelagem">Modelagem</option>
-                    </select>
+                    />
                     <input 
                       type="text" 
                       placeholder="Caminho da Imagem no Servidor (ex: /arquivos/nome_da_imagem.jpg)" 
@@ -1440,23 +1438,111 @@ const AdminDashboard = () => {
                 </form>
               )}
 
-              <div className="grid sm:grid-cols-2 gap-4">
-                {arquivos.map(arq => (
-                  <div key={arq.id} className="flex items-center gap-4 p-4 border rounded-2xl">
-                    <img src={ensureRobustUrl(arq.img)} className="w-16 h-16 object-cover rounded-lg" alt="" referrerPolicy="no-referrer" />
-                    <div className="flex-grow">
-                      <h4 className="font-bold text-sm">{arq.title}</h4>
-                      <span className="text-xs bg-brand-paper px-2 py-0.5 rounded-full text-brand-clay font-medium">{arq.category}</span>
-                      <p className="text-[10px] text-gray-400 truncate max-w-[150px] mt-1">{arq.img}</p>
+              <div className="grid sm:grid-cols-2 gap-6">
+                {arquivos.map(arq => {
+                  const currentOrder = typeof arq.order === 'number' ? arq.order : 1;
+                  return (
+                    <div key={arq.id} className="flex flex-col gap-3 p-4 border rounded-2xl bg-white shadow-sm hover:shadow-md transition-all">
+                      <div className="flex items-start gap-4">
+                        <img 
+                          src={ensureRobustUrl(arq.img)} 
+                          className="w-16 h-16 object-cover rounded-lg flex-shrink-0" 
+                          alt="" 
+                          referrerPolicy="no-referrer" 
+                        />
+                        <div className="flex-grow min-w-0">
+                          <p className="text-[10px] text-gray-400 truncate max-w-[200px] mb-1">{arq.img}</p>
+                          
+                          {/* Nome da Obra (Título) */}
+                          <div className="mb-2">
+                            <label className="block text-[10px] text-gray-400 font-medium mb-0.5">Nome da Obra</label>
+                            <input 
+                              type="text"
+                              defaultValue={arq.title}
+                              onBlur={async (e) => {
+                                const newTitle = e.target.value.trim();
+                                if (newTitle && newTitle !== arq.title) {
+                                  try {
+                                    await updateDoc(doc(db, 'arquivos', arq.id!), { title: newTitle });
+                                  } catch (err) {
+                                    console.error("Erro ao atualizar título da obra:", err);
+                                  }
+                                }
+                              }}
+                              onKeyDown={async (e) => {
+                                if (e.key === 'Enter') {
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              className="w-full p-2 text-xs border rounded-lg bg-gray-50 focus:bg-white text-gray-800 font-medium"
+                              placeholder="Nome da Obra"
+                            />
+                          </div>
+
+                          {/* Tipo de Trabalho (Categoria) */}
+                          <div>
+                            <label className="block text-[10px] text-gray-400 font-medium mb-0.5">Tipo de Trabalho</label>
+                            <input 
+                              type="text"
+                              defaultValue={arq.category}
+                              onBlur={async (e) => {
+                                const newCategory = e.target.value.trim();
+                                if (newCategory !== undefined && newCategory !== arq.category) {
+                                  try {
+                                    await updateDoc(doc(db, 'arquivos', arq.id!), { category: newCategory });
+                                  } catch (err) {
+                                    console.error("Erro ao atualizar categoria da obra:", err);
+                                  }
+                                }
+                              }}
+                              onKeyDown={async (e) => {
+                                if (e.key === 'Enter') {
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              className="w-full p-2 text-xs border rounded-lg bg-gray-50 focus:bg-white text-gray-800"
+                              placeholder="ex: Madeira, Grafite, Modelagem..."
+                            />
+                          </div>
+                        </div>
+
+                        <button 
+                          onClick={() => handleDeleteArquivo(arq.id!)}
+                          className="text-red-400 hover:text-red-600 p-2 flex-shrink-0 rounded-full hover:bg-red-50 transition-colors"
+                          title="Excluir obra"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      {/* Outras propriedades (ex: Ordem) */}
+                      <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100 text-xs">
+                        <div>
+                          <label className="block text-[10px] text-gray-400 font-medium mb-1">Ordem de Exibição</label>
+                          <input
+                            type="number"
+                            value={currentOrder}
+                            min="1"
+                            onChange={async (e) => {
+                              const val = parseInt(e.target.value, 10);
+                              if (!isNaN(val)) {
+                                try {
+                                  await updateDoc(doc(db, 'arquivos', arq.id!), { order: val });
+                                } catch (err) {
+                                  console.error("Erro ao atualizar ordem da obra:", err);
+                                }
+                              }
+                            }}
+                            className="w-full p-2 border rounded-lg bg-gray-50 text-gray-700 font-mono"
+                          />
+                        </div>
+                        <div className="flex items-end justify-end text-[10px] text-gray-400 font-mono pb-2">
+                          ID: {arq.id?.slice(0, 6)}...
+                        </div>
+                      </div>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteArquivo(arq.id!)}
-                      className="text-red-400 hover:text-red-600 p-2"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
                 {arquivos.length === 0 && (
                   <p className="text-center text-gray-400 py-12 col-span-2">Nenhuma obra cadastrada na galeria.</p>
                 )}
