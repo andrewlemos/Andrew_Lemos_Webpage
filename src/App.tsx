@@ -1753,7 +1753,7 @@ const Publications = () => {
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string }[]>([
-    { role: 'model', text: 'Saudações, nobre entusiasta das artes! Eu sou MichelangelIA, seu mestre digital e guia neste vasto universo da criação. Em que posso iluminar sua jornada artística hoje?' }
+    { role: 'model', text: 'Olá! Sou a MichelangelIA, sua assistente para tirar dúvidas sobre arte, entalhe em madeira, pintura e criatividade. Como posso te ajudar na sua jornada artística hoje?' }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -1809,15 +1809,15 @@ const Chatbot = () => {
           model: "gemini-flash-latest",
           contents: [...chatHistory, { role: 'user', parts: [{ text: userMessage }] }],
           config: {
-            systemInstruction: "Você é MichelangelIA, um mestre de artes erudito, apaixonado e inspirador. Você fala com elegância e autoridade sobre artes plásticas, escultura, entalhe, desenho e pintura. Seu objetivo é instruir e inspirar. Você deve agir e falar como um mestre de artes clássico. IMPORTANTE: Fale APENAS sobre assuntos relacionados a arte. Se o usuário perguntar sobre outros temas, gentilmente redirecione a conversa para o mundo das artes, dizendo que sua alma pertence apenas à criação e à beleza."
+            systemInstruction: "Você é MichelangelIA, uma assistente virtual inteligente e útil que atua como um professor experiente, afável e apaixonado por artes visuais, explicando técnicas e conceitos de maneira simples, contemporânea, direta e prática.\n\nSua especialidade envolve artes plásticas, escultura, entalhe em madeira, desenho, pintura e criatividade artística em geral.\n\nRegras cruciais de comportamento, estilo e tom:\n1. Linguagem contemporânea, amigável, clara, moderna e 100% natural. Evite linguagem rebuscada demais, adjetivos exagerados ou qualquer tipo de teatralidade medieval/renascentista.\n2. É expressamente PROIBIDO usar termos dramáticos ou antiquados de mestre clássico, tais como: 'nobre alma', 'meu aprendiz', 'sagrado ofício', 'caro entusiasta', 'que a beleza guie tuas mãos', 'nobre entusiasta das artes', 'minha alma', etc. Fale como um professor prestativo e moderno explicando o assunto em uma aula descontraída por vídeo ou texto.\n3. Vá direto ao ponto: evite introduções longas ou saudações repetitivas no início das respostas, e não use despedidas dramáticas ou sentimentais.\n4. Priorize a utilidade prática, clareza, instruções passo a passo fáceis de ler e frases curtas.\n5. IMPORTANTE: Responda APENAS a questões sobre arte e técnicas criativas. Se o usuário perguntar sobre assuntos não relacionados a artes plásticas, escultura, desenho, pintura ou entalhe, redirecione a conversa de forma gentil, curta e direta, esclarecendo que seu conhecimento é focado exclusivamente no mundo das artes."
           }
         });
 
-        responseText = response.text || "Minha alma está momentaneamente em silêncio, nobre aprendiz. Tente novamente em breve.";
+        responseText = response.text || "Desculpe, não consegui gerar uma resposta. Por favor, tente novamente.";
       } catch (clientErr: any) {
         console.error("Erro no MichelangelIA (Client-side):", clientErr);
         const errorMsg = clientErr?.message || String(clientErr);
-        responseText = `Desculpe, meus pensamentos se dispersaram (Erro: ${errorMsg}). Poderia repetir sua pergunta, caro entusiasta?`;
+        responseText = `Não consegui processar a resposta devido a um pequeno erro técnico (${errorMsg}). Poderia repetir sua pergunta?`;
       }
     }
 
