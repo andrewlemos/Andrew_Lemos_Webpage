@@ -281,7 +281,7 @@ const Biography = () => {
             </div>
             <div className="bg-brand-paper p-8 rounded-2xl border border-brand-wood/10">
               <h3 className="text-xl font-serif mb-4 text-brand-wood">Atuação Cultural</h3>
-              <p className="text-base">Membro do Conselho de Cultura de Pirassununga (Artes Visuais) em 2022 e 2023 e premiado com o Notoriedade Artística em 2024 através da Lei Paulo Gustavo.</p>
+              <p className="text-base">Membro do Conselho de Cultura de Pirassununga (Artes Visuais) em 2022 e 2023 e premiado por Notoriedade Artística em 2024 através da Lei Paulo Gustavo.</p>
             </div>
           </div>
 
