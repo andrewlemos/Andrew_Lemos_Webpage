@@ -29,7 +29,9 @@ service cloud.firestore {
       return data.name is string && data.name.size() > 0 && data.name.size() < 300 &&
              data.affiliateLink is string && data.affiliateLink.matches("^https?://.*") &&
              data.imageUrl is string && data.imageUrl.size() < 500 &&
-             data.createdAt is timestamp;
+             data.createdAt is timestamp &&
+             (!("category" in data) || (data.category is string && data.category.size() < 100)) &&
+             (!("order" in data) || (data.order is int));
     }
 
     function isValidLead(data) {
@@ -46,7 +48,8 @@ service cloud.firestore {
 
     match /products/{productId} {
       allow read: if true; // Publicly readable
-      allow create, update, delete: if isAdmin() && isValidProduct(request.resource.data);
+      allow create, update: if isAdmin() && isValidProduct(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     match /leads/{leadId} {
@@ -56,7 +59,8 @@ service cloud.firestore {
 
     match /arquivos/{arquivoId} {
       allow read: if true; // Publicly readable
-      allow create, update, delete: if isAdmin() && isValidArquivo(request.resource.data);
+      allow create, update: if isAdmin() && isValidArquivo(request.resource.data);
+      allow delete: if isAdmin();
     }
   }
 }

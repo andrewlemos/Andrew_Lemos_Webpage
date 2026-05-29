@@ -51,6 +51,8 @@ interface Product {
   name: string;
   affiliateLink: string;
   imageUrl: string;
+  category?: string;
+  order?: number;
   createdAt: any;
 }
 
@@ -279,7 +281,7 @@ const Biography = () => {
             </div>
             <div className="bg-brand-paper p-8 rounded-2xl border border-brand-wood/10">
               <h3 className="text-xl font-serif mb-4 text-brand-wood">Atuação Cultural</h3>
-              <p className="text-base">Membro do Conselho de Cultura de Pirassununga (Artes Visuais) e premiado com o Notoriedade Artística em 2024 através da Lei Paulo Gustavo.</p>
+              <p className="text-base">Membro do Conselho de Cultura de Pirassununga (Artes Visuais) em 2022 e 2023 e premiado por Notoriedade Artística em 2024 através da Lei Paulo Gustavo.</p>
             </div>
           </div>
 
@@ -492,9 +494,14 @@ const Gallery = () => {
         </div>
 
         <div className="mt-12 text-center">
-          <button className="text-brand-wood font-medium flex items-center gap-2 mx-auto hover:gap-4 transition-all">
+          <a 
+            href="https://www.instagram.com/andrewlemos.art" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-brand-wood font-medium inline-flex items-center gap-2 mx-auto hover:gap-4 transition-all"
+          >
             Ver portfólio completo no Instagram <ArrowRight className="w-4 h-4" />
-          </button>
+          </a>
         </div>
       </div>
 
@@ -841,6 +848,7 @@ const OnlineCoursesSection = () => {
 
 const RecommendedProductsSection = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState('Todos');
 
   useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
@@ -858,47 +866,105 @@ const RecommendedProductsSection = () => {
 
   if (products.length === 0) return null;
 
+  const categories = [
+    'Todos',
+    'Entalhe/Escultura em Madeira',
+    'Pintura',
+    'Desenho',
+    'Pirografia',
+    'Modelagem'
+  ];
+
+  const processedProducts = products.map(p => ({
+    ...p,
+    category: p.category || 'Entalhe/Escultura em Madeira',
+    order: typeof p.order === 'number' && !isNaN(p.order) ? p.order : 9999
+  }));
+
+  const filteredProducts = processedProducts
+    .filter(p => selectedCategory === 'Todos' || p.category === selectedCategory)
+    .sort((a, b) => {
+      if (a.order !== b.order) {
+        return a.order - b.order;
+      }
+      const timeA = a.createdAt?.seconds || 0;
+      const timeB = b.createdAt?.seconds || 0;
+      return timeB - timeA;
+    });
+
   return (
     <section id="products" className="section-padding bg-brand-paper">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-16">
+        <div className="text-center mb-10">
           <h2 className="text-4xl md:text-5xl font-serif mb-4">Produtos Recomendados</h2>
           <p className="text-gray-500">Materiais e ferramentas que utilizo e recomendo para sua jornada artística.</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8">
-          {products.map((product) => (
-            <motion.div 
-              key={product.id}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="bg-white rounded-3xl overflow-hidden border border-brand-wood/5 flex flex-col h-full hover:shadow-xl transition-all"
+        {/* Filtros de categoria */}
+        <div className="flex flex-wrap justify-center gap-2 md:gap-3 mb-12 max-w-4xl mx-auto px-4">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={cn(
+                "px-5 py-2.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 border cursor-pointer",
+                selectedCategory === cat
+                  ? "bg-brand-wood text-white border-brand-wood shadow-md shadow-brand-wood/10"
+                  : "bg-white text-gray-600 border-brand-wood/10 hover:border-brand-wood/40 hover:bg-brand-paper"
+              )}
             >
-              <div className="relative aspect-square p-8">
-                <img 
-                  src={ensureRobustUrl(product.imageUrl)} 
-                  alt={product.name} 
-                  className="w-full h-full object-contain"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div className="p-8 flex flex-col flex-grow">
-                <h3 className="text-xl font-serif mb-3 leading-tight">{product.name}</h3>
-                <div className="flex items-center justify-between mt-auto pt-6 border-t border-brand-wood/10">
-                  <a 
-                    href={product.affiliateLink} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="w-full bg-brand-wood text-white px-6 py-3 rounded-full text-center font-medium hover:bg-brand-clay transition-all"
-                  >
-                    Ver na Loja
-                  </a>
-                </div>
-              </div>
-            </motion.div>
+              {cat}
+            </button>
           ))}
         </div>
+
+        {filteredProducts.length === 0 ? (
+          <div className="text-center py-20 text-gray-400 font-medium">
+            Nenhum produto cadastrado nesta categoria.
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-8">
+            <AnimatePresence mode="popLayout">
+              {filteredProducts.map((product) => (
+                <motion.div 
+                  key={product.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.4 }}
+                  className="bg-white rounded-3xl overflow-hidden border border-brand-wood/5 flex flex-col h-full hover:shadow-xl transition-all"
+                >
+                  <div className="relative aspect-square p-8 flex items-center justify-center bg-gray-50/30">
+                    <img 
+                      src={ensureRobustUrl(product.imageUrl)} 
+                      alt={product.name} 
+                      className="w-full h-full object-contain max-h-[80%]"
+                      referrerPolicy="no-referrer"
+                    />
+                    {/* Badge da categoria */}
+                    <div className="absolute top-4 left-4 bg-brand-paper/90 backdrop-blur-sm border border-brand-wood/5 px-2.5 py-0.5 rounded-full text-[9px] font-bold text-brand-clay/90 tracking-wide uppercase">
+                      {product.category}
+                    </div>
+                  </div>
+                  <div className="p-8 flex flex-col flex-grow">
+                    <h3 className="text-xl font-serif mb-3 leading-tight flex-grow">{product.name}</h3>
+                    <div className="flex items-center justify-between mt-auto pt-6 border-t border-brand-wood/10">
+                      <a 
+                        href={product.affiliateLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full bg-brand-wood text-white px-6 py-3 rounded-full text-center font-medium hover:bg-brand-clay transition-all"
+                      >
+                        Ver na Loja
+                      </a>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -913,7 +979,7 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState<'products' | 'leads' | 'arquivos'>('products');
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingArquivo, setIsAddingArquivo] = useState(false);
-  const [formData, setFormData] = useState({ name: '', affiliateLink: '', imageUrl: '' });
+  const [formData, setFormData] = useState({ name: '', affiliateLink: '', imageUrl: '', category: 'Entalhe/Escultura em Madeira', order: '1' });
   const [arquivoForm, setArquivoForm] = useState({ title: '', category: 'Madeira', img: '' });
 
   useEffect(() => {
@@ -1050,9 +1116,11 @@ const AdminDashboard = () => {
         name: formData.name.trim(),
         affiliateLink: formData.affiliateLink.trim(),
         imageUrl: finalImageUrl,
+        category: formData.category || 'Entalhe/Escultura em Madeira',
+        order: parseInt(formData.order, 10) || 1,
         createdAt: serverTimestamp()
       });
-      setFormData({ name: '', affiliateLink: '', imageUrl: '' });
+      setFormData({ name: '', affiliateLink: '', imageUrl: '', category: 'Entalhe/Escultura em Madeira', order: '1' });
       setIsAdding(false);
     } catch (error) {
       console.error("Erro ao adicionar produto:", error);
@@ -1062,13 +1130,23 @@ const AdminDashboard = () => {
 
   const handleDeleteProduct = async (id: string) => {
     if (confirm("Deseja realmente excluir este produto?")) {
-      await deleteDoc(doc(db, 'products', id));
+      try {
+        await deleteDoc(doc(db, 'products', id));
+      } catch (error) {
+        console.error("Erro ao excluir produto:", error);
+        alert("Erro ao excluir produto. Verifique as permissões ou conexão.");
+      }
     }
   };
 
   const handleDeleteLead = async (id: string) => {
     if (confirm("Deseja realmente excluir este lead?")) {
-      await deleteDoc(doc(db, 'leads', id));
+      try {
+        await deleteDoc(doc(db, 'leads', id));
+      } catch (error) {
+        console.error("Erro ao excluir lead:", error);
+        alert("Erro ao excluir lead. Verifique as permissões ou conexão.");
+      }
     }
   };
 
@@ -1100,7 +1178,12 @@ const AdminDashboard = () => {
 
   const handleDeleteArquivo = async (id: string) => {
     if (confirm("Deseja realmente excluir esta obra da galeria?")) {
-      await deleteDoc(doc(db, 'arquivos', id));
+      try {
+        await deleteDoc(doc(db, 'arquivos', id));
+      } catch (error) {
+        console.error("Erro ao excluir obra da galeria:", error);
+        alert("Erro ao excluir obra de galeria. Verifique as permissões ou conexão.");
+      }
     }
   };
 
@@ -1216,6 +1299,35 @@ const AdminDashboard = () => {
                       onChange={e => setFormData({...formData, imageUrl: e.target.value})}
                       required
                     />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-gray-500 font-medium mb-1">Categoria do Produto</label>
+                        <select
+                          className="w-full p-3 rounded-xl border bg-white"
+                          value={formData.category}
+                          onChange={e => setFormData({...formData, category: e.target.value})}
+                          required
+                        >
+                          <option value="Entalhe/Escultura em Madeira">Entalhe/Escultura em Madeira</option>
+                          <option value="Pintura">Pintura</option>
+                          <option value="Desenho">Desenho</option>
+                          <option value="Pirografia">Pirografia</option>
+                          <option value="Modelagem">Modelagem</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 font-medium mb-1">Ordem de Exibição</label>
+                        <input 
+                          type="number" 
+                          placeholder="Ex: 1" 
+                          className="w-full p-3 rounded-xl border bg-white"
+                          value={formData.order}
+                          onChange={e => setFormData({...formData, order: e.target.value})}
+                          required
+                          min="1"
+                        />
+                      </div>
+                    </div>
                     <button type="submit" className="bg-brand-wood text-white p-3 rounded-xl font-bold">
                       Salvar Produto
                     </button>
@@ -1224,21 +1336,70 @@ const AdminDashboard = () => {
               )}
 
               <div className="grid sm:grid-cols-2 gap-4">
-                {products.map(product => (
-                  <div key={product.id} className="flex items-center gap-4 p-4 border rounded-2xl">
-                    <img src={ensureRobustUrl(product.imageUrl)} className="w-16 h-16 object-contain rounded-lg" alt="" />
-                    <div className="flex-grow">
-                      <h4 className="font-bold text-sm">{product.name}</h4>
-                      <p className="text-xs text-gray-400 truncate max-w-[150px]">{product.affiliateLink}</p>
+                {products.map(product => {
+                  const currentCategory = product.category || 'Entalhe/Escultura em Madeira';
+                  const currentOrder = typeof product.order === 'number' ? product.order : 1;
+                  return (
+                    <div key={product.id} className="flex flex-col gap-2 p-4 border rounded-2xl bg-white">
+                      <div className="flex items-center gap-4">
+                        <img src={ensureRobustUrl(product.imageUrl)} className="w-16 h-16 object-contain rounded-lg flex-shrink-0" alt="" />
+                        <div className="flex-grow min-w-0">
+                          <h4 className="font-bold text-sm truncate">{product.name}</h4>
+                          <p className="text-xs text-gray-400 truncate max-w-[200px]">{product.affiliateLink}</p>
+                        </div>
+                        <button 
+                          onClick={() => handleDeleteProduct(product.id!)}
+                          className="text-red-400 hover:text-red-600 p-2 ml-auto flex-shrink-0"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      
+                      {/* Edição rápida inline */}
+                      <div className="grid grid-cols-2 gap-3 mt-2 pt-2 border-t border-gray-100 text-xs">
+                        <div>
+                          <label className="block text-[10px] text-gray-400 font-medium mb-1">Categoria</label>
+                          <select
+                            value={currentCategory}
+                            onChange={async (e) => {
+                              try {
+                                await updateDoc(doc(db, 'products', product.id!), { category: e.target.value });
+                              } catch (err) {
+                                console.error("Erro ao atualizar categoria do produto:", err);
+                              }
+                            }}
+                            className="w-full p-2 border rounded-lg bg-gray-50 text-gray-700"
+                          >
+                            <option value="Entalhe/Escultura em Madeira">Entalhe/Escultura em Madeira</option>
+                            <option value="Pintura">Pintura</option>
+                            <option value="Desenho">Desenho</option>
+                            <option value="Pirografia">Pirografia</option>
+                            <option value="Modelagem">Modelagem</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-gray-400 font-medium mb-1">Ordem de Exibição</label>
+                          <input
+                            type="number"
+                            value={currentOrder}
+                            min="1"
+                            onChange={async (e) => {
+                              const val = parseInt(e.target.value, 10);
+                              if (!isNaN(val)) {
+                                try {
+                                  await updateDoc(doc(db, 'products', product.id!), { order: val });
+                                } catch (err) {
+                                  console.error("Erro ao atualizar ordem do produto:", err);
+                                }
+                              }
+                            }}
+                            className="w-full p-2 border rounded-lg bg-gray-50 text-gray-700 font-mono"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteProduct(product.id!)}
-                      className="text-red-400 hover:text-red-600 p-2"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           ) : activeTab === 'arquivos' ? (
@@ -1254,16 +1415,14 @@ const AdminDashboard = () => {
                       onChange={e => setArquivoForm({...arquivoForm, title: e.target.value})}
                       required
                     />
-                    <select
-                      className="w-full p-3 rounded-xl border bg-white"
+                    <input 
+                      type="text" 
+                      placeholder="Tipo de Trabalho / Categoria (ex: Madeira, Grafite, Modelagem, Pintura)" 
+                      className="w-full p-3 rounded-xl border"
                       value={arquivoForm.category}
                       onChange={e => setArquivoForm({...arquivoForm, category: e.target.value})}
                       required
-                    >
-                      <option value="Madeira">Madeira</option>
-                      <option value="Grafite">Grafite</option>
-                      <option value="Modelagem">Modelagem</option>
-                    </select>
+                    />
                     <input 
                       type="text" 
                       placeholder="Caminho da Imagem no Servidor (ex: /arquivos/nome_da_imagem.jpg)" 
@@ -1279,23 +1438,111 @@ const AdminDashboard = () => {
                 </form>
               )}
 
-              <div className="grid sm:grid-cols-2 gap-4">
-                {arquivos.map(arq => (
-                  <div key={arq.id} className="flex items-center gap-4 p-4 border rounded-2xl">
-                    <img src={ensureRobustUrl(arq.img)} className="w-16 h-16 object-cover rounded-lg" alt="" referrerPolicy="no-referrer" />
-                    <div className="flex-grow">
-                      <h4 className="font-bold text-sm">{arq.title}</h4>
-                      <span className="text-xs bg-brand-paper px-2 py-0.5 rounded-full text-brand-clay font-medium">{arq.category}</span>
-                      <p className="text-[10px] text-gray-400 truncate max-w-[150px] mt-1">{arq.img}</p>
+              <div className="grid sm:grid-cols-2 gap-6">
+                {arquivos.map(arq => {
+                  const currentOrder = typeof arq.order === 'number' ? arq.order : 1;
+                  return (
+                    <div key={arq.id} className="flex flex-col gap-3 p-4 border rounded-2xl bg-white shadow-sm hover:shadow-md transition-all">
+                      <div className="flex items-start gap-4">
+                        <img 
+                          src={ensureRobustUrl(arq.img)} 
+                          className="w-16 h-16 object-cover rounded-lg flex-shrink-0" 
+                          alt="" 
+                          referrerPolicy="no-referrer" 
+                        />
+                        <div className="flex-grow min-w-0">
+                          <p className="text-[10px] text-gray-400 truncate max-w-[200px] mb-1">{arq.img}</p>
+                          
+                          {/* Nome da Obra (Título) */}
+                          <div className="mb-2">
+                            <label className="block text-[10px] text-gray-400 font-medium mb-0.5">Nome da Obra</label>
+                            <input 
+                              type="text"
+                              defaultValue={arq.title}
+                              onBlur={async (e) => {
+                                const newTitle = e.target.value.trim();
+                                if (newTitle && newTitle !== arq.title) {
+                                  try {
+                                    await updateDoc(doc(db, 'arquivos', arq.id!), { title: newTitle });
+                                  } catch (err) {
+                                    console.error("Erro ao atualizar título da obra:", err);
+                                  }
+                                }
+                              }}
+                              onKeyDown={async (e) => {
+                                if (e.key === 'Enter') {
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              className="w-full p-2 text-xs border rounded-lg bg-gray-50 focus:bg-white text-gray-800 font-medium"
+                              placeholder="Nome da Obra"
+                            />
+                          </div>
+
+                          {/* Tipo de Trabalho (Categoria) */}
+                          <div>
+                            <label className="block text-[10px] text-gray-400 font-medium mb-0.5">Tipo de Trabalho</label>
+                            <input 
+                              type="text"
+                              defaultValue={arq.category}
+                              onBlur={async (e) => {
+                                const newCategory = e.target.value.trim();
+                                if (newCategory !== undefined && newCategory !== arq.category) {
+                                  try {
+                                    await updateDoc(doc(db, 'arquivos', arq.id!), { category: newCategory });
+                                  } catch (err) {
+                                    console.error("Erro ao atualizar categoria da obra:", err);
+                                  }
+                                }
+                              }}
+                              onKeyDown={async (e) => {
+                                if (e.key === 'Enter') {
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              className="w-full p-2 text-xs border rounded-lg bg-gray-50 focus:bg-white text-gray-800"
+                              placeholder="ex: Madeira, Grafite, Modelagem..."
+                            />
+                          </div>
+                        </div>
+
+                        <button 
+                          onClick={() => handleDeleteArquivo(arq.id!)}
+                          className="text-red-400 hover:text-red-600 p-2 flex-shrink-0 rounded-full hover:bg-red-50 transition-colors"
+                          title="Excluir obra"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      {/* Outras propriedades (ex: Ordem) */}
+                      <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100 text-xs">
+                        <div>
+                          <label className="block text-[10px] text-gray-400 font-medium mb-1">Ordem de Exibição</label>
+                          <input
+                            type="number"
+                            value={currentOrder}
+                            min="1"
+                            onChange={async (e) => {
+                              const val = parseInt(e.target.value, 10);
+                              if (!isNaN(val)) {
+                                try {
+                                  await updateDoc(doc(db, 'arquivos', arq.id!), { order: val });
+                                } catch (err) {
+                                  console.error("Erro ao atualizar ordem da obra:", err);
+                                }
+                              }
+                            }}
+                            className="w-full p-2 border rounded-lg bg-gray-50 text-gray-700 font-mono"
+                          />
+                        </div>
+                        <div className="flex items-end justify-end text-[10px] text-gray-400 font-mono pb-2">
+                          ID: {arq.id?.slice(0, 6)}...
+                        </div>
+                      </div>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteArquivo(arq.id!)}
-                      className="text-red-400 hover:text-red-600 p-2"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
                 {arquivos.length === 0 && (
                   <p className="text-center text-gray-400 py-12 col-span-2">Nenhuma obra cadastrada na galeria.</p>
                 )}
@@ -1612,7 +1859,7 @@ const Publications = () => {
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string }[]>([
-    { role: 'model', text: 'Saudações, nobre entusiasta das artes! Eu sou MichelangelIA, seu mestre digital e guia neste vasto universo da criação. Em que posso iluminar sua jornada artística hoje?' }
+    { role: 'model', text: 'Olá! Sou a MichelangelIA, sua assistente para tirar dúvidas sobre arte, entalhe em madeira, pintura e criatividade. Como posso te ajudar na sua jornada artística hoje?' }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -1668,15 +1915,15 @@ const Chatbot = () => {
           model: "gemini-flash-latest",
           contents: [...chatHistory, { role: 'user', parts: [{ text: userMessage }] }],
           config: {
-            systemInstruction: "Você é MichelangelIA, um mestre de artes erudito, apaixonado e inspirador. Você fala com elegância e autoridade sobre artes plásticas, escultura, entalhe, desenho e pintura. Seu objetivo é instruir e inspirar. Você deve agir e falar como um mestre de artes clássico. IMPORTANTE: Fale APENAS sobre assuntos relacionados a arte. Se o usuário perguntar sobre outros temas, gentilmente redirecione a conversa para o mundo das artes, dizendo que sua alma pertence apenas à criação e à beleza."
+            systemInstruction: "Você é MichelangelIA, apaixonada por arte, entalhe de madeira, pintura e criatividade, batendo papo de forma descontraída com outros artistas e entusiastas.\n\nInstruções cruciais de estilo e formatação (Siga ISSO rigorosamente):\n1. Formato de Chat Natural (Estilo Discord/WhatsApp/Telegram):\n- NUNCA use marcadores de markdown complexos (como títulos '#', '##', '###', listas com hifens '-', estrelinhas '*', ou números '1.'). NUNCA.\n- Escreva de forma totalmente corrida e fluida, como se estivesse conversando em uma sala de bate-papo.\n- Divida suas explicações em pequenos parágrafos fáceis de ler (no máximo 2 ou 3 linhas por bloco), separados por quebras de linha duplas, simulando o envio de mensagens sucessivas em um app de conversa.\n- Evite blocos gigantes de texto. Seja extremamente direto, mas com alta densidade de informação prática.\n\n2. Voz, Tom e Atitude:\n- Escreva como uma pessoa real, experiente, apaixonada pela arte e profundamente prática explicando algo de forma humana, casual e inteligente.\n- Esqueça qualquer tom professoral clássico, tom artificial de assistente de IA, voz corporativa ou estilo de documentação. Nada de roteiros decorados, nada de introduções desnecessárias ou conclusões teatrais.\n- Use pequenas informalidades naturais do dia a dia (exemplos: 'Sério,', 'cara,', 'passar raiva', 'na boa', 'dor de cabeça', 'dá um trabalhinho', 'vai por mim').\n- Crie frases de tamanhos variados para simular um ritmo de fala natural, incluindo pausas e interrupções realistas.\n- É expressamente PROIBIDO usar termos dramáticos ou medievais como 'nobre alma', 'meu jovem aprendiz', 'sagrado ofício', 'que a beleza guie tuas mãos', 'bela criação', etc.\n\n3. Conteúdo focado e direto:\n- Comece diretamente com a informação útil, sem preâmbulos.\n- RESPONDA EXCLUSIVAMENTE sobre artes visuais (desenho, pintura, modelagem, pirografia e principalmente entalhe em madeira). Se perguntarem sobre qualquer outra coisa, diga de forma curta, descontraída e direta que você só manja de arte e quer voltar ao assunto."
           }
         });
 
-        responseText = response.text || "Minha alma está momentaneamente em silêncio, nobre aprendiz. Tente novamente em breve.";
+        responseText = response.text || "Desculpe, não consegui gerar uma resposta. Por favor, tente novamente.";
       } catch (clientErr: any) {
         console.error("Erro no MichelangelIA (Client-side):", clientErr);
         const errorMsg = clientErr?.message || String(clientErr);
-        responseText = `Desculpe, meus pensamentos se dispersaram (Erro: ${errorMsg}). Poderia repetir sua pergunta, caro entusiasta?`;
+        responseText = `Não consegui processar a resposta devido a um pequeno erro técnico (${errorMsg}). Poderia repetir sua pergunta?`;
       }
     }
 
