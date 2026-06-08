@@ -35,10 +35,43 @@ try {
     console.warn("Failed to dynamically load firebase-applet-config.json (using default resilient fallback):", readErr);
   }
 
+  let credential = undefined;
+  
+  // Try loading from FIREBASE_SERVICE_ACCOUNT JSON string first
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+      let saString = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+      if (saString.startsWith('"') && saString.endsWith('"')) {
+        saString = saString.substring(1, saString.length - 1);
+      }
+      const sa = JSON.parse(saString);
+      credential = admin.credential.cert(sa);
+      console.log("Firebase Admin SDK: Initializing using FIREBASE_SERVICE_ACCOUNT environment variable.");
+    } catch (parseErr) {
+      console.error("Firebase Admin SDK: Failed to parse FIREBASE_SERVICE_ACCOUNT JSON string:", parseErr);
+    }
+  }
+  
+  // If not loaded, check individual environment variables
+  if (!credential && process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY.trim();
+    if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+      privateKey = privateKey.substring(1, privateKey.length - 1);
+    }
+    const formattedPrivateKey = privateKey.replace(/\\n/g, "\n");
+    credential = admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL.trim(),
+      privateKey: formattedPrivateKey,
+    });
+    console.log("Firebase Admin SDK: Initializing using individual environment variables.");
+  }
+
   let appInstance;
   if (admin.apps.length === 0) {
     appInstance = admin.initializeApp({
-      projectId: firebaseConfig.projectId
+      projectId: firebaseConfig.projectId,
+      credential: credential
     });
   } else {
     appInstance = admin.apps[0];
@@ -51,6 +84,46 @@ try {
   console.log("Firebase Admin SDK successfully ready for database:", firebaseConfig.firestoreDatabaseId || "(default)");
 } catch (error) {
   console.error("Warning: Failed to initialize Firebase Admin SDK in backend:", error);
+}
+
+// User-friendly error message formatter to guide Vercel/Netlify developers on Firebase credentials configuration
+function formatFirebaseError(err: any): string {
+  const message = err?.message || String(err);
+  if (
+    message.includes("Could not load the default credentials") || 
+    message.includes("credentials") || 
+    message.includes("App options") ||
+    message.includes("no credential") ||
+    message.includes("Failed to get document") ||
+    message.includes("database")
+  ) {
+    const diagnostics = {
+      firebase_service_account_present: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+      firebase_private_key_present: !!process.env.FIREBASE_PRIVATE_KEY,
+      firebase_client_email_present: !!process.env.FIREBASE_CLIENT_EMAIL,
+      firebase_project_id_present: !!process.env.FIREBASE_PROJECT_ID,
+      firebase_private_key_length: process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.length : 0,
+      firebase_client_email_value: process.env.FIREBASE_CLIENT_EMAIL || null,
+      firebase_project_id_value: process.env.FIREBASE_PROJECT_ID || null,
+    };
+
+    return `Erro de Autenticação com o Firebase (Servidor): O backend não pôde acessar o banco de dados.
+
+[DIAGNÓSTICO DE VARIÁVEIS NO SERVIDOR ATUAL]:
+- FIREBASE_SERVICE_ACCOUNT: ${diagnostics.firebase_service_account_present ? "Instanciado (Sim)" : "Ausente (Não)"}
+- FIREBASE_PRIVATE_KEY: ${diagnostics.firebase_private_key_present ? `Instanciado (Tamanho: ${diagnostics.firebase_private_key_length} chars)` : "Ausente (Não)"}
+- FIREBASE_CLIENT_EMAIL: ${diagnostics.firebase_client_email_present ? `Instanciado (${diagnostics.firebase_client_email_value})` : "Ausente (Não)"}
+- FIREBASE_PROJECT_ID: ${diagnostics.firebase_project_id_present ? `Instanciado (${diagnostics.firebase_project_id_value})` : "Ausente (Não)"}
+
+COMO ADICIONAR ESTAS VARIÁVEIS:
+1. No painel de controle (por exemplo, na Vercel), vá em "Settings" > "Environment Variables".
+2. Certifique-se de configurar estas 3 variáveis exatamente com os nomes acima (tudo maiúsculo).
+3. A variável FIREBASE_PRIVATE_KEY deve conter as bordas BEGIN/END e a chave secreta completa.
+4. Se o erro persistir, certifique-se de fazer um NOVO DEPLOY para aplicar as variáveis nas funções serverless de produção.
+
+Erro técnico: ${message}`;
+  }
+  return message;
 }
 
 const app = express();
@@ -511,7 +584,7 @@ app.post("/api/vendas/checkout", async (req, res) => {
     }
   } catch (err: any) {
     console.error("Checking stock list failed:", err);
-    return res.status(500).json({ error: "Erro de banco de dados ao verificar estoque: " + err.message });
+    return res.status(500).json({ error: "Erro de banco de dados ao verificar estoque: " + formatFirebaseError(err) });
   }
 
   // Calculate Subtotal and Total
@@ -544,7 +617,7 @@ app.post("/api/vendas/checkout", async (req, res) => {
     console.log(`[Pedido Salvo] Pedido ${orderId} registrado com total de R$ ${total}`);
   } catch (err: any) {
     console.error("Erro ao salvar pedido no Firestore:", err);
-    return res.status(500).json({ error: "Erro interno ao cadastrar o pedido no banco de dados: " + err.message });
+    return res.status(500).json({ error: "Erro interno ao cadastrar o pedido no banco de dados: " + formatFirebaseError(err) });
   }
 
   // Check Mercado Pago Token (MERCADOPAGO_ACCESS_TOKEN)
@@ -714,7 +787,7 @@ app.post("/api/vendas/webhook-mercadopago", async (req, res) => {
         await updateOrderStatusInDatabase(orderId, status, paymentId);
         return res.json({ success: true, orderId, updatedStatus: status });
       } catch (err: any) {
-        return res.status(500).json({ error: err.message });
+        return res.status(500).json({ error: formatFirebaseError(err) });
       }
     }
   }
@@ -780,7 +853,7 @@ app.post("/api/vendas/webhook-mercadopago", async (req, res) => {
     }
   } catch (error: any) {
     console.error("[Webhook MercadoPago Error] Falha ao sincronizar webhook:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: formatFirebaseError(error) });
   }
 });
 
@@ -801,7 +874,7 @@ app.post("/api/vendas/webhook-pagseguro", async (req, res) => {
     await updateOrderStatusInDatabase(orderId, status, paymentId);
     return res.json({ success: true, orderId, updatedStatus: status });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: formatFirebaseError(err) });
   }
 });
 
@@ -958,7 +1031,7 @@ app.post("/api/vendas/quotes/respond", async (req, res) => {
     res.json({ success: true, orderId: orderId });
   } catch (error: any) {
     console.error("Erro ao responder cotação:", error);
-    res.status(500).json({ error: error.message || "Erro desconhecido ao cadastrar resposta da cotação." });
+    res.status(500).json({ error: formatFirebaseError(error) || "Erro desconhecido ao cadastrar resposta da cotação." });
   }
 });
 
