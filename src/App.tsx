@@ -111,12 +111,15 @@ export const ensureRobustUrl = (url: string) => {
     // Somente os arquivos locais que reparamos/geramos limpos são carregados do caminho local direto.
     // Todas as outras mídias mais antigas, cujos arquivos originais estão corrompidos localmente/no repositório,
     // são buscadas de forma segura e impecável a partir do commit estável histórico '16eec916efc1342685e03616e5222f2ee1b1c784' via CDN.
+    if (lower === 'capa_curso_udemy_game.jpeg') {
+      return `https://cdn.jsdelivr.net/gh/andrewlemos/Andrew_Lemos_Webpage@main/public/arquivos/${encodeURIComponent(decoded)}`;
+    }
+
     if (
       lower === 'favicon.png' ||
       lower === 'ico.png' ||
       lower === 'banner andrew.png' ||
-      lower === 'dreamina_course_thumbnail.jpeg' ||
-      lower === 'capa_curso_udemy_game.jpeg'
+      lower === 'dreamina_course_thumbnail.jpeg'
     ) {
       return `/arquivos/${encodeURIComponent(decoded)}`;
     } else {

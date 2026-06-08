@@ -71,12 +71,15 @@ const ensureRobustUrl = (url: string) => {
     } catch (e) {}
 
     const lower = decoded.toLowerCase();
+    if (lower === 'capa_curso_udemy_game.jpeg') {
+      return `https://cdn.jsdelivr.net/gh/andrewlemos/Andrew_Lemos_Webpage@main/public/arquivos/${encodeURIComponent(decoded)}`;
+    }
+
     if (
       lower === 'favicon.png' ||
       lower === 'ico.png' ||
       lower === 'banner andrew.png' ||
-      lower === 'dreamina_course_thumbnail.jpeg' ||
-      lower === 'capa_curso_udemy_game.jpeg'
+      lower === 'dreamina_course_thumbnail.jpeg'
     ) {
       return `/arquivos/${encodeURIComponent(decoded)}`;
     } else {

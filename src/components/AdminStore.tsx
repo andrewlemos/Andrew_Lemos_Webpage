@@ -36,10 +36,27 @@ export const AdminStore = () => {
   const [products, setProducts] = useState<EcomProduct[]>([]);
   const [orders, setOrders] = useState<EcomOrder[]>([]);
   const [quotes, setQuotes] = useState<ShippingQuote[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'products' | 'orders' | 'quotes' | 'packaging'>('products');
+  const [activeSubTab, setActiveSubTab] = useState<'products' | 'orders' | 'quotes' | 'packaging' | 'marketing'>('products');
   const [isAdding, setIsAdding] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<EcomOrder | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<ShippingQuote | null>(null);
+
+  // Registered customers collection
+  const [customers, setCustomers] = useState<any[]>([]);
+
+  // Filtering dates for sales reporting
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // Mala Direta email marketing state
+  const [marketingSubject, setMarketingSubject] = useState('Novidades Exclusivas do Ateliê Andrew Lemos 🎨');
+  const [marketingBannerUrl, setMarketingBannerUrl] = useState('');
+  const [marketingBodyText, setMarketingBodyText] = useState('Olá {NOME},\n\nGostaria de compartilhar com você as novas peças entalhadas em madeira que acabo de disponibilizar na nossa galeria virtual.\n\nCada obra é única, feita à mão com muito carinho, unindo paixão e técnicas tradicionais de entalhe.\n\nFique à vontade para visitar nosso catálogo atualizado e qualquer dúvida responda a este e-mail!\n\nAbraço artístico,\nAndrew Lemos');
+  const [marketingSelectedRecipients, setMarketingSelectedRecipients] = useState<string[]>([]);
+  const [marketingSending, setMarketingSending] = useState(false);
+  const [marketingProgress, setMarketingProgress] = useState(0);
+  const [marketingLogs, setMarketingLogs] = useState<string[]>([]);
+  const [marketingStatusMessage, setMarketingStatusMessage] = useState('');
 
   const [packagingSettings, setPackagingSettings] = useState<PackagingSettings>({
     extraHeight: 5,
@@ -54,6 +71,175 @@ export const AdminStore = () => {
     deliveryTime: '',
     notes: ''
   });
+
+  // Helper to obtain date objects securely
+  const getOrderDate = (createdAt: any): Date | null => {
+    if (!createdAt) return null;
+    if (createdAt instanceof Date) return createdAt;
+    if (typeof createdAt.toDate === 'function') return createdAt.toDate();
+    if (createdAt.seconds !== undefined) return new Date(createdAt.seconds * 1000);
+    if (typeof createdAt === 'string') {
+      const parsed = Date.parse(createdAt);
+      if (!isNaN(parsed)) return new Date(parsed);
+    }
+    return null;
+  };
+
+  // Get filtered orders and cash-flow consolidation metrics
+  const getFilteredOrdersAndStats = () => {
+    const filtered = orders.filter(order => {
+      const d = getOrderDate(order.createdAt);
+      if (!d) return true;
+      if (startDate) {
+        const sDate = new Date(startDate + 'T00:00:00');
+        if (d < sDate) return false;
+      }
+      if (endDate) {
+        const eDate = new Date(endDate + 'T23:59:59');
+        if (d > eDate) return false;
+      }
+      return true;
+    });
+
+    const count = filtered.length;
+    let earnings = 0;
+    let pending = 0;
+    let totalExpected = 0;
+
+    filtered.forEach(o => {
+      if (o.status === 'Pago') {
+        earnings += o.total;
+      } else if (o.status === 'Aguardando pagamento') {
+        pending += o.total;
+      }
+      
+      if (o.status !== 'Cancelado') {
+        totalExpected += o.total;
+      }
+    });
+
+    return { filtered, count, earnings, pending, totalExpected };
+  };
+
+  const { 
+    filtered: filteredOrders, 
+    count: filteredOrdersCount, 
+    earnings: filteredEarnings, 
+    pending: filteredPending, 
+    totalExpected: filteredTotalExpected 
+  } = getFilteredOrdersAndStats();
+
+  // Export consolidated sales report as CSV with UTF-8 BOM
+  const handleDownloadCSV = () => {
+    const headers = [
+      'ID do Pedido',
+      'Data de Criacao',
+      'Nome do Cliente',
+      'E-mail',
+      'CPF',
+      'Telefone/Celular',
+      'Status do Pedido',
+      'Forma de Envio',
+      'Custo de Frete (R$)',
+      'Subtotal (R$)',
+      'Total Geral (R$)',
+      'Itens Adquiridos'
+    ];
+
+    const rows = filteredOrders.map(o => {
+      const dateStr = formatAdminDate(o.createdAt);
+      const itemsListStr = o.items.map(itm => `${itm.name} (x${itm.quantity})`).join('; ');
+      
+      return [
+        o.id || '',
+        dateStr,
+        o.customerInfo.name || '',
+        o.customerInfo.email || '',
+        o.customerInfo.cpf || '',
+        o.customerInfo.phone || '',
+        o.status || '',
+        o.shippingMethod || '',
+        String(o.shippingCost || 0).replace('.', ','),
+        String(o.subtotal || 0).replace('.', ','),
+        String(o.total || 0).replace('.', ','),
+        `"${itemsListStr.replace(/"/g, '""')}"`
+      ];
+    });
+
+    // Create CSV content separate by semicolon for Portuguese Excel format
+    const csvContent = "\uFEFF" + [
+      headers.join(';'),
+      ...rows.map(r => r.join(';'))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `consolidado_vendas_${startDate || 'inicio'}_a_${endDate || 'fim'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Dispatch personalized marketing email campaign (Mala Direta) via backend API
+  const handleSendMarketingEmails = async () => {
+    if (marketingSelectedRecipients.length === 0) return;
+    
+    setMarketingSending(true);
+    setMarketingProgress(0);
+    setMarketingStatusMessage('');
+    setMarketingLogs(['[Mala Direta] Iniciando processo de envio individual...']);
+
+    const selectedCustomers = customers.filter(c => marketingSelectedRecipients.includes(c.email));
+    
+    try {
+      const logsList = ['[Mala Direta] Iniciando processo de envio...'];
+      let successfulCount = 0;
+      let failureCount = 0;
+
+      const response = await fetch('/api/admin/mala-direta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: marketingSubject,
+          bannerUrl: marketingBannerUrl,
+          bodyText: marketingBodyText,
+          recipients: selectedCustomers.map(sc => ({ email: sc.email, name: sc.name }))
+        })
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({ error: 'Desconhecido' }));
+        throw new Error(errJson.error || 'Erro ao conectar à API do Servidor.');
+      }
+
+      const resData = await response.json();
+      if (resData.success && Array.isArray(resData.results)) {
+        resData.results.forEach((res: any, index: number) => {
+          if (res.success) {
+            successfulCount++;
+            logsList.push(`[${index + 1}/${resData.results.length}] Sucesso para ${res.name || res.email}`);
+          } else {
+            failureCount++;
+            logsList.push(`[${index + 1}/${resData.results.length}] Falha para ${res.name || res.email}: ${res.error || 'Erro SMTP'}`);
+          }
+          setMarketingProgress(index + 1);
+          setMarketingLogs([...logsList]);
+        });
+
+        setMarketingStatusMessage(`Mala Direta Processada! ${successfulCount} e-mails enviados com sucesso, ${failureCount} falhas.`);
+      } else {
+        throw new Error('Retorno inválido do servidor.');
+      }
+
+    } catch (e: any) {
+      console.error(e);
+      setMarketingLogs(prev => [...prev, `[ERRO CRÍTICO] Falha ao disparar e-mails: ${e.message || e}`]);
+    } finally {
+      setMarketingSending(false);
+    }
+  };
 
   // Form states for new product
   const [formData, setFormData] = useState({
@@ -87,6 +273,20 @@ export const AdminStore = () => {
       setQuotes(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ShippingQuote[]);
     });
 
+    // Real-time listener for ecom_customers
+    const unsubCustomers = onSnapshot(collection(db, 'ecom_customers'), (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
+      setCustomers(list);
+      // Automatically precheck new users' emails
+      setMarketingSelectedRecipients(prev => {
+        if (prev.length === 0) {
+          return list.map((c: any) => c.email).filter(Boolean);
+        }
+        return prev;
+      });
+    });
+
     const unsubPackaging = onSnapshot(doc(db, 'ecom_settings', 'packaging'), (snap) => {
       if (snap.exists()) {
         setPackagingSettings(snap.data() as PackagingSettings);
@@ -104,6 +304,7 @@ export const AdminStore = () => {
       unsubProds();
       unsubOrders();
       unsubQuotes();
+      unsubCustomers();
       unsubPackaging();
     };
   }, []);
@@ -221,6 +422,14 @@ export const AdminStore = () => {
           }`}
         >
           Cotações de Frete ({quotes.length})
+        </button>
+        <button 
+          onClick={() => setActiveSubTab('marketing')} 
+          className={`pb-2.5 transition-colors cursor-pointer ${
+            activeSubTab === 'marketing' ? 'text-brand-wood border-b-2 border-brand-wood' : 'text-gray-400'
+          }`}
+        >
+          Mala Direta
         </button>
         <button 
           onClick={() => setActiveSubTab('packaging')} 
@@ -472,12 +681,96 @@ export const AdminStore = () => {
           </div>
         </div>
       ) : activeSubTab === 'orders' ? (
-        // TAB - ORDERS LIST
+        // TAB - ORDERS LIST WITH RANGE DATE SELECTIVITY AND DETAILED SALES EXPORT
         <div className="space-y-4">
-          <h3 className="font-serif font-bold text-xl text-brand-ink">Gerenciador de Pedidos</h3>
-          
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+            <h3 className="font-serif font-bold text-xl text-brand-ink">Gerenciador de Pedidos</h3>
+            <button
+              onClick={handleDownloadCSV}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-full flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-700/10 cursor-pointer text-xs"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Baixar Planilha (.csv)</span>
+            </button>
+          </div>
+
+          {/* DATE PICKERS PANEL & CASH-FLOW CALCULATOR */}
+          <div className="bg-gray-50/70 border border-brand-wood/10 p-5 rounded-2xl space-y-4 text-xs">
+            <div className="flex flex-col gap-1">
+              <span className="font-serif font-bold text-brand-ink text-sm">Controle de Caixa & Filtro de Período</span>
+              <span className="text-gray-400 text-[11px] font-normal leading-relaxed">
+                Selecione um intervalo de dias para consolidar as métricas financeiras e exportar planilhas para maior controle de caixa.
+              </span>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-3 items-end">
+              <div>
+                <label className="block text-gray-500 font-bold mb-1 uppercase tracking-wider text-[9px]">Data de Início</label>
+                <input 
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  className="w-full bg-white border rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-brand-wood font-medium text-brand-ink"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-555 font-bold mb-1 uppercase tracking-wider text-[9px]">Data de Fim</label>
+                <input 
+                  type="date"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                  className="w-full bg-white border rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-brand-wood font-medium text-brand-ink"
+                />
+              </div>
+
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  onClick={() => { setStartDate(''); setEndDate(''); }}
+                  disabled={!startDate && !endDate}
+                  className={`w-full md:w-auto px-4 py-2 rounded-xl text-[10px] font-bold uppercase transition-colors cursor-pointer ${
+                    startDate || endDate
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                      : 'bg-gray-100 text-gray-400 border border-gray-150 cursor-not-allowed'
+                  }`}
+                >
+                  Limpar Intervalo
+                </button>
+              </div>
+            </div>
+
+            {/* DASHBOARD METRICS */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              <div className="bg-white p-3.5 rounded-xl border border-brand-wood/5">
+                <span className="text-[9px] text-gray-400 uppercase tracking-wider block font-bold mb-0.5">Pedidos Filtrados</span>
+                <span className="font-bold text-slate-800 text-sm font-mono block">
+                  {filteredOrdersCount} pedido(s)
+                </span>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-100 p-3.5 rounded-xl">
+                <span className="text-[9px] text-emerald-800 uppercase tracking-wider block font-bold mb-0.5">Total Faturado (Pago)</span>
+                <span className="font-bold text-emerald-700 text-sm font-mono block">
+                  R$ {filteredEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="bg-amber-50 border border-amber-100 p-3.5 rounded-xl">
+                <span className="text-[9px] text-amber-800 uppercase tracking-wider block font-bold mb-0.5">Em Aberto (Aguardando)</span>
+                <span className="font-bold text-amber-700 text-sm font-mono block">
+                  R$ {filteredPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="bg-brand-paper p-3.5 rounded-xl border border-brand-wood/15">
+                <span className="text-[9px] text-brand-wood uppercase tracking-wider block font-bold mb-0.5">Previsão Líquida (Não Canc.)</span>
+                <span className="font-bold text-brand-wood text-sm font-mono block">
+                  R$ {filteredTotalExpected.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-3">
-            {orders.map(order => {
+            {filteredOrders.map(order => {
               const statusColors: Record<string, string> = {
                 'Aguardando pagamento': 'bg-amber-50 text-amber-800 border-amber-200',
                 'Pago': 'bg-emerald-50 text-emerald-800 border-emerald-200',
@@ -537,8 +830,8 @@ export const AdminStore = () => {
               );
             })}
 
-            {orders.length === 0 && (
-              <p className="text-center text-gray-400 py-12">Nenhum pedido efetuado no e-commerce.</p>
+            {filteredOrders.length === 0 && (
+              <p className="text-center text-gray-400 py-12">Nenhum pedido efetuado no e-commerce correspondente aos filtros.</p>
             )}
           </div>
         </div>
@@ -609,6 +902,188 @@ export const AdminStore = () => {
             {quotes.length === 0 && (
               <p className="text-center text-gray-400 py-12">Nenhuma solicitação de cotação de frete recebida ainda.</p>
             )}
+          </div>
+        </div>
+      ) : activeSubTab === 'marketing' ? (
+        // TAB - MALA DIRETA (MARKETING / EMAIL BLAST)
+        <div className="space-y-6">
+          <div className="space-y-1">
+            <h3 className="font-serif font-bold text-xl text-brand-ink">Mala Direta de Clientes</h3>
+            <p className="text-gray-400 text-xs">
+              Escreva e envie comunicados, novidades e banners promocionais individualmente para todos os seus clientes cadastrados de uma só vez, com total privacidade (cada cliente recebe o e-mail individualizado sem ver os endereços dos outros).
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-12 gap-6 text-xs">
+            {/* Form Column */}
+            <div className="lg:col-span-7 bg-white p-6 rounded-2xl border space-y-4 font-medium">
+              <div>
+                <label className="block text-gray-405 font-bold mb-1 uppercase tracking-wide">Assunto do E-mail *</label>
+                <input 
+                  type="text" 
+                  value={marketingSubject}
+                  onChange={e => setMarketingSubject(e.target.value)}
+                  placeholder="Ex: Peças novas com edição limitada no Ateliê!"
+                  className="w-full bg-slate-50 border rounded-xl px-4 py-2.5 font-semibold outline-none focus:ring-1 focus:ring-brand-wood text-brand-ink"
+                  disabled={marketingSending}
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-405 font-bold mb-1 uppercase tracking-wide">Link do Banner Promocional (Opcional)</label>
+                <input 
+                  type="text" 
+                  value={marketingBannerUrl}
+                  onChange={e => setMarketingBannerUrl(e.target.value)}
+                  placeholder="Ex: https://meusite.com/banner.jpg"
+                  className="w-full bg-slate-50 border rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood text-brand-ink font-mono text-[10px]"
+                  disabled={marketingSending}
+                />
+                
+                {/* Quick select banner gallery */}
+                <div className="mt-2 space-y-1">
+                  <span className="text-[10px] text-gray-400 block font-normal">Ou clique para escolher uma imagem do seu Ateliê:</span>
+                  <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                    {[
+                      { name: 'Banner Geral', path: '/arquivos/banner andrew.png' },
+                      { name: 'Painel Madeira', path: '/arquivos/andrew lemos painel site2.jpg' },
+                      { name: 'Prêmio Notoriedade', path: '/arquivos/Premio de Notoriedade Artística (1).png' },
+                      { name: 'Canal YouTube', path: '/arquivos/Apresentação do Canal.jpg' }
+                    ].map(b => (
+                      <button
+                        key={b.path}
+                        type="button"
+                        onClick={() => setMarketingBannerUrl(window.location.origin + b.path)}
+                        className={`px-2.5 py-1 rounded-md border text-[10px] transition-all cursor-pointer ${
+                          marketingBannerUrl === window.location.origin + b.path 
+                            ? 'bg-brand-wood text-white border-brand-wood font-bold' 
+                            : 'bg-gray-50 text-gray-650 border-gray-200 hover:bg-gray-100'
+                        }`}
+                        disabled={marketingSending}
+                      >
+                        {b.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-gray-405 font-bold uppercase tracking-wide">Mensagem do E-mail *</label>
+                  <span className="text-[10px] text-gray-400 font-normal">Use <code className="bg-gray-100 px-1 py-0.5 rounded font-mono font-bold text-rose-500">{'{NOME}'}</code> para personalizar o nome do cliente.</span>
+                </div>
+                <textarea 
+                  rows={8}
+                  value={marketingBodyText}
+                  onChange={e => setMarketingBodyText(e.target.value)}
+                  placeholder="Escreva a newsletter ou comunicado..."
+                  className="w-full bg-slate-50 border rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood text-brand-ink font-medium leading-relaxed"
+                  disabled={marketingSending}
+                />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleSendMarketingEmails}
+                  disabled={marketingSending || marketingSelectedRecipients.length === 0}
+                  className={`w-full py-3 rounded-full font-bold shadow-md text-xs transition-all flex items-center justify-center gap-2 text-white cursor-pointer ${
+                    marketingSending 
+                      ? 'bg-gray-400 cursor-not-allowed shadow-none' 
+                      : 'bg-brand-wood hover:bg-brand-clay shadow-brand-wood/10'
+                  }`}
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>
+                    {marketingSending 
+                      ? `Enviando Comunicados (${marketingProgress}/${marketingSelectedRecipients.length})...` 
+                      : `Enviar Mala Direta para ${marketingSelectedRecipients.length} Cliente(s)`
+                    }
+                  </span>
+                </button>
+              </div>
+
+              {/* Status and Log monitor panel */}
+              {(marketingSending || marketingLogs.length > 0 || marketingStatusMessage) && (
+                <div className="space-y-2 pt-2 border-t mt-4">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-[10px] text-gray-400 block uppercase tracking-wide">Status do Envio & Logs</span>
+                    {marketingSending && (
+                      <span className="animate-pulse text-xs font-bold text-brand-wood font-mono">
+                        {Math.round((marketingProgress / marketingSelectedRecipients.length) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  
+                  {marketingStatusMessage && (
+                    <div className="bg-emerald-50 text-emerald-800 p-3 rounded-xl border border-emerald-200 font-bold text-center">
+                      {marketingStatusMessage}
+                    </div>
+                  )}
+
+                  <div className="bg-slate-900 text-slate-100 p-3 rounded-xl font-mono text-[10px] h-[150px] overflow-y-auto space-y-1">
+                    {marketingLogs.map((log, lidx) => (
+                      <div key={lidx}>{log}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Recipients selection column */}
+            <div className="lg:col-span-5 bg-white p-6 rounded-2xl border flex flex-col h-[600px]">
+              <div className="flex justify-between items-center mb-3">
+                <span className="font-bold text-brand-ink leading-tight">Lista de Destinatários ({customers.length})</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMarketingSelectedRecipients(customers.map(c => c.email).filter(Boolean))}
+                    className="text-brand-wood font-semibold text-[10px] hover:underline cursor-pointer"
+                    disabled={marketingSending}
+                  >
+                    Marcar Todos
+                  </button>
+                  <span className="text-gray-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setMarketingSelectedRecipients([])}
+                    className="text-gray-400 font-semibold text-[10px] hover:underline cursor-pointer"
+                    disabled={marketingSending}
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-grow overflow-y-auto border rounded-xl divide-y bg-slate-50">
+                {customers.map(cust => (
+                  <div key={cust.id} className="p-3 flex items-start gap-2.5 transition-colors hover:bg-white">
+                    <input 
+                      type="checkbox"
+                      checked={marketingSelectedRecipients.includes(cust.email)}
+                      onChange={() => {
+                        if (marketingSelectedRecipients.includes(cust.email)) {
+                          setMarketingSelectedRecipients(marketingSelectedRecipients.filter(e => e !== cust.email));
+                        } else {
+                          setMarketingSelectedRecipients([...marketingSelectedRecipients, cust.email]);
+                        }
+                      }}
+                      className="mt-0.5 rounded cursor-pointer"
+                      disabled={marketingSending || !cust.email}
+                    />
+                    <div className="flex-grow min-w-0">
+                      <div className="font-bold text-gray-800 truncate">{cust.name || 'Sem Nome'}</div>
+                      <div className="text-[10px] text-gray-400 truncate">{cust.email || 'Sem E-mail'}</div>
+                    </div>
+                  </div>
+                ))}
+
+                {customers.length === 0 && (
+                  <p className="text-center text-gray-400 py-12 px-4">Nenhum cliente cadastrado no e-commerce ainda.</p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       ) : (

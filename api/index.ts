@@ -442,6 +442,83 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+// API Route for admin bulk email campaigns ("Mala Direta")
+app.post("/api/admin/mala-direta", async (req, res) => {
+  const { subject, bannerUrl, bodyText, recipients } = req.body;
+
+  if (!subject || !bodyText || !recipients || !Array.isArray(recipients)) {
+    return res.status(400).json({ error: "Assunto, mensagem e destinatários são obrigatórios para a Mala Direta." });
+  }
+
+  // Get SMTP transporter
+  let transporter;
+  try {
+    transporter = getSmtpTransporter();
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+
+  const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
+  const results: Array<{ email: string; name: string; success: boolean; error?: string }> = [];
+
+  // Loop through and send individually to ensure privacy and personalization
+  for (const recipient of recipients) {
+    const { email, name } = recipient;
+    if (!email) continue;
+
+    try {
+      // Personalize name placeholder if present
+      const personalizedBodyText = bodyText.replace(/{NOME}/g, name || "Cliente");
+      let htmlContent = `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e5e5e5; border-radius: 20px; background-color: #fbfbf9; line-height: 1.6;">
+          <h2 style="color: #8d6e63; font-family: 'Georgia', serif; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-top: 0; margin-bottom: 25px;">Olá, ${name || "Cliente"}!</h2>
+      `;
+
+      if (bannerUrl) {
+        htmlContent += `
+          <div style="text-align: center; margin-bottom: 25px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+            <img src="${bannerUrl}" alt="${subject}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />
+          </div>
+        `;
+      }
+
+      htmlContent += `
+          <div style="font-size: 15px; color: #333; white-space: pre-wrap; margin-bottom: 30px; font-weight: normal; line-height: 1.7;">${personalizedBodyText}</div>
+          
+          <div style="text-align: center; margin: 35px 0 10px 0;">
+            <a href="https://andrew-lemos.vercel.app/" 
+               style="background-color: #8d6e63; color: white; padding: 12px 28px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 14px; display: inline-block;">
+              Visitar Nosso Ateliê
+            </a>
+          </div>
+          
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+          <p style="text-align: center; font-size: 11px; color: #999; margin-top: 20px; line-height: 1.4;">
+            Você está recebendo este e-mail por estar cadastrado como cliente ou parceiro de arte no Ateliê Andrew Lemos.<br>
+            Se não desejar mais comunicados, basta responder a este e-mail solicitando a remoção de sua conta.
+          </p>
+        </div>
+      `;
+
+      await transporter.sendMail({
+        from: `"Ateliê Andrew Lemos" <${SMTP_USER}>`,
+        to: email,
+        replyTo: SMTP_USER,
+        subject: subject,
+        html: htmlContent,
+        text: `${subject}\n\nOlá ${name || "Cliente"},\n\n${personalizedBodyText}`
+      });
+
+      results.push({ email, name, success: true });
+    } catch (mailError: any) {
+      console.error(`Mala Direta: Falha ao enviar para ${email}:`, mailError);
+      results.push({ email, name, success: false, error: mailError.message || String(mailError) });
+    }
+  }
+
+  res.json({ success: true, results });
+});
+
 // --- E-commerce "Vendas" Endpoints ---
 
 // 1. Calculate shipping via MelhorEnvio with local fallback
