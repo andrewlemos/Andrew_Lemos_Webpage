@@ -1304,11 +1304,10 @@ const AdminDashboard = () => {
             <a 
               href="/api/download-zip" 
               download
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-full text-sm flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 rounded-full flex items-center justify-center transition-all shadow-sm cursor-pointer"
               title="Baixar Backup ZIP completo do Projeto"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Backup do Código (.zip)</span>
+              <Download className="w-4 h-4" />
             </a>
             {activeTab === 'products' && (
               <button 

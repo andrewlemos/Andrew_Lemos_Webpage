@@ -18,6 +18,19 @@ import {
 } from 'lucide-react';
 import { db, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, setDoc } from '../firebase';
 import { EcomProduct, EcomOrder, ShippingQuote, PackagingSettings } from '../types';
+import { ensureRobustUrl } from '../App';
+
+const formatAdminDate = (createdAt: any) => {
+  if (!createdAt) return '---';
+  if (typeof createdAt === 'string') return createdAt;
+  if (typeof createdAt.toDate === 'function') {
+    return createdAt.toDate().toLocaleString('pt-BR');
+  }
+  if (createdAt.seconds !== undefined) {
+    return new Date(createdAt.seconds * 1000).toLocaleString('pt-BR');
+  }
+  return String(createdAt);
+};
 
 export const AdminStore = () => {
   const [products, setProducts] = useState<EcomProduct[]>([]);
@@ -376,7 +389,7 @@ export const AdminStore = () => {
                 <div key={p.id} className="bg-white p-4 rounded-2xl border flex gap-4 hover:shadow-xs transition-shadow">
                   <div className="w-20 h-20 bg-gray-50 rounded-xl p-2.5 border overflow-hidden flex items-center justify-center flex-shrink-0">
                     {mainImg ? (
-                      <img src={mainImg} alt="" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                      <img src={ensureRobustUrl(mainImg)} alt="" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
                     ) : null}
                   </div>
                   
@@ -403,9 +416,30 @@ export const AdminStore = () => {
                     <div className="flex items-center justify-between border-t pt-2 mt-2 gap-2 text-xs">
                       <div>
                         <span className="text-[10px] text-gray-400 block pb-0.5 leading-none">Preço Único</span>
-                        <span className="font-bold text-brand-wood font-mono text-sm leading-none">
-                          R$ {p.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
+                        <div className="flex items-center gap-0.5">
+                          <span className="text-xs font-bold text-gray-500 font-serif">R$</span>
+                          <input 
+                            type="number" 
+                            step="0.01"
+                            defaultValue={p.price}
+                            onBlur={async (e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val) && val >= 0) {
+                                try {
+                                  await updateDoc(doc(db, 'ecom_products', p.id!), { price: val });
+                                } catch (err) {
+                                  console.error("Erro ao atualizar preço do produto:", err);
+                                }
+                              }
+                            }}
+                            onKeyDown={async (e) => {
+                              if (e.key === 'Enter') {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            className="w-20 text-left border rounded-md font-bold px-1 py-0.5 text-brand-wood font-mono text-xs bg-gray-50 focus:bg-white"
+                          />
+                        </div>
                       </div>
 
                       {/* Stock updating field */}
@@ -466,7 +500,7 @@ export const AdminStore = () => {
                       </span>
                     </div>
                     <div className="text-[11px] text-gray-600 font-bold">{order.customerInfo.name} ({order.customerInfo.email})</div>
-                    <div className="text-[10px] text-gray-400 font-mono">Realizado em: {order.createdAt}</div>
+                    <div className="text-[10px] text-gray-400 font-mono">Realizado em: {formatAdminDate(order.createdAt)}</div>
                   </div>
 
                   <div className="flex items-center gap-6 justify-between md:justify-end flex-wrap">
@@ -535,7 +569,7 @@ export const AdminStore = () => {
                       </span>
                     </div>
                     <div className="text-[11px] text-gray-600 font-bold">Cliente: {quote.customerInfo.name} ({quote.customerInfo.email})</div>
-                    <div className="text-[10px] text-gray-400 font-mono">Realizado em: {quote.createdAt}</div>
+                    <div className="text-[10px] text-gray-400 font-mono">Realizado em: {formatAdminDate(quote.createdAt)}</div>
                   </div>
 
                   <div className="flex items-center gap-6 justify-between md:justify-end flex-wrap">
@@ -827,7 +861,7 @@ export const AdminStore = () => {
                     </div>
                     {selectedQuote.productImage && (
                       <div className="h-12 w-full mt-2 rounded border overflow-hidden bg-slate-100 flex items-center justify-center p-1 self-end">
-                        <img src={selectedQuote.productImage} className="max-h-full max-w-full object-contain" referrerPolicy="no-referrer" />
+                        <img src={ensureRobustUrl(selectedQuote.productImage)} className="max-h-full max-w-full object-contain" referrerPolicy="no-referrer" />
                       </div>
                     )}
                   </div>
