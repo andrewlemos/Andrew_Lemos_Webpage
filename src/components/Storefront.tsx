@@ -18,7 +18,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { db, collection, query, onSnapshot, orderBy, handleFirestoreError, OperationType, addDoc } from '../firebase';
-import { EcomProduct, CartItem } from '../types';
+import { doc, getDoc } from 'firebase/firestore';
+import { EcomProduct, CartItem, EcomCustomer } from '../types';
 
 // Helper to handle Google Drive image links and path conversion
 const ensureRobustUrl = (url: string) => {
@@ -114,6 +115,10 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
   // Checkout form visual flow
   const [checkoutStep, setCheckoutStep] = useState<'browsing' | 'details' | 'submitting'>('browsing');
 
+  // Persist fetched customer profile if logged in
+  const [profileLoaded, setProfileLoaded] = useState<EcomCustomer | null>(null);
+  const [useProfileAddress, setUseProfileAddress] = useState(true);
+
   // Customer details form
   const [customerInfo, setCustomerInfo] = useState({
     name: '',
@@ -128,6 +133,41 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
     city: '',
     state: ''
   });
+
+  // Load customer profile if logged in
+  useEffect(() => {
+    if (!userId) {
+      setProfileLoaded(null);
+      return;
+    }
+
+    const fetchProfile = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'ecom_customers', userId));
+        if (snap.exists()) {
+          const profileData = snap.data() as EcomCustomer;
+          setProfileLoaded(profileData);
+          setCustomerInfo({
+            name: profileData.name || '',
+            email: profileData.email || '',
+            phone: profileData.phone || '',
+            cpf: profileData.cpf || '',
+            cep: profileData.cep || '',
+            street: profileData.street || '',
+            number: profileData.number || '',
+            complement: profileData.complement || '',
+            neighborhood: profileData.neighborhood || '',
+            city: profileData.city || '',
+            state: profileData.state || ''
+          });
+        }
+      } catch (err) {
+        console.warn("Error fetching customer profile at checkout:", err);
+      }
+    };
+
+    fetchProfile();
+  }, [userId]);
 
   // Shipping
   const [shippingCep, setShippingCep] = useState('');
@@ -851,6 +891,19 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                   ) : checkoutStep === 'details' ? (
                     // STEP 2: DETAILS FORM
                     <form onSubmit={handleCheckoutSubmit} className="space-y-3 prose pr-1">
+                      {!userId && (
+                        <div className="bg-amber-50 text-amber-800 border border-amber-200 p-3 rounded-xl text-[11px] leading-snug flex items-center justify-between mb-3">
+                          <span>Já é nosso cliente com conta cadastrada?</span>
+                          <button 
+                            type="button" 
+                            onClick={() => onNavigateToView('customer-area')} 
+                            className="text-[#8d6e63] font-bold hover:underline outline-none cursor-pointer text-[10px] uppercase tracking-wide flex-shrink-0 ml-2"
+                          >
+                            Fazer Login
+                          </button>
+                        </div>
+                      )}
+
                       <div className="text-xs text-gray-400 border-b pb-2 mb-3 font-semibold uppercase tracking-wider">Identidade & Contato</div>
                       <input 
                         type="text" 
@@ -888,64 +941,120 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                       </div>
 
                       <div className="text-xs text-gray-400 border-b pb-2 pt-2 font-semibold uppercase tracking-wider">Logradouro do Destino</div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <input 
-                          type="text" 
-                          placeholder="CEP *" 
-                          required 
-                          value={customerInfo.cep} 
-                          onChange={e => {
-                            setCustomerInfo({...customerInfo, cep: e.target.value});
-                            if (e.target.value.replace(/\D/g, "").length === 8) {
-                              lookupCep(e.target.value);
-                            }
-                          }}
-                          className="w-full bg-[#FAFAFA] border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-semibold"
-                        />
-                        <input 
-                          type="text" 
-                          placeholder="Cidade *" 
-                          required 
-                          disabled
-                          value={customerInfo.city} 
-                          className="w-full bg-gray-50 border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none col-span-2 text-gray-400"
-                        />
-                      </div>
-                      <div className="grid grid-cols-5 gap-2">
-                        <input 
-                          type="text" 
-                          placeholder="Logradouro / Rua *" 
-                          required 
-                          value={customerInfo.street} 
-                          onChange={e => setCustomerInfo({...customerInfo, street: e.target.value})}
-                          className="w-full bg-[#FAFAFA] border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-medium col-span-3"
-                        />
-                        <input 
-                          type="text" 
-                          placeholder="Número *" 
-                          required 
-                          value={customerInfo.number} 
-                          onChange={e => setCustomerInfo({...customerInfo, number: e.target.value})}
-                          className="w-full bg-[#FAFAFA] border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-medium col-span-2"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input 
-                          type="text" 
-                          placeholder="Bairro *" 
-                          required 
-                          value={customerInfo.neighborhood} 
-                          onChange={e => setCustomerInfo({...customerInfo, neighborhood: e.target.value})}
-                          className="w-full bg-[#FAFAFA] border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-medium"
-                        />
-                        <input 
-                          type="text" 
-                          placeholder="Complemento (Apto, conj, etc)" 
-                          value={customerInfo.complement} 
-                          onChange={e => setCustomerInfo({...customerInfo, complement: e.target.value})}
-                          className="w-full bg-[#FAFAFA] border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-medium"
-                        />
-                      </div>
+                      
+                      {profileLoaded && (
+                        <div className="bg-[#FAF9F5] border border-brand-wood/10 rounded-xl p-3 mb-2 flex items-center justify-between text-xs transition-all select-none">
+                          <div className="pr-3">
+                            <span className="text-[9px] uppercase font-bold tracking-wider text-brand-wood block">Endereço de Cadastro</span>
+                            <span className="text-gray-500 block text-[10px] line-clamp-1">{profileLoaded.street}, {profileLoaded.number} — {profileLoaded.city}/{profileLoaded.state}</span>
+                          </div>
+                          <label className="flex items-center gap-1.5 cursor-pointer font-bold text-[#8d6e63] shrink-0">
+                            <input 
+                              type="checkbox" 
+                              checked={useProfileAddress}
+                              onChange={(e) => {
+                                setUseProfileAddress(e.target.checked);
+                                if (e.target.checked) {
+                                  // Restore profile address
+                                  setCustomerInfo({
+                                    ...customerInfo,
+                                    cep: profileLoaded.cep || '',
+                                    street: profileLoaded.street || '',
+                                    number: profileLoaded.number || '',
+                                    complement: profileLoaded.complement || '',
+                                    neighborhood: profileLoaded.neighborhood || '',
+                                    city: profileLoaded.city || '',
+                                    state: profileLoaded.state || ''
+                                  });
+                                } else {
+                                  // Clear address fields
+                                  setCustomerInfo({
+                                    ...customerInfo,
+                                    cep: '',
+                                    street: '',
+                                    number: '',
+                                    complement: '',
+                                    neighborhood: '',
+                                    city: '',
+                                    state: ''
+                                  });
+                                }
+                              }}
+                              className="accent-brand-wood h-4 w-4 rounded"
+                            />
+                            <span className="text-[10px] tracking-wide uppercase">Usar Cadastro</span>
+                          </label>
+                        </div>
+                      )}
+
+                      {(!profileLoaded || !useProfileAddress) ? (
+                        <>
+                          <div className="grid grid-cols-3 gap-2">
+                            <input 
+                              type="text" 
+                              placeholder="CEP *" 
+                              required 
+                              value={customerInfo.cep} 
+                              onChange={e => {
+                                setCustomerInfo({...customerInfo, cep: e.target.value});
+                                if (e.target.value.replace(/\D/g, "").length === 8) {
+                                  lookupCep(e.target.value);
+                                }
+                              }}
+                              className="w-full bg-[#FAFAFA] border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-semibold"
+                            />
+                            <input 
+                              type="text" 
+                              placeholder="Cidade *" 
+                              required 
+                              disabled
+                              value={customerInfo.city} 
+                              className="w-full bg-gray-50 border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none col-span-2 text-gray-400"
+                            />
+                          </div>
+                          <div className="grid grid-cols-5 gap-2">
+                            <input 
+                              type="text" 
+                              placeholder="Logradouro / Rua *" 
+                              required 
+                              value={customerInfo.street} 
+                              onChange={e => setCustomerInfo({...customerInfo, street: e.target.value})}
+                              className="w-full bg-[#FAFAFA] border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-medium col-span-3"
+                            />
+                            <input 
+                              type="text" 
+                              placeholder="Número *" 
+                              required 
+                              value={customerInfo.number} 
+                              onChange={e => setCustomerInfo({...customerInfo, number: e.target.value})}
+                              className="w-full bg-[#FAFAFA] border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-medium col-span-2"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input 
+                              type="text" 
+                              placeholder="Bairro *" 
+                              required 
+                              value={customerInfo.neighborhood} 
+                              onChange={e => setCustomerInfo({...customerInfo, neighborhood: e.target.value})}
+                              className="w-full bg-[#FAFAFA] border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-medium"
+                            />
+                            <input 
+                              type="text" 
+                              placeholder="Complemento (Apto, conj, etc)" 
+                              value={customerInfo.complement} 
+                              onChange={e => setCustomerInfo({...customerInfo, complement: e.target.value})}
+                              className="w-full bg-[#FAFAFA] border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-medium"
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="bg-[#FAF9F5] border border-brand-wood/10 rounded-xl p-4 text-xs space-y-1 relative shadow-inner">
+                          <span className="text-[9px] uppercase font-bold text-[#8d6e63] block tracking-wider font-mono">Endereço de Cadastro Confirmado</span>
+                          <p className="font-bold text-gray-700 text-[11px] leading-snug">{customerInfo.street}, {customerInfo.number} {customerInfo.complement && `(${customerInfo.complement})`}</p>
+                          <p className="text-gray-500 text-[10px]">{customerInfo.neighborhood} — CEP {customerInfo.cep} — {customerInfo.city}/{customerInfo.state}</p>
+                        </div>
+                      )}
                       {checkoutValidationError && (
                         <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-start gap-2 mt-2">
                           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-500 animate-pulse" />

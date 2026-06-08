@@ -47,6 +47,7 @@ import { serverTimestamp, Timestamp } from 'firebase/firestore';
 import { Storefront } from './components/Storefront';
 import { CheckoutPay } from './components/CheckoutPay';
 import { CheckoutConfirm } from './components/CheckoutConfirm';
+import { CustomerArea } from './components/CustomerArea';
 import { AdminStore } from './components/AdminStore';
 import { Product, Arquivo, EcomProduct, EcomOrder } from './types';
 
@@ -149,6 +150,7 @@ const Navbar = () => {
     { name: 'Produtos', href: '#products' },
     { name: 'Vendas ✨', href: '#vendas' },
     { name: 'Contato', href: '#contact' },
+    { name: 'Login', href: '#customer-area' },
   ];
 
   return (
@@ -2101,7 +2103,7 @@ const Chatbot = () => {
 };
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area'>('landing');
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<any | null>(null);
 
@@ -2125,6 +2127,8 @@ export default function App() {
         const id = urlParams.get('id') || '';
         setCurrentView('checkout-confirm');
         setCurrentOrderId(id);
+      } else if (hash.startsWith('#customer-area')) {
+        setCurrentView('customer-area');
       } else {
         setCurrentView('landing');
         if (hash === '#vendas') {
@@ -2143,11 +2147,13 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm', id?: string) => {
+  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area', id?: string) => {
     if (view === 'checkout-pay' && id) {
       window.location.hash = `#vendas/pay?id=${id}`;
     } else if (view === 'checkout-confirm' && id) {
       window.location.hash = `#vendas/confirm?id=${id}`;
+    } else if (view === 'customer-area') {
+      window.location.hash = '#customer-area';
     } else if (view === 'vendas') {
       window.location.hash = '#vendas';
       setTimeout(() => {
@@ -2225,6 +2231,29 @@ export default function App() {
             <CheckoutConfirm 
               orderId={currentOrderId} 
               onNavigateToView={navigateToView}
+            />
+          </motion.div>
+        )}
+
+        {currentView === 'customer-area' && (
+          <motion.div 
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed inset-0 z-[120] bg-[#FAF9F5] overflow-y-auto"
+          >
+            {/* Direct overlay close button */}
+            <div className="absolute top-4 right-4 z-[130]">
+              <button 
+                onClick={() => navigateToView('landing')} 
+                className="p-3 bg-white hover:bg-gray-100 rounded-full border border-gray-150 transition-all text-slate-750 flex items-center justify-center cursor-pointer shadow-sm outline-none"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <CustomerArea 
+              onNavigateToView={navigateToView} 
             />
           </motion.div>
         )}

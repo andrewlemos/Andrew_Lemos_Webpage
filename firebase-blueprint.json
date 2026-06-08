@@ -111,6 +111,26 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "customerInfo", "items", "shippingMethod", "shippingCost", "subtotal", "total", "status"]
+    },
+    "EcomCustomer": {
+      "title": "EcomCustomer",
+      "description": "Store customer profile details",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "cpf": { "type": "string" },
+        "cep": { "type": "string" },
+        "street": { "type": "string" },
+        "number": { "type": "string" },
+        "neighborhood": { "type": "string" },
+        "complement": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "phone", "cpf", "cep", "street", "number", "neighborhood", "city", "state"]
     }
   },
   "firestore": {
@@ -133,6 +153,10 @@
     "/ecom_orders/{orderId}": {
       "schema": "EcomOrder",
       "description": "Collection of store orders and checkout details"
+    },
+    "/ecom_customers/{userId}": {
+      "schema": "EcomCustomer",
+      "description": "Collection of customer account profiles and shipping parameters"
     }
   }
 }

@@ -558,6 +558,129 @@ app.post("/api/vendas/shipping/calculate", async (req, res) => {
   res.json({ success: true, carrier: "Local Engine Surcharge Fallback", services });
 });
 
+// Helper to send order placement confirmation email
+async function sendOrderPlacementEmail(orderId: string, orderData: any, baseUrl: string) {
+  try {
+    const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
+    const SMTP_PASS = process.env.SMTP_PASS;
+    if (!SMTP_PASS) {
+      console.warn(`[E-mail Pedido] SMTP_PASS não configurado. Ignorando envio de e-mail de confirmação para o pedido ${orderId}.`);
+      return;
+    }
+
+    const transporter = getSmtpTransporter();
+    const customerInfo = orderData.customerInfo;
+    const itemsHtml = orderData.items.map((itm: any) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">${itm.name} (x${itm.quantity})</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">R$ ${(itm.price * itm.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+      </tr>
+    `).join("");
+
+    const clientAreaLink = `${baseUrl}/#customer-area`;
+
+    await transporter.sendMail({
+      from: `"Ateliê Andrew Lemos" <${SMTP_USER}>`,
+      to: customerInfo.email,
+      replyTo: SMTP_USER,
+      subject: `🛒 Pedido Confirmado! Acompanhe sua compra (Pedido: ${orderId})`,
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e5e5e5; border-radius: 20px; background-color: #fbfbf9;">
+          <h2 style="color: #8d6e63; border-bottom: 2px solid #8d6e63; padding-bottom: 10px; margin-top: 0; font-family: 'Georgia', serif; text-align: center;">Seu Pedido foi Recebido!</h2>
+          <p>Olá <strong>${customerInfo.name}</strong>,</p>
+          <p>Agradecemos por adquirir uma peça exclusiva direto do ateliê do artista Andrew Lemos. Seu pedido <strong>${orderId}</strong> está em processamento.</p>
+          
+          <div style="background-color: #f7f5f0; border-radius: 12px; padding: 15px; margin: 20px 0;">
+            <h4 style="margin: 0 0 10px 0; color: #8d6e63;">Resumo do Pedido</h4>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <thead>
+                <tr style="border-bottom: 2px solid #e5e5e5; text-align: left;">
+                  <th style="padding: 8px;">Item</th>
+                  <th style="padding: 8px; text-align: right;">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+                <tr>
+                  <td style="padding: 8px; font-weight: bold;">Subtotal dos Itens</td>
+                  <td style="padding: 8px; text-align: right; font-weight: bold;">R$ ${Number(orderData.subtotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px;">Frete (${orderData.shippingMethod})</td>
+                  <td style="padding: 8px; text-align: right;">R$ ${Number(orderData.shippingCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                </tr>
+                <tr style="border-top: 2px solid #e5e5e5; font-size: 15px; font-weight: bold; color: #8d6e63;">
+                  <td style="padding: 8px;">Total Geral</td>
+                  <td style="padding: 8px; text-align: right;">R$ ${Number(orderData.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="background-color: #fcfcfc; border: 1px solid #eee; border-radius: 12px; padding: 15px; margin: 20px 0; text-align: center;">
+            <p style="margin: 0 0 10px 0; font-weight: bold; color: #8d6e63;">Acompanhamento do Pedido no Site</p>
+            <p style="margin: 0 0 15px 0; font-size: 13px;">Você pode acompanhar em tempo real o status, a liberação e o código de rastreamento do seu pacote através da nossa Área do Cliente no site.</p>
+            <a href="${clientAreaLink}" style="background-color: #8d6e63; color: white; padding: 12px 24px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 14px; display: inline-block;">
+              Acessar Área do Cliente
+            </a>
+          </div>
+
+          <p style="font-size: 12px; color: #666; text-align: center; margin-top: 25px;">
+            A senha de acesso é a mesma que você preencheu ou cadastrou no momento da finalização da compra.<br/> 
+            Se tiver qualquer dúvida, responda diretamente este e-mail.
+          </p>
+        </div>
+      `
+    });
+    console.log(`[E-mail Pedido] E-mail de confirmação de recebimento enviado com sucesso para ${customerInfo.email}`);
+  } catch (err) {
+    console.error(`[E-mail Pedido] Falha ao enviar e-mail de confirmação do pedido ${orderId}:`, err);
+  }
+}
+
+// Helper to send payment confirmation email
+async function sendOrderPaymentConfirmationEmail(orderId: string, orderData: any, baseUrl: string) {
+  try {
+    const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
+    const SMTP_PASS = process.env.SMTP_PASS;
+    if (!SMTP_PASS) return;
+
+    const transporter = getSmtpTransporter();
+    const customerInfo = orderData.customerInfo;
+    const clientAreaLink = `${baseUrl}/#customer-area`;
+
+    await transporter.sendMail({
+      from: `"Ateliê Andrew Lemos" <${SMTP_USER}>`,
+      to: customerInfo.email,
+      replyTo: SMTP_USER,
+      subject: `✅ Pagamento Confirmado! Seu Pedido ${orderId} está sendo preparado`,
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e5e5e5; border-radius: 20px; background-color: #fbfbf9;">
+          <h2 style="color: #2e7d32; border-bottom: 2px solid #2e7d32; padding-bottom: 10px; margin-top: 0; font-family: 'Georgia', serif; text-align: center;">Pagamento Aprovado! 🎉</h2>
+          <p>Olá <strong>${customerInfo.name}</strong>,</p>
+          <p>Excelente notícia! Confirmamos o pagamento do seu pedido <strong>${orderId}</strong> com sucesso.</p>
+          <p>Sua peça artística já está entrando em processo de embalagem com todo o cuidado para o envio seguro.</p>
+          
+          <div style="background-color: #f7f5f0; border-radius: 12px; padding: 15px; margin: 20px 0; text-align: center;">
+            <p style="margin: 0 0 10px 0; font-weight: bold; color: #8d6e63;">Acompanhe o Status & Rastreio</p>
+            <p style="margin: 0 0 15px 0; font-size: 13px;">Assim que seu pacote for despachado nos Correios ou na Transportadora, o código de rastreamento será disponibilizado na sua Área do Cliente.</p>
+            <a href="${clientAreaLink}" style="background-color: #2e7d32; color: white; padding: 12px 24px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 14px; display: inline-block;">
+              Ver Status do Pedido
+            </a>
+          </div>
+
+          <p style="font-size: 12px; color: #666; text-align: center; margin-top: 25px;">
+            Dúvidas ou alterações? Basta responder diretamente a este e-mail.
+          </p>
+        </div>
+      `
+    });
+    console.log(`[E-mail Pagamento] E-mail de confirmação de pagamento enviado para ${customerInfo.email}`);
+  } catch (err) {
+    console.error(`[E-mail Pagamento] Falha ao enviar e-mail de confirmação de pagamento para ${orderId}:`, err);
+  }
+}
+
 // 2. Checkout Creation Endpoint (PagSeguro integration or virtual sandbox)
 app.post("/api/vendas/checkout", async (req, res) => {
   const { userId, customerInfo, items, shippingMethod, shippingCost } = req.body;
@@ -615,6 +738,11 @@ app.post("/api/vendas/checkout", async (req, res) => {
     };
     await adminDb.collection("ecom_orders").doc(orderId).set(orderDoc);
     console.log(`[Pedido Salvo] Pedido ${orderId} registrado com total de R$ ${total}`);
+
+    const host = req.get("host") || "localhost:3000";
+    const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") ? "http" : "https";
+    const baseUrl = `${protocol}://${host}`;
+    sendOrderPlacementEmail(orderId, orderDoc, baseUrl).catch(e => console.error("Async sending of order confirmation failed:", e));
   } catch (err: any) {
     console.error("Erro ao salvar pedido no Firestore:", err);
     return res.status(500).json({ error: "Erro interno ao cadastrar o pedido no banco de dados: " + formatFirebaseError(err) });
@@ -671,11 +799,25 @@ app.post("/api/vendas/checkout", async (req, res) => {
     // which results in a status 400 validation error from Mercado Pago if we construct baseUrl using req.protocol.
     const baseUrl = `https://${host}`;
 
+    // Clean phone and CPF digits to construct the regulated payer structure
+    const phoneDigits = (customerInfo.phone || "").replace(/\D/g, "");
+    const areaCode = phoneDigits.substring(0, 2) || "21";
+    const phoneNumber = phoneDigits.substring(2) || "999999999";
+    const cpfDigits = (customerInfo.cpf || "").replace(/\D/g, "");
+
     const mpBody = {
       items: mpItems,
       payer: {
         name: customerInfo.name,
-        email: customerInfo.email
+        email: customerInfo.email,
+        phone: {
+          area_code: areaCode,
+          number: phoneNumber
+        },
+        identification: {
+          type: "CPF",
+          number: cpfDigits
+        }
       },
       back_urls: {
         success: `${baseUrl}/vendas/checkout/confirm?id=${orderId}`,
@@ -752,7 +894,7 @@ app.post("/api/vendas/checkout", async (req, res) => {
 });
 
 // Helper to update order status and decrement product stock securely
-async function updateOrderStatusInDatabase(orderId: string, status: string, paymentId: string) {
+async function updateOrderStatusInDatabase(orderId: string, status: string, paymentId: string, baseUrl?: string) {
   if (!adminDb) {
     throw new Error("Banco de dados indisponível no backend.");
   }
@@ -790,6 +932,10 @@ async function updateOrderStatusInDatabase(orderId: string, status: string, paym
         console.error(`[Webhook MercadoPago] Erro ao diminuir estoque de '${item.name}':`, stockError);
       }
     }
+
+    // Send payment email confirmation
+    const finalBaseUrl = baseUrl || "http://localhost:3000";
+    sendOrderPaymentConfirmationEmail(orderId, orderData, finalBaseUrl).catch(e => console.error("Async sending of payment confirmation failed:", e));
   }
 
   // Update Order Status in database
@@ -816,7 +962,10 @@ app.post("/api/vendas/webhook-mercadopago", async (req, res) => {
 
     if (orderId) {
       try {
-        await updateOrderStatusInDatabase(orderId, status, paymentId);
+        const host = req.get("host") || "localhost:3000";
+        const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") ? "http" : "https";
+        const baseUrl = `${protocol}://${host}`;
+        await updateOrderStatusInDatabase(orderId, status, paymentId, baseUrl);
         return res.json({ success: true, orderId, updatedStatus: status });
       } catch (err: any) {
         return res.status(500).json({ error: formatFirebaseError(err) });
@@ -876,7 +1025,10 @@ app.post("/api/vendas/webhook-mercadopago", async (req, res) => {
         orderStatus = "Cancelado";
       }
 
-      await updateOrderStatusInDatabase(orderId, orderStatus, String(paymentId));
+      const host = req.get("host") || "localhost:3000";
+      const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") ? "http" : "https";
+      const baseUrl = `${protocol}://${host}`;
+      await updateOrderStatusInDatabase(orderId, orderStatus, String(paymentId), baseUrl);
       return res.json({ success: true, orderId, updatedStatus: orderStatus });
     } else {
       const errorText = await mpResponse.text().catch(() => "");
@@ -903,7 +1055,10 @@ app.post("/api/vendas/webhook-pagseguro", async (req, res) => {
   }
 
   try {
-    await updateOrderStatusInDatabase(orderId, status, paymentId);
+    const host = req.get("host") || "localhost:3000";
+    const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") ? "http" : "https";
+    const baseUrl = `${protocol}://${host}`;
+    await updateOrderStatusInDatabase(orderId, status, paymentId, baseUrl);
     return res.json({ success: true, orderId, updatedStatus: status });
   } catch (err: any) {
     return res.status(500).json({ error: formatFirebaseError(err) });
