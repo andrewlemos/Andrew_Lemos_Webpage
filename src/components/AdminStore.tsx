@@ -16,7 +16,7 @@ import {
   DollarSign,
   Layers
 } from 'lucide-react';
-import { db, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, setDoc } from '../firebase';
+import { db, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, setDoc, auth } from '../firebase';
 import { EcomProduct, EcomOrder, ShippingQuote, PackagingSettings } from '../types';
 import { ensureRobustUrl } from '../App';
 
@@ -909,9 +909,13 @@ export const AdminStore = () => {
                           };
 
                           // Call api to respond quote (this handles database, pending order creation & emailing in backend to guarantee 100% security)
+                          const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : '';
                           const responseMe = await fetch('/api/vendas/quotes/respond', {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 
+                              'Content-Type': 'application/json',
+                              'Authorization': `Bearer ${idToken}`
+                            },
                             body: JSON.stringify({
                               quoteId: selectedQuote.id,
                               responseValue: resPayload

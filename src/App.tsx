@@ -1148,6 +1148,34 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleDownloadZip = async () => {
+    try {
+      const u = auth.currentUser;
+      if (!u) {
+        alert("Autenticação requerida.");
+        return;
+      }
+      const token = await u.getIdToken();
+      const response = await fetch(`/api/download-zip?token=${encodeURIComponent(token)}`);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Erro de autorização ou falha do servidor.");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "andrew_lemos_webpage_backup.zip";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error("Erro ao transferir backup:", error);
+      alert("Falha de segurança ao transferir backup: " + error.message);
+    }
+  };
+
   const handleLogout = () => signOut(auth);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1301,14 +1329,13 @@ const AdminDashboard = () => {
             </button>
           </div>
           <div className="flex gap-4">
-            <a 
-              href="/api/download-zip" 
-              download
-              className="bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 rounded-full flex items-center justify-center transition-all shadow-sm cursor-pointer"
+            <button 
+              onClick={handleDownloadZip}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 rounded-full flex items-center justify-center transition-all shadow-sm cursor-pointer border-0"
               title="Baixar Backup ZIP completo do Projeto"
             >
               <Download className="w-4 h-4" />
-            </a>
+            </button>
             {activeTab === 'products' && (
               <button 
                 onClick={() => setIsAdding(!isAdding)}
