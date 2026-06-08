@@ -452,9 +452,11 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
               const orderId = matchId ? matchId[1] : resData.orderId;
               onNavigateToView('checkout-pay', orderId);
             } else {
-              // External redirection (real PagSeguro page)
-              window.open(resData.redirectUrl, '_blank');
-              onNavigateToView('landing');
+              // Attempt to open the real Mercado Pago checkout securely in a new tab to bypass Iframe sandbox policies
+              window.open(resData.redirectUrl, '_blank', 'noopener,noreferrer');
+              
+              // Open checkout summary page as fallback so user can see details and have a manual pay button
+              onNavigateToView('checkout-pay', resData.orderId);
             }
           }
         } else {

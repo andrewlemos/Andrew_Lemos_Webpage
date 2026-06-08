@@ -71,6 +71,9 @@ export interface EcomOrder {
   status: 'Aguardando pagamento' | 'Pago' | 'Separação' | 'Enviado' | 'Entregue' | 'Cancelado';
   paymentId?: string;
   trackingCode?: string;
+  gateway?: string;
+  gatewayError?: string;
+  paymentUrl?: string;
   createdAt?: any;
   updatedAt?: any;
 }

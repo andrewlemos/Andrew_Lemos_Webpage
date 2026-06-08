@@ -625,6 +625,14 @@ app.post("/api/vendas/checkout", async (req, res) => {
 
   if (!mpAccessToken) {
     console.log(`[Mercado Pago] Token MERCADOPAGO_ACCESS_TOKEN ausente. Redirecionando pedido ${orderId} para simulador virtual...`);
+    try {
+      await adminDb.collection("ecom_orders").doc(orderId).update({
+        gateway: "Virtual Simulator",
+        gatewayError: "A variável de ambiente MERCADOPAGO_ACCESS_TOKEN não está configurada no seu servidor do backend. O sistema entrou no modo de simulação virtual para testes."
+      });
+    } catch (e) {
+      console.error("Failed to update gateway status for offline order:", e);
+    }
     return res.json({
       success: true,
       orderId,
@@ -695,6 +703,14 @@ app.post("/api/vendas/checkout", async (req, res) => {
       const redirectLink = mpData.init_point || mpData.sandbox_init_point;
       
       if (redirectLink) {
+        try {
+          await adminDb.collection("ecom_orders").doc(orderId).update({
+            gateway: "Mercado Pago",
+            paymentUrl: redirectLink
+          });
+        } catch (e) {
+          console.error("Failed to update gateway tracking for real order:", e);
+        }
         return res.json({
           success: true,
           orderId,
@@ -705,9 +721,25 @@ app.post("/api/vendas/checkout", async (req, res) => {
     } else {
       const errText = await mpResponse.text().catch(() => "");
       console.warn(`[Mercado Pago] Falha ao criar preferência de pagamento. Status ${mpResponse.status}: ${errText}. Forçando fallback.`);
+      try {
+        await adminDb.collection("ecom_orders").doc(orderId).update({
+          gateway: "Virtual Simulator (Fallback)",
+          gatewayError: `Falha na API do Mercado Pago ao gerar preferência de pagamento. Status HTTP ${mpResponse.status}: ${errText}`
+        });
+      } catch (e) {
+        console.error("Failed to update db with gateway fallback state:", e);
+      }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("[Mercado Pago] Erro na requisição de integração com a API do Mercado Pago. Forçando fallback.", error);
+    try {
+      await adminDb.collection("ecom_orders").doc(orderId).update({
+        gateway: "Virtual Simulator (Fallback)",
+        gatewayError: `Erro de conexão com o servidor do Mercado Pago. Detalhe técnico: ${error.message || error}`
+      });
+    } catch (e) {
+      console.error("Failed to update db with gateway error state:", e);
+    }
   }
 
   // Fallback to local checkout simulator URL

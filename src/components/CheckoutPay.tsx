@@ -158,6 +158,60 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
 
   return (
     <div className="bg-brand-paper min-h-screen py-12 px-6 font-sans">
+      
+      {/* REAL PAYMENT CORRECTION REDIRECT */}
+      {order.paymentUrl && (
+        <div className="max-w-4xl mx-auto mb-6 bg-emerald-50 border-2 border-emerald-300 text-emerald-900 rounded-2xl p-5 shadow-sm space-y-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex gap-3 items-start">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <h4 className="font-serif font-bold text-sm text-emerald-800">Link de Pagamento Oficial Ativo</h4>
+              <p className="text-xs text-emerald-700">
+                Uma preferência real do Mercado Pago foi registrada com sucesso para esta compra.
+              </p>
+            </div>
+          </div>
+          <a 
+            href={order.paymentUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-3 rounded-xl transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 shadow-sm hover:shadow hover:scale-[1.01] active:scale-[0.99]"
+          >
+            <span>Ir para o Mercado Pago Oficial</span>
+            <ArrowRight className="w-4 h-4" />
+          </a>
+        </div>
+      )}
+
+      {/* DIAGNOSTIC WARNING BANNER FOR CLIENT */}
+      {order.gateway?.includes("Virtual") && (
+        <div className="max-w-4xl mx-auto mb-6 bg-amber-50 border-2 border-amber-200 text-amber-900 rounded-3xl p-5 shadow-xs space-y-3">
+          <div className="flex gap-3 items-start">
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5 animate-pulse" />
+            <div className="space-y-1">
+              <h4 className="font-serif font-bold text-sm text-amber-800">Carrinho em Modo Teste / Simulação Virtual de Pagamento</h4>
+              <p className="text-xs leading-relaxed text-amber-700">
+                Você foi redirecionado para esta tela de sandbox local porque a integração real do <strong>Mercado Pago</strong> não está ativada.
+              </p>
+              {order.gatewayError && (
+                <div className="bg-amber-100/50 p-3 rounded-2xl text-[10px] font-mono text-amber-800 mt-2 border border-amber-200/50">
+                  <strong>Mensagem Diagnóstica Técnica:</strong> {order.gatewayError}
+                </div>
+              )}
+              <div className="text-[11px] font-medium text-amber-800 pt-2 border-t border-amber-200/50 mt-2">
+                <strong>💡 Como configurar e ativar pagamento REAL na sua loja:</strong>
+                <ol className="list-decimal pl-4 mt-1 space-y-1">
+                  <li>No painel da Vercel (ou do servidor onde fez o deploy), vá em <strong>Settings &gt; Environment Variables</strong>.</li>
+                  <li>Adicione a variável de ambiente: <strong>MERCADOPAGO_ACCESS_TOKEN</strong></li>
+                  <li>Preencha o valor com o seu Access Token de Produção obtido no painel de desenvolvedores do Mercado Pago (normalmente começa com <code className="bg-amber-200/50 px-1 rounded font-mono text-[10px]">APP_USR-...</code>).</li>
+                  <li>Importante: <strong>Refaça o Deployment</strong> do seu projeto para que o servidor carregue a nova variável de ambiente.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto grid md:grid-cols-[1fr_360px] gap-8">
         
         {/* Column 1: Payment Method selector interface gateway */}
