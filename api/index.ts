@@ -5,28 +5,29 @@ import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
 import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import AdmZip from "adm-zip";
+import firebaseConfig from "../firebase-applet-config.json";
 
 dotenv.config();
 
-// Initialize firebase-admin securely using fs.readFileSync to ensure 100% resolution compatibility
+// Initialize firebase-admin securely using imported config file
 let adminDb: any = null;
 try {
-  const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
-  if (fs.existsSync(firebaseConfigPath)) {
-    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf8"));
-    if (admin.apps.length === 0) {
-      admin.initializeApp({
-        projectId: firebaseConfig.projectId
-      });
-    }
-    if (firebaseConfig.firestoreDatabaseId) {
-      adminDb = admin.firestore(firebaseConfig.firestoreDatabaseId);
-    } else {
-      adminDb = admin.firestore();
-    }
-    console.log("Firebase Admin SDK successfully ready for database:", firebaseConfig.firestoreDatabaseId || "(default)");
+  let appInstance;
+  if (admin.apps.length === 0) {
+    appInstance = admin.initializeApp({
+      projectId: firebaseConfig.projectId
+    });
+  } else {
+    appInstance = admin.apps[0];
   }
+  if (firebaseConfig.firestoreDatabaseId) {
+    adminDb = getFirestore(appInstance, firebaseConfig.firestoreDatabaseId);
+  } else {
+    adminDb = getFirestore(appInstance);
+  }
+  console.log("Firebase Admin SDK successfully ready for database:", firebaseConfig.firestoreDatabaseId || "(default)");
 } catch (error) {
   console.error("Warning: Failed to initialize Firebase Admin SDK in backend:", error);
 }
@@ -473,8 +474,10 @@ app.post("/api/vendas/checkout", async (req, res) => {
 
   // Verify stock exists for each product in database before initiating order
   try {
+    if (!adminDb) {
+      throw new Error("Erro de infraestrutura: Banco de dados o Firestore do Firebase Admin não inicializou corretamento no servidor.");
+    }
     for (const item of items) {
-      if (!adminDb) break;
       const prodSnap = await adminDb.collection("ecom_products").doc(item.productId).get();
       if (prodSnap.exists) {
         const prodData = prodSnap.data();
@@ -485,8 +488,9 @@ app.post("/api/vendas/checkout", async (req, res) => {
         }
       }
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error("Checking stock list failed:", err);
+    return res.status(500).json({ error: "Erro de banco de dados ao verificar estoque: " + err.message });
   }
 
   // Calculate Subtotal and Total
@@ -498,27 +502,28 @@ app.post("/api/vendas/checkout", async (req, res) => {
 
   // Save the order to Firestore
   try {
-    if (adminDb) {
-      const orderDoc = {
-        userId: userId || "guest",
-        customerInfo,
-        items,
-        shippingMethod,
-        shippingCost: Number(shippingCost),
-        subtotal: Number(subtotal),
-        total: Number(total),
-        status: "Aguardando pagamento",
-        paymentId: "",
-        trackingCode: "",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      };
-      await adminDb.collection("ecom_orders").doc(orderId).set(orderDoc);
-      console.log(`[Pedido Salvo] Pedido ${orderId} registrado com total de R$ ${total}`);
+    if (!adminDb) {
+      throw new Error("Erro de infraestrutura: Banco de dados Firebase Admin ausente.");
     }
+    const orderDoc = {
+      userId: userId || "guest",
+      customerInfo,
+      items,
+      shippingMethod,
+      shippingCost: Number(shippingCost),
+      subtotal: Number(subtotal),
+      total: Number(total),
+      status: "Aguardando pagamento",
+      paymentId: "",
+      trackingCode: "",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    await adminDb.collection("ecom_orders").doc(orderId).set(orderDoc);
+    console.log(`[Pedido Salvo] Pedido ${orderId} registrado com total de R$ ${total}`);
   } catch (err: any) {
     console.error("Erro ao salvar pedido no Firestore:", err);
-    return res.status(500).json({ error: "Erro interno ao cadastrar o pedido no banco de dados." });
+    return res.status(500).json({ error: "Erro interno ao cadastrar o pedido no banco de dados: " + err.message });
   }
 
   // Check Mercado Pago Token (MERCADOPAGO_ACCESS_TOKEN)
@@ -957,6 +962,7 @@ app.get("/api/download-zip", (req, res) => {
           file === ".env" ||
           file === "server.log" ||
           file === ".next" ||
+          file === "arquivos" || // Excluir os arquivos/mídias pesados do backup de código
           file.endsWith(".zip")
         ) {
           continue;

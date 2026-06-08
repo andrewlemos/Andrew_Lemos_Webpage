@@ -9,5 +9,10 @@
       "source": "/:path*",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/index.ts": {
+      "excludeFiles": "public/**"
+    }
+  }
 }
