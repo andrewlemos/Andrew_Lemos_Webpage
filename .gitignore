@@ -6,3 +6,5 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Arquivos que já foram commitados anteriormente no GitHub ou mídias normais devem ser rastreados.

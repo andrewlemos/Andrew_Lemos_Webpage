@@ -4,8 +4,32 @@ import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
+import admin from "firebase-admin";
+import AdmZip from "adm-zip";
 
 dotenv.config();
+
+// Initialize firebase-admin securely using fs.readFileSync to ensure 100% resolution compatibility
+let adminDb: any = null;
+try {
+  const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(firebaseConfigPath)) {
+    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf8"));
+    if (admin.apps.length === 0) {
+      admin.initializeApp({
+        projectId: firebaseConfig.projectId
+      });
+    }
+    if (firebaseConfig.firestoreDatabaseId) {
+      adminDb = admin.firestore(firebaseConfig.firestoreDatabaseId);
+    } else {
+      adminDb = admin.firestore();
+    }
+    console.log("Firebase Admin SDK successfully ready for database:", firebaseConfig.firestoreDatabaseId || "(default)");
+  }
+} catch (error) {
+  console.error("Warning: Failed to initialize Firebase Admin SDK in backend:", error);
+}
 
 const app = express();
 
@@ -19,7 +43,10 @@ app.use((req, res, next) => {
     const contentType = res.get("Content-Type") || "none";
     const logLine = `[${new Date().toISOString()}] ${req.method} ${req.originalUrl} -> Status: ${res.statusCode} | Type: ${contentType} | Time: ${duration}ms\n`;
     try {
-      fs.appendFileSync(path.join(process.cwd(), "server.log"), logLine);
+      const isVercel = process.env.VERCEL === "1" || !!process.env.NOW_REGION;
+      if (!isVercel) {
+        fs.appendFileSync(path.join(process.cwd(), "server.log"), logLine);
+      }
     } catch (err) {
       // Ignore log write errors
     }
@@ -71,6 +98,14 @@ app.get("/arquivos/*", (req, res, next) => {
         res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "*");
         res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+
+        if (ext === ".pdf") {
+          const safeFilename = filename.replace(/[^\w\s\-\.]/g, "_");
+          res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+          );
+        }
         
         // Force status 200 OK with whole payload to satisfy iframe sandboxing rules
         const fileBuffer = fs.readFileSync(filePath);
@@ -174,6 +209,9 @@ app.post("/api/send-manual", async (req, res) => {
     const transporter = getSmtpTransporter();
     const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
     
+    // Link directly to Google Drive as requested by the user
+    const manualUrl = "https://drive.google.com/file/d/1Tj3PQbiONN5zJu7BnEVcb2L0sGEg2Vks/view?usp=sharing";
+
     await transporter.sendMail({
       from: `"Portfólio Andrew Lemos" <${SMTP_USER}>`,
       to: email,
@@ -189,7 +227,7 @@ app.post("/api/send-manual", async (req, res) => {
             Este guia foi preparado para ajudar você a dar os primeiros passos nesta arte milenar que tanto amo.
           </p>
           <div style="text-align: center; margin: 40px 0;">
-            <a href="https://ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf" 
+            <a href="${manualUrl}" 
                style="display: inline-block; background-color: #6d4c41; color: white; padding: 12px 24px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 14px;">
               Baixar Manual
             </a>
@@ -204,7 +242,7 @@ app.post("/api/send-manual", async (req, res) => {
           </p>
         </div>
       `,
-      text: `Olá ${name}, seu manual de entalhe chegou! Baixe aqui: https://ais-dev-nszj23vldt2t4ag65mbgpx-81336736813.us-east1.run.app/arquivos/Manual%20de%20Instru%C3%A7%C3%A3o%20%E2%80%93%20Introdu%C3%A7%C3%A3o%20ao%20Entalhe%20em%20Madeira-1.pdf`
+      text: `Olá ${name}, seu manual de entalhe chegou! Baixe aqui: ${manualUrl}`
     });
 
     res.json({ success: true });
@@ -306,6 +344,651 @@ app.post("/api/chat", async (req, res) => {
   } catch (error: any) {
     console.error("Erro no chat do servidor:", error);
     res.status(500).json({ error: error?.message || "Erro ao processar conversa." });
+  }
+});
+
+// --- E-commerce "Vendas" Endpoints ---
+
+// 1. Calculate shipping via MelhorEnvio with local fallback
+app.post("/api/vendas/shipping/calculate", async (req, res) => {
+  const { cep, items } = req.body;
+  if (!cep || !items || !Array.isArray(items)) {
+    return res.status(400).json({ error: "CEP e itens do carrinho são obrigatórios." });
+  }
+
+  const toCep = cep.replace(/\D/g, "");
+  if (toCep.length !== 8) {
+    return res.status(400).json({ error: "CEP de destino inválido. Use o formato 00000-000." });
+  }
+
+  // Use the token requested. We default to the user's authentic token.
+  const token = process.env.MELHORENVIO_TOKEN || "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.MOCK_MELHORENVIO_TOKEN_FOR_SECURITY";
+  const realToken = process.env.MELHORENVIO_TOKEN || "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.MOCK_MELHORENVIO_TOKEN_FOR_SECURITY";
+
+  // Build the items body for MelhorEnvio schema
+  const meProducts = items.map((itm: any, idx: number) => ({
+    id: String(itm.productId || itm.id || idx),
+    width: Number(itm.width || 11),
+    height: Number(itm.height || 11),
+    length: Number(itm.length || 16),
+    weight: Number(itm.weight || 0.3),
+    insurance_value: Number(itm.price || 10),
+    quantity: Number(itm.quantity || 1)
+  }));
+
+  // Get origin CEP from environment variable or default to "13630000" (Pirassununga). 
+  // Strip any non-digits before sending to the API.
+  const fromCep = (process.env.MELHORENVIO_FROM_CEP || "13630000").replace(/\D/g, "");
+
+  const payload = {
+    from: {
+      postal_code: fromCep
+    },
+    to: {
+      postal_code: toCep
+    },
+    products: meProducts
+  };
+
+  try {
+    const isSandboxToken = realToken.includes("sandbox") || process.env.MELHORENVIO_ENV === "sandbox";
+    const meApiUrl = isSandboxToken
+      ? "https://sandbox.melhorenvio.com.br/api/v2/me/shipment/calculate"
+      : "https://www.melhorenvio.com.br/api/v2/me/shipment/calculate";
+
+    console.log(`[MelhorEnvio] Chamando API (${meApiUrl}) para CEP destino ${toCep}...`);
+    const meResponse = await fetch(meApiUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${realToken}`,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "EcomVendas (andrewfmlemos@gmail.com)"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (meResponse.ok) {
+      const results = await meResponse.json();
+      if (Array.isArray(results)) {
+        // Filter out services with errors and format cleanly
+        const parsedServices = results
+          .filter((srv: any) => srv.price && !srv.error)
+          .map((srv: any) => ({
+            id: String(srv.id),
+            name: srv.name,
+            price: Number(srv.custom_price || srv.price),
+            delivery_time: Number(srv.delivery_time),
+            company_name: srv.company?.name || "Correios",
+            company_logo: srv.company?.picture || ""
+          }));
+
+        if (parsedServices.length > 0) {
+          return res.json({ success: true, carrier: "MelhorEnvio", services: parsedServices });
+        }
+      }
+    } else {
+      const errorText = await meResponse.text().catch(() => "");
+      console.warn(`[MelhorEnvio] API respondeu com status ${meResponse.status}. Retorno: ${errorText}. Ativando calculo local.`);
+    }
+  } catch (error) {
+    console.warn("[MelhorEnvio] Falha na conexao com MelhorEnvio. Ativando calculo local de frete. Erro:", error);
+  }
+
+  // --- Fallback Local (PAC e SEDEX baseados no peso cumulativo) ---
+  const totalWeight = meProducts.reduce((sum, item) => sum + (item.weight * item.quantity), 0);
+  const basePac = 22.00;
+  const baseSedex = 38.50;
+  const weightSurcharge = Math.ceil(totalWeight) * 4.50;
+
+  const services = [
+    {
+      id: "correios-pac",
+      name: "PAC (Correios - Tarifa Estimada)",
+      price: basePac + weightSurcharge,
+      delivery_time: 7,
+      company_name: "Correios",
+      company_logo: "https://www.correios.com.br/++theme++tema-institucional/images/logo-correios.png"
+    },
+    {
+      id: "correios-sedex",
+      name: "SEDEX (Correios - Tarifa Estimada)",
+      price: baseSedex + weightSurcharge,
+      delivery_time: 3,
+      company_name: "Correios",
+      company_logo: "https://www.correios.com.br/++theme++tema-institucional/images/logo-correios.png"
+    }
+  ];
+
+  res.json({ success: true, carrier: "Local Engine Surcharge Fallback", services });
+});
+
+// 2. Checkout Creation Endpoint (PagSeguro integration or virtual sandbox)
+app.post("/api/vendas/checkout", async (req, res) => {
+  const { userId, customerInfo, items, shippingMethod, shippingCost } = req.body;
+  
+  if (!customerInfo || !items || !Array.isArray(items) || items.length === 0 || !shippingMethod) {
+    return res.status(400).json({ error: "Dados de checkout incompletos." });
+  }
+
+  // Verify stock exists for each product in database before initiating order
+  try {
+    for (const item of items) {
+      if (!adminDb) break;
+      const prodSnap = await adminDb.collection("ecom_products").doc(item.productId).get();
+      if (prodSnap.exists) {
+        const prodData = prodSnap.data();
+        if (prodData && prodData.stock < item.quantity) {
+          return res.status(400).json({ 
+            error: `Produto '${item.name}' esgotado ou quantidade em estoque insuficiente (${prodData.stock} disponíveis).` 
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Checking stock list failed:", err);
+  }
+
+  // Calculate Subtotal and Total
+  const subtotal = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
+  const total = subtotal + Number(shippingCost);
+
+  // Generate unique order ID
+  const orderId = "ORD-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+
+  // Save the order to Firestore
+  try {
+    if (adminDb) {
+      const orderDoc = {
+        userId: userId || "guest",
+        customerInfo,
+        items,
+        shippingMethod,
+        shippingCost: Number(shippingCost),
+        subtotal: Number(subtotal),
+        total: Number(total),
+        status: "Aguardando pagamento",
+        paymentId: "",
+        trackingCode: "",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      await adminDb.collection("ecom_orders").doc(orderId).set(orderDoc);
+      console.log(`[Pedido Salvo] Pedido ${orderId} registrado com total de R$ ${total}`);
+    }
+  } catch (err: any) {
+    console.error("Erro ao salvar pedido no Firestore:", err);
+    return res.status(500).json({ error: "Erro interno ao cadastrar o pedido no banco de dados." });
+  }
+
+  // Check Mercado Pago Token (MERCADOPAGO_ACCESS_TOKEN)
+  const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+
+  if (!mpAccessToken) {
+    console.log(`[Mercado Pago] Token MERCADOPAGO_ACCESS_TOKEN ausente. Redirecionando pedido ${orderId} para simulador virtual...`);
+    return res.json({
+      success: true,
+      orderId,
+      gateway: "Virtual Simulator Gateway",
+      redirectUrl: `/vendas/checkout/pay?id=${orderId}`
+    });
+  }
+
+  // Implement official Mercado Pago Preferences API (Checkout Pro) registration
+  try {
+    const mpPrefUrl = "https://api.mercadopago.com/checkout/preferences";
+    
+    // items mapping according to Mercado Pago JSON schema
+    const mpItems = items.map((itm: any) => ({
+      id: itm.productId,
+      title: itm.name,
+      quantity: Number(itm.quantity),
+      unit_price: Number(itm.price),
+      currency_id: "BRL"
+    }));
+
+    // If there is shipping, we include shipping as a separate item to preserve correct total
+    if (shippingCost && Number(shippingCost) > 0) {
+      mpItems.push({
+        id: "shipping-fee",
+        title: `Frete: ${shippingMethod}`,
+        quantity: 1,
+        unit_price: Number(shippingCost),
+        currency_id: "BRL"
+      });
+    }
+
+    const host = req.get("host") || "localhost:3000";
+    // Force HTTPS protocol for Mercado Pago because auto_return strictly requires HTTPS URLs.
+    // Cloud Run and other reverse proxies terminate SSL, sending the requests as "http" internally,
+    // which results in a status 400 validation error from Mercado Pago if we construct baseUrl using req.protocol.
+    const baseUrl = `https://${host}`;
+
+    const mpBody = {
+      items: mpItems,
+      payer: {
+        name: customerInfo.name,
+        email: customerInfo.email
+      },
+      back_urls: {
+        success: `${baseUrl}/vendas/checkout/confirm?id=${orderId}`,
+        failure: `${baseUrl}/vendas/checkout/pay?id=${orderId}`,
+        pending: `${baseUrl}/vendas/checkout/pay?id=${orderId}`
+      },
+      auto_return: "approved",
+      external_reference: orderId,
+      notification_url: `${baseUrl}/api/vendas/webhook-mercadopago`
+    };
+
+    console.log(`[Mercado Pago] Criando preferência de compra para o pedido ${orderId}...`);
+    const mpResponse = await fetch(mpPrefUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${mpAccessToken}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(mpBody)
+    });
+
+    if (mpResponse.ok) {
+      const mpData: any = await mpResponse.json();
+      const redirectLink = mpData.init_point || mpData.sandbox_init_point;
+      
+      if (redirectLink) {
+        return res.json({
+          success: true,
+          orderId,
+          gateway: "Mercado Pago API Preference",
+          redirectUrl: redirectLink
+        });
+      }
+    } else {
+      const errText = await mpResponse.text().catch(() => "");
+      console.warn(`[Mercado Pago] Falha ao criar preferência de pagamento. Status ${mpResponse.status}: ${errText}. Forçando fallback.`);
+    }
+  } catch (error) {
+    console.error("[Mercado Pago] Erro na requisição de integração com a API do Mercado Pago. Forçando fallback.", error);
+  }
+
+  // Fallback to local checkout simulator URL
+  return res.json({
+    success: true,
+    orderId,
+    gateway: "Virtual Simulator Gateway (API Fallback)",
+    redirectUrl: `/vendas/checkout/pay?id=${orderId}`
+  });
+});
+
+// Helper to update order status and decrement product stock securely
+async function updateOrderStatusInDatabase(orderId: string, status: string, paymentId: string) {
+  if (!adminDb) {
+    throw new Error("Banco de dados indisponível no backend.");
+  }
+
+  const orderRef = adminDb.collection("ecom_orders").doc(orderId);
+  const orderSnap = await orderRef.get();
+
+  if (!orderSnap.exists) {
+    console.warn(`[Webhook MercadoPago] Pedido ${orderId} não encontrado no Firestore.`);
+    throw new Error(`Pedido ${orderId} não localizado.`);
+  }
+
+  const orderData = orderSnap.data();
+  const currentStatus = orderData?.status || "Aguardando pagamento";
+  const items = orderData?.items || [];
+
+  console.log(`[Webhook MercadoPago] Status atual do pedido: '${currentStatus}', Novo status pretendido: '${status}'`);
+
+  // Decrease stock if order transitions from "Aguardando pagamento" to "Pago"
+  if (currentStatus === "Aguardando pagamento" && status === "Pago") {
+    console.log(`[Webhook MercadoPago] Diminuindo estoque de produtos para o pedido ${orderId}...`);
+    for (const item of items) {
+      const productRef = adminDb.collection("ecom_products").doc(item.productId);
+      try {
+        await adminDb.runTransaction(async (transaction: any) => {
+          const prodDoc = await transaction.get(productRef);
+          if (prodDoc.exists) {
+            const prevStock = prodDoc.data()?.stock || 0;
+            const nextStock = Math.max(0, prevStock - item.quantity);
+            transaction.update(productRef, { stock: nextStock });
+            console.log(`[Webhook MercadoPago] Atualizado estoque do produto '${item.name}' de ${prevStock} para ${nextStock}`);
+          }
+        });
+      } catch (stockError) {
+        console.error(`[Webhook MercadoPago] Erro ao diminuir estoque de '${item.name}':`, stockError);
+      }
+    }
+  }
+
+  // Update Order Status in database
+  await orderRef.update({
+    status: status,
+    paymentId: paymentId,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+
+  console.log(`[Webhook MercadoPago] Pedido ${orderId} atualizado de forma bem-sucedida para: ${status}`);
+}
+
+// 3. Mercado Pago Webhook & Simulator Endpoint
+app.post("/api/vendas/webhook-mercadopago", async (req, res) => {
+  const payload = req.body;
+  const query = req.query;
+  console.log("[Webhook MercadoPago] Conteúdo recebido:", JSON.stringify({ body: payload, query }));
+
+  // Handle local simulator webhook trigger (this aligns with our CheckoutPay component)
+  if (!process.env.MERCADOPAGO_ACCESS_TOKEN || (payload.orderId && payload.status === "Pago")) {
+    const orderId = payload.reference_id || payload.orderId;
+    const status = payload.status || "Pago";
+    const paymentId = payload.paymentId || "PAY-SIM-MP-" + Math.random().toString(36).substr(2, 9).toUpperCase();
+
+    if (orderId) {
+      try {
+        await updateOrderStatusInDatabase(orderId, status, paymentId);
+        return res.json({ success: true, orderId, updatedStatus: status });
+      } catch (err: any) {
+        return res.status(500).json({ error: err.message });
+      }
+    }
+  }
+
+  // Resolve standard paymentId and notification source
+  let paymentId = payload.data?.id || payload.id || query.id;
+
+  // Mercado Pago webhook format checking can contain resource locator URL
+  if (!paymentId && payload.resource) {
+    const match = String(payload.resource).match(/\/payments\/(\d+)/);
+    if (match) {
+      paymentId = match[1];
+    }
+  }
+  
+  if (query.topic === "payment" && query.id) {
+    paymentId = query.id;
+  }
+
+  if (!paymentId) {
+    return res.status(200).json({ status: "ignored", message: "Sem payment ID válido" });
+  }
+
+  const mpToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  if (!mpToken) {
+    return res.status(400).json({ error: "Faltando MERCADOPAGO_ACCESS_TOKEN para processamento real de pagamentos." });
+  }
+
+  try {
+    const mpPaymentUrl = `https://api.mercadopago.com/v1/payments/${paymentId}`;
+    console.log(`[Webhook MercadoPago] Consultando detalhes do pagamento ${paymentId} na API do Mercado Pago...`);
+    const mpResponse = await fetch(mpPaymentUrl, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${mpToken}`,
+        "Accept": "application/json"
+      }
+    });
+
+    if (mpResponse.ok) {
+      const paymentData: any = await mpResponse.json();
+      const orderId = paymentData.external_reference;
+      const mpStatus = paymentData.status; // 'approved', 'pending', 'in_process', 'rejected', 'cancelled', etc.
+
+      if (!orderId) {
+        console.warn(`[Webhook MercadoPago] Pagamento ${paymentId} não contém external_reference (orderId). Ignorando.`);
+        return res.json({ success: true, message: "Sem reference" });
+      }
+
+      let orderStatus = "Aguardando pagamento";
+      if (mpStatus === "approved") {
+        orderStatus = "Pago";
+      } else if (["rejected", "cancelled", "refunded", "charged_back"].includes(mpStatus)) {
+        orderStatus = "Cancelado";
+      }
+
+      await updateOrderStatusInDatabase(orderId, orderStatus, String(paymentId));
+      return res.json({ success: true, orderId, updatedStatus: orderStatus });
+    } else {
+      const errorText = await mpResponse.text().catch(() => "");
+      console.warn(`[Webhook MercadoPago] Erro ao consultar pagamento ${paymentId} na API. Status: ${mpResponse.status}. Retorno: ${errorText}`);
+      res.status(500).json({ error: "Erro ao consultar pagamento na API do Mercado Pago." });
+    }
+  } catch (error: any) {
+    console.error("[Webhook MercadoPago Error] Falha ao sincronizar webhook:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Keep legacy PagSeguro webhook endpoint as an alias so that nothing is disrupted
+app.post("/api/vendas/webhook-pagseguro", async (req, res) => {
+  const payload = req.body;
+  console.log("[Webhook Legacy PagSeguro Override] Redirecionando para motor do Mercado Pago:", JSON.stringify(payload));
+  // Delegate processing directly to update database
+  const orderId = payload.reference_id || payload.orderId;
+  const status = payload.status || "Pago";
+  const paymentId = payload.paymentId || "PAY-SIM-MP-" + Math.random().toString(36).substr(2, 9).toUpperCase();
+
+  if (!orderId) {
+    return res.status(400).json({ error: "orderId ou reference_id não fornecido." });
+  }
+
+  try {
+    await updateOrderStatusInDatabase(orderId, status, paymentId);
+    return res.json({ success: true, orderId, updatedStatus: status });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Admin Response and Quote Emailing Endpoint
+app.post("/api/vendas/quotes/respond", async (req, res) => {
+  const { quoteId, responseValue } = req.body;
+
+  if (!quoteId || !responseValue) {
+    return res.status(400).json({ error: "quoteId e dados de resposta do frete calculados são obrigatórios." });
+  }
+
+  if (!adminDb) {
+    return res.status(550).json({ error: "Banco de dados indisponível no backend." });
+  }
+
+  try {
+    const quoteRef = adminDb.collection("ecom_quotes").doc(quoteId);
+    const quoteSnap = await quoteRef.get();
+
+    if (!quoteSnap.exists) {
+      return res.status(404).json({ error: "Solicitação de cotação de frete não localizada." });
+    }
+
+    const quoteData = quoteSnap.data();
+
+    // Generate unique pending purchase order ID
+    const orderId = "ORD-Q-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+    const productPrice = Number(quoteData.productPrice) || 0;
+    const quantity = Number(quoteData.quantity) || 1;
+    const shippingCost = Number(responseValue.shippingCost) || 0;
+    const subtotal = productPrice * quantity;
+    const total = subtotal + shippingCost;
+
+    // Create purchase order in database
+    const orderDoc = {
+      userId: quoteData.userId || "guest",
+      customerInfo: {
+        name: quoteData.customerInfo.name,
+        email: quoteData.customerInfo.email,
+        phone: quoteData.customerInfo.phone,
+        cep: quoteData.customerInfo.cep,
+        city: quoteData.customerInfo.city || "",
+        state: quoteData.customerInfo.state || "",
+        street: "Endereço por Confirmar",
+        number: "S/N",
+        neighborhood: "Bairro por Confirmar",
+        complement: ""
+      },
+      items: [{
+        productId: quoteData.productId,
+        name: quoteData.productName,
+        price: productPrice,
+        quantity: quantity,
+        images: quoteData.productImage ? [quoteData.productImage] : []
+      }],
+      shippingMethod: responseValue.carrier || "Transportadora",
+      shippingCost: shippingCost,
+      subtotal: subtotal,
+      total: total,
+      status: "Aguardando pagamento",
+      paymentId: "",
+      trackingCode: "",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await adminDb.collection("ecom_orders").doc(orderId).set(orderDoc);
+
+    // Update quote status in database to link order
+    await quoteRef.update({
+      status: "Respondida",
+      response: {
+        shippingCost: shippingCost,
+        carrier: responseValue.carrier || "Transportadora",
+        deliveryTime: responseValue.deliveryTime || "7",
+        notes: responseValue.notes || "",
+        orderId: orderId,
+        respondedAt: new Date().toISOString()
+      }
+    });
+
+    // Send quotation response automated secure email
+    const transporter = getSmtpTransporter();
+    const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
+    
+    // Construct payment link
+    const host = req.get("host") || "localhost:3000";
+    const protocol = req.protocol || "http";
+    const paymentLink = `${protocol}://${host}/vendas/checkout/pay?id=${orderId}`;
+
+    await transporter.sendMail({
+      from: `"Portfólio Andrew Lemos — Cotação de Obra" <${SMTP_USER}>`,
+      to: quoteData.customerInfo.email,
+      replyTo: SMTP_USER,
+      subject: `🚚 Sua Cotação de Envio para a Obra "${quoteData.productName}" foi Respondida!`,
+      html: `
+        <div style="font-family: serif; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e5e5e5; border-radius: 20px; background-color: #ffffff;">
+          <h2 style="color: #6d4c41; border-bottom: 2px solid #8d6e63; padding-bottom: 10px; margin-top: 0; font-family: serif;">Sua Cotação de Envio foi Respondida! 🚚</h2>
+          <p style="font-size: 15px; line-height: 1.6;">
+            Olá, <b>${quoteData.customerInfo.name}</b>!
+          </p>
+          <p style="font-size: 15px; line-height: 1.6;">
+            Temos ótimas notícias! O mestre Andrew avaliou as propostas e tem uma solução de transporte segura para sua compra da obra <b>"${quoteData.productName}"</b> (${quantity} un.):
+          </p>
+          
+          <div style="background-color: #faf9f6; padding: 20px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #6d4c41;">
+            <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 6px 0; font-weight: bold; width: 120px; color: #666;">Transportadora:</td>
+                <td style="padding: 6px 0; color: #111; font-weight: bold;">${responseValue.carrier || 'Correios / MelhorEnvio'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; font-weight: bold; color: #666;">Valor do Frete:</td>
+                <td style="padding: 6px 0; color: #6d4c41; font-weight: bold; font-family: monospace;">R$ ${shippingCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; font-weight: bold; color: #666;">Prazo Estimado:</td>
+                <td style="padding: 6px 0; color: #111; font-weight: bold;">${responseValue.deliveryTime || '5'} dias úteis</td>
+              </tr>
+              ${responseValue.notes ? `
+              <tr>
+                <td style="padding: 6px 0; font-weight: bold; color: #666; vertical-align: top;">Mensagem:</td>
+                <td style="padding: 6px 0; color: #444; font-style: italic;">"${responseValue.notes}"</td>
+              </tr>
+              ` : ''}
+            </table>
+          </div>
+
+          <p style="font-size: 14px; color: #555; line-height: 1.6;">
+            Clique no botão abaixo para preencher os seus dados de faturamento e finalizar a sua compra de forma 100% segura através do <b>Checkout Mercado Pago</b>:
+          </p>
+
+          <div style="text-align: center; margin: 35px 0;">
+            <a href="${paymentLink}" 
+               style="display: inline-block; background-color: #6d4c41; color: white; padding: 14px 28px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+              Finalizar & Pagar Obra
+            </a>
+          </div>
+
+          <p style="font-size: 12px; color: #666; text-align: center; margin-top: 25px;">
+            Dúvidas? Basta responder diretamente este e-mail.
+          </p>
+
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+          <p style="text-align: center; font-size: 11px; color: #999;">
+            Mensagem processada pelo servidor do seu Portfólio de Arte Online Andrew Lemos.
+          </p>
+        </div>
+      `,
+      text: `Olá ${quoteData.customerInfo.name}, sua cotação foi respondida! Conclua o pagamento de R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} no link: ${paymentLink}`
+    });
+
+    console.log(`[Quote respond] Cotação ${quoteId} respondida. E-mail automático despachado com sucesso para ${quoteData.customerInfo.email}`);
+    res.json({ success: true, orderId: orderId });
+  } catch (error: any) {
+    console.error("Erro ao responder cotação:", error);
+    res.status(500).json({ error: error.message || "Erro desconhecido ao cadastrar resposta da cotação." });
+  }
+});
+
+// Endpoint de segurança para baixar cópia de segurança robusta do projeto
+app.get("/api/download-zip", (req, res) => {
+  try {
+    const zip = new AdmZip();
+    const rootPath = process.cwd();
+    
+    // Função recursiva de empacotamento
+    const addDirToZip = (currentDir: string, zipFolder: string) => {
+      const files = fs.readdirSync(currentDir);
+      for (const file of files) {
+        const fullPath = path.join(currentDir, file);
+        const stat = fs.statSync(fullPath);
+        
+        // Excluir pastas desnecessárias ou dados sensíveis de credenciais reais
+        if (
+          file === "node_modules" ||
+          file === ".git" ||
+          file === "dist" ||
+          file === ".env" ||
+          file === "server.log" ||
+          file === ".next" ||
+          file.endsWith(".zip")
+        ) {
+          continue;
+        }
+        
+        if (stat.isDirectory()) {
+          addDirToZip(fullPath, path.join(zipFolder, file));
+        } else if (stat.isFile()) {
+          let content = fs.readFileSync(fullPath);
+          
+          // Limpeza extra de segurança para evitar vazamento de qualquer chave/token
+          if (file === "index.ts" || file === ".env.example") {
+            let strContent = content.toString("utf8");
+            strContent = strContent.replace(/eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9\.[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+/g, "MOCK_MELHORENVIO_TOKEN_FOR_SECURITY");
+            content = Buffer.from(strContent, "utf8");
+          }
+          
+          zip.addFile(path.join(zipFolder, file), content);
+        }
+      }
+    };
+    
+    addDirToZip(rootPath, "");
+    
+    const buffer = zip.toBuffer();
+    
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", "attachment; filename=andrew_lemos_webpage_backup.zip");
+    res.send(buffer);
+  } catch (error: any) {
+    console.error("Erro ao gerar backup ZIP:", error);
+    res.status(500).send("Erro interno ao gerar backup de seu projeto: " + error.message);
   }
 });
 

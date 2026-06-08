@@ -72,6 +72,45 @@
         }
       },
       "required": ["title", "category", "img"]
+    },
+    "EcomProduct": {
+      "title": "EcomProduct",
+      "description": "Store product for e-commerce",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "images": { "type": "array" },
+        "weight": { "type": "number" },
+        "height": { "type": "number" },
+        "width": { "type": "number" },
+        "length": { "type": "number" },
+        "stock": { "type": "integer" },
+        "price": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "description", "category", "images", "weight", "height", "width", "length", "stock", "price"]
+    },
+    "EcomOrder": {
+      "title": "EcomOrder",
+      "description": "Store order details",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "customerInfo": { "type": "object" },
+        "items": { "type": "array" },
+        "shippingMethod": { "type": "string" },
+        "shippingCost": { "type": "number" },
+        "subtotal": { "type": "number" },
+        "total": { "type": "number" },
+        "status": { "type": "string" },
+        "paymentId": { "type": "string" },
+        "trackingCode": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "customerInfo", "items", "shippingMethod", "shippingCost", "subtotal", "total", "status"]
     }
   },
   "firestore": {
@@ -86,6 +125,14 @@
     "/arquivos/{arquivoId}": {
       "schema": "Arquivo",
       "description": "Collection of gallery works and images"
+    },
+    "/ecom_products/{productId}": {
+      "schema": "EcomProduct",
+      "description": "Collection of store products for purchase"
+    },
+    "/ecom_orders/{orderId}": {
+      "schema": "EcomOrder",
+      "description": "Collection of store orders and checkout details"
     }
   }
 }

@@ -22,7 +22,8 @@ import {
   ArrowRight,
   MessageCircle,
   Send,
-  Lock
+  Lock,
+  Download
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { cn } from './lib/utils';
@@ -43,45 +44,86 @@ import {
 } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { serverTimestamp, Timestamp } from 'firebase/firestore';
-
-// --- Types ---
-
-interface Product {
-  id?: string;
-  name: string;
-  affiliateLink: string;
-  imageUrl: string;
-  category?: string;
-  order?: number;
-  createdAt: any;
-}
-
-interface Arquivo {
-  id?: string;
-  title: string;
-  category: string;
-  img: string;
-  order?: number;
-  createdAt?: any;
-}
+import { Storefront } from './components/Storefront';
+import { CheckoutPay } from './components/CheckoutPay';
+import { CheckoutConfirm } from './components/CheckoutConfirm';
+import { AdminStore } from './components/AdminStore';
+import { Product, Arquivo, EcomProduct, EcomOrder } from './types';
 
 // --- Helpers ---
 export const ensureRobustUrl = (url: string) => {
   if (!url) return '';
-  if (url.startsWith('/arquivos') || url.startsWith('arquivos/')) {
-    return url.startsWith('/') ? url : '/' + url;
+  let processedUrl = url.trim();
+
+  // 1. Suporte para tornar links de compartilhamento do Google Drive compatíveis com visualização em tags <img>
+  if (processedUrl.includes('drive.google.com')) {
+    const fileDMatch = processedUrl.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
+    if (fileDMatch && fileDMatch[1]) {
+      return `https://lh3.googleusercontent.com/d/${fileDMatch[1]}`;
+    }
+    const queryIdMatch = processedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (queryIdMatch && queryIdMatch[1]) {
+      return `https://lh3.googleusercontent.com/d/${queryIdMatch[1]}`;
+    }
   }
-  if (url.includes('/arquivos/')) {
+
+  // 2. Se for link externo completo (http:// ou https://) e não contiver '/arquivos/', retorna ele mesmo
+  if ((processedUrl.startsWith('http://') || processedUrl.startsWith('https://')) && !processedUrl.includes('/arquivos/')) {
+    return processedUrl;
+  }
+
+  // 3. Se contiver '/arquivos/', normaliza para o formato local '/arquivos/nome_do_arquivo'
+  if (processedUrl.includes('/arquivos/')) {
     try {
-      const parts = url.split('/arquivos/');
+      const parts = processedUrl.split('/arquivos/');
       if (parts.length >= 2) {
-        return `/arquivos/${parts.slice(1).join('/arquivos/')}`;
+        processedUrl = `/arquivos/${parts.slice(1).join('/arquivos/')}`;
       }
     } catch (e) {
       // safe fallback
     }
   }
-  return url;
+
+  // 4. Se o usuário digitou apenas o nome de um arquivo local, ex: "entalhe_cavalo.jpg"
+  if (!processedUrl.startsWith('http') && !processedUrl.includes('/') && (
+    processedUrl.endsWith('.jpg') || 
+    processedUrl.endsWith('.jpeg') || 
+    processedUrl.endsWith('.png') || 
+    processedUrl.endsWith('.webp') ||
+    processedUrl.endsWith('.gif') ||
+    processedUrl.endsWith('.PNG') ||
+    processedUrl.endsWith('.JPG') ||
+    processedUrl.endsWith('.JPEG')
+  )) {
+    processedUrl = `/arquivos/${processedUrl}`;
+  }
+
+  // 5. Agora resolvemos o caminho local '/arquivos/nome_do_arquivo' ou 'arquivos/nome_do_arquivo'
+  if (processedUrl.startsWith('/arquivos/') || processedUrl.startsWith('arquivos/')) {
+    const filename = processedUrl.replace(/^\/?arquivos\//, '');
+    let decoded = filename;
+    try {
+      decoded = decodeURIComponent(filename);
+    } catch (e) {}
+
+    const lower = decoded.toLowerCase();
+    // Somente os arquivos locais que reparamos/geramos limpos são carregados do caminho local direto.
+    // Todas as outras mídias mais antigas, cujos arquivos originais estão corrompidos localmente/no repositório,
+    // são buscadas de forma segura e impecável a partir do commit estável histórico '16eec916efc1342685e03616e5222f2ee1b1c784' via CDN.
+    if (
+      lower === 'favicon.png' ||
+      lower === 'ico.png' ||
+      lower === 'banner andrew.png' ||
+      lower === 'dreamina_course_thumbnail.jpeg' ||
+      lower === 'capa_curso_udemy_game.jpeg'
+    ) {
+      return `/arquivos/${encodeURIComponent(decoded)}`;
+    } else {
+      return `https://cdn.jsdelivr.net/gh/andrewlemos/Andrew_Lemos_Webpage@16eec916efc1342685e03616e5222f2ee1b1c784/public/arquivos/${encodeURIComponent(decoded)}`;
+    }
+  }
+
+  return processedUrl;
 };
 
 // --- Components ---
@@ -105,6 +147,7 @@ const Navbar = () => {
     { name: 'Aulas', href: '#classes' },
     { name: 'Cursos Online', href: '#online-courses' },
     { name: 'Produtos', href: '#products' },
+    { name: 'Vendas ✨', href: '#vendas' },
     { name: 'Contato', href: '#contact' },
   ];
 
@@ -117,7 +160,7 @@ const Navbar = () => {
         <a href="#home" className="flex items-center gap-2">
           <div className="h-10 md:h-12 flex items-center gap-2">
             <img 
-              src="/arquivos/LOGO ANDREW.png" 
+              src={ensureRobustUrl("/arquivos/LOGO ANDREW.png")} 
               alt="Andrew Lemos Logo" 
               className="h-full w-auto object-contain"
               onError={(e) => {
@@ -229,7 +272,7 @@ const Hero = () => {
           <div className="absolute -inset-4 border border-brand-wood/20 rounded-2xl rotate-3"></div>
           <div className="absolute -inset-4 border border-brand-wood/20 rounded-2xl -rotate-3"></div>
           <img 
-            src="/arquivos/IMG_20230520_122543_345-1.jpg"
+            src={ensureRobustUrl("/arquivos/IMG_20230520_122543_345-1.jpg")}
             alt="Andrew Lemos - Artista Plástico" 
             className="w-full h-full object-cover rounded-2xl shadow-2xl relative z-10"
             referrerPolicy="no-referrer"
@@ -293,7 +336,7 @@ const Biography = () => {
             className="my-12 rounded-3xl overflow-hidden shadow-xl border border-brand-wood/10"
           >
             <img 
-              src="/arquivos/Premio de Notoriedade Artística (1).png" 
+              src={ensureRobustUrl("/arquivos/Premio de Notoriedade Artística (1).png")} 
               alt="Prêmio de Notoriedade Artística" 
               className="w-full h-auto"
               referrerPolicy="no-referrer"
@@ -621,7 +664,7 @@ const YouTubeSection = () => {
         >
           <div className="aspect-video bg-gray-800 rounded-3xl overflow-hidden shadow-2xl border border-white/10 group">
             <img 
-              src="/arquivos/WhatsApp Image 2025-03-01 at 18.06.49.jpeg" 
+              src={ensureRobustUrl("/arquivos/WhatsApp Image 2025-03-01 at 18.06.49.jpeg")} 
               alt="YouTube Thumbnail" 
               className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700"
               referrerPolicy="no-referrer"
@@ -771,7 +814,7 @@ const ClassesSection = () => {
           </div>
           <div className="relative h-[400px] md:h-auto">
             <img 
-              src="/arquivos/Apresentação do Canal.jpg" 
+              src={ensureRobustUrl("/arquivos/Apresentação do Canal.jpg")} 
               alt="Ateliê Andrew Lemos" 
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
@@ -789,7 +832,7 @@ const OnlineCoursesSection = () => {
       title: 'Introdução ao Desenvolvimento de Games',
       platform: 'Udemy',
       price: 'Ver Preço na Udemy',
-      img: '/arquivos/dreamina-2025-11-08-5018-Pixel art style course thumbnail for a c....jpeg',
+      img: '/arquivos/Capa_curso_udemy_game.jpeg',
       link: 'https://www.udemy.com/course/introducao-ao-desenvolvimento-de-games/?referralCode=1D6F524BD5BE69910E5D',
       desc: 'Dê seus primeiros passos no mundo da criação de jogos digitais com este curso introdutório completo.'
     }
@@ -814,7 +857,7 @@ const OnlineCoursesSection = () => {
             >
               <div className="relative aspect-video">
                 <img 
-                  src={course.img} 
+                  src={ensureRobustUrl(course.img)} 
                   alt={course.title} 
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
@@ -976,7 +1019,7 @@ const AdminDashboard = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [arquivos, setArquivos] = useState<Arquivo[]>([]);
-  const [activeTab, setActiveTab] = useState<'products' | 'leads' | 'arquivos'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'leads' | 'arquivos' | 'vendas'>('products');
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingArquivo, setIsAddingArquivo] = useState(false);
   const [formData, setFormData] = useState({ name: '', affiliateLink: '', imageUrl: '', category: 'Entalhe/Escultura em Madeira', order: '1' });
@@ -1075,6 +1118,11 @@ const AdminDashboard = () => {
       await signInWithPopup(auth, googleProvider);
     } catch (error: any) {
       console.error("Erro no login:", error);
+      if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
+        // Silently capture since the user closed/cancelled the popup themselves
+        console.log("Login cancelado pelo usuário (popup fechada).");
+        return;
+      }
       if (error?.code === 'auth/unauthorized-domain') {
         alert(
           "Domínio Não Autorizado no Firebase Auth!\n\n" +
@@ -1245,12 +1293,27 @@ const AdminDashboard = () => {
             >
               Leads ({leads.length})
             </button>
+            <button 
+              onClick={() => setActiveTab('vendas')}
+              className={cn("text-2xl font-serif", activeTab === 'vendas' ? "text-brand-wood" : "text-gray-400")}
+            >
+              E-commerce 🛍️
+            </button>
           </div>
           <div className="flex gap-4">
+            <a 
+              href="/api/download-zip" 
+              download
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-full text-sm flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+              title="Baixar Backup ZIP completo do Projeto"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Backup do Código (.zip)</span>
+            </a>
             {activeTab === 'products' && (
               <button 
                 onClick={() => setIsAdding(!isAdding)}
-                className="bg-brand-wood text-white px-4 py-2 rounded-full text-sm"
+                className="bg-brand-wood text-white px-4 py-2 rounded-full text-sm cursor-pointer"
               >
                 {isAdding ? 'Cancelar' : 'Novo Produto'}
               </button>
@@ -1258,12 +1321,12 @@ const AdminDashboard = () => {
             {activeTab === 'arquivos' && (
               <button 
                 onClick={() => setIsAddingArquivo(!isAddingArquivo)}
-                className="bg-brand-wood text-white px-4 py-2 rounded-full text-sm"
+                className="bg-brand-wood text-white px-4 py-2 rounded-full text-sm cursor-pointer"
               >
                 {isAddingArquivo ? 'Cancelar' : 'Nova Obra'}
               </button>
             )}
-            <button onClick={handleLogout} className="text-gray-500 hover:text-red-500">
+            <button onClick={handleLogout} className="text-gray-500 hover:text-red-500 cursor-pointer">
               Sair
             </button>
           </div>
@@ -1548,7 +1611,7 @@ const AdminDashboard = () => {
                 )}
               </div>
             </>
-          ) : (
+          ) : activeTab === 'leads' ? (
             <div className="space-y-4">
               {leads.map(lead => (
                 <div key={lead.id} className="flex items-center justify-between p-4 border rounded-2xl bg-brand-paper/30">
@@ -1571,6 +1634,8 @@ const AdminDashboard = () => {
                 <p className="text-center text-gray-400 py-12">Nenhum lead capturado ainda.</p>
               )}
             </div>
+          ) : (
+            <AdminStore />
           )}
         </div>
         <button 
@@ -1845,7 +1910,7 @@ const Publications = () => {
               className="bg-white p-4 rounded-2xl shadow-sm border border-brand-wood/5"
             >
               <div className="aspect-[4/5] rounded-xl overflow-hidden mb-4">
-                <img src={pub.img} alt={pub.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                <img src={ensureRobustUrl(pub.img)} alt={pub.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               </div>
               <h3 className="text-center font-serif text-brand-wood">{pub.title}</h3>
             </motion.div>
@@ -1905,7 +1970,7 @@ const Chatbot = () => {
     // 2. Fallback no cliente: Caso o servidor esteja offline ou em provedor estático puro sem Express (Vercel/Amplify)
     if (!backendSuccess) {
       try {
-        const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
+        const apiKey = (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined) || (import.meta as any).env?.VITE_GEMINI_API_KEY;
         if (!apiKey) {
           throw new Error("Chave do Gemini não encontrada. Defina GEMINI_API_KEY em Secrets (AI Studio) ou VITE_GEMINI_API_KEY no painel do Vercel/Amplify.");
         }
@@ -2010,8 +2075,71 @@ const Chatbot = () => {
 };
 
 export default function App() {
+  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm'>('landing');
+  const [currentOrderId, setCurrentOrderId] = useState<string>('');
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#vendas/pay')) {
+        const urlParams = new URLSearchParams(hash.replace(/#vendas\/pay\??/, ''));
+        const id = urlParams.get('id') || '';
+        setCurrentView('checkout-pay');
+        setCurrentOrderId(id);
+      } else if (hash.startsWith('#vendas/confirm')) {
+        const urlParams = new URLSearchParams(hash.replace(/#vendas\/confirm\??/, ''));
+        const id = urlParams.get('id') || '';
+        setCurrentView('checkout-confirm');
+        setCurrentOrderId(id);
+      } else {
+        setCurrentView('landing');
+        if (hash === '#vendas') {
+          setTimeout(() => {
+            const elem = document.getElementById('vendas');
+            if (elem) {
+              elem.scrollIntoView({ behavior: 'smooth' });
+            }
+          }, 100);
+        }
+      }
+    };
+
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm', id?: string) => {
+    if (view === 'checkout-pay' && id) {
+      window.location.hash = `#vendas/pay?id=${id}`;
+    } else if (view === 'checkout-confirm' && id) {
+      window.location.hash = `#vendas/confirm?id=${id}`;
+    } else if (view === 'vendas') {
+      window.location.hash = '#vendas';
+      setTimeout(() => {
+        const elem = document.getElementById('vendas');
+        if (elem) {
+          elem.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 50);
+    } else {
+      window.location.hash = '';
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 50);
+    }
+  };
+
   return (
-    <div className="min-h-screen selection:bg-brand-wood selection:text-white">
+    <div className="min-h-screen selection:bg-brand-wood selection:text-white font-sans text-brand-ink antialiased">
       <Navbar />
       <Hero />
       <Biography />
@@ -2022,8 +2150,59 @@ export default function App() {
       <ClassesSection />
       <OnlineCoursesSection />
       <RecommendedProductsSection />
+      
+      {/* SEÇÃO DE LOJA VENDAS ARTESANAIS */}
+      <section id="vendas" className="section-padding bg-brand-paper hover:bg-brand-paper transition-all duration-300 border-t border-brand-wood/10">
+        <div className="max-w-7xl mx-auto px-6 mb-12">
+          <div className="text-center max-w-3xl mx-auto">
+            <h2 className="text-4xl md:text-5xl font-serif mb-4 text-brand-ink">Peças & Obras à Venda</h2>
+            <p className="text-gray-500 text-sm md:text-base leading-relaxed">
+              Adquira esculturas exclusivas e ferramentas autografadas direto do ateliê do artista. Frete seguro via MelhorEnvio com acompanhamento detalhado.
+            </p>
+          </div>
+        </div>
+        <Storefront 
+          onBackToMain={() => navigateToView('landing')} 
+          onNavigateToView={navigateToView}
+          userId={currentUser?.uid}
+        />
+      </section>
+
       <Contact />
       <Footer />
+
+      {/* Modais de Checkout - Não alteram o corpo do site por baixo */}
+      <AnimatePresence>
+        {currentView === 'checkout-pay' && (
+          <motion.div 
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed inset-0 z-[120] bg-brand-paper overflow-y-auto"
+          >
+            <CheckoutPay 
+              orderId={currentOrderId} 
+              onNavigateToView={navigateToView}
+            />
+          </motion.div>
+        )}
+        
+        {currentView === 'checkout-confirm' && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 z-[120] bg-brand-paper overflow-y-auto"
+          >
+            <CheckoutConfirm 
+              orderId={currentOrderId} 
+              onNavigateToView={navigateToView}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
       <Chatbot />
       <AdminDashboard />
     </div>
