@@ -7,13 +7,34 @@ import fs from "fs";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import AdmZip from "adm-zip";
-import firebaseConfig from "../firebase-applet-config.json";
 
 dotenv.config();
 
-// Initialize firebase-admin securely using imported config file
+// Dynamic secure Firestore config parsing + static failsafe fallback container
 let adminDb: any = null;
 try {
+  const firebaseConfig = {
+    projectId: "gen-lang-client-0853696923",
+    firestoreDatabaseId: "ai-studio-8daf606b-b021-4ffa-9ea1-9b7ced315035"
+  };
+
+  try {
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    const parentConfigPath = path.join(process.cwd(), "..", "firebase-applet-config.json");
+    
+    if (fs.existsSync(configPath)) {
+      const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      if (parsed.projectId) firebaseConfig.projectId = parsed.projectId;
+      if (parsed.firestoreDatabaseId) firebaseConfig.firestoreDatabaseId = parsed.firestoreDatabaseId;
+    } else if (fs.existsSync(parentConfigPath)) {
+      const parsed = JSON.parse(fs.readFileSync(parentConfigPath, "utf-8"));
+      if (parsed.projectId) firebaseConfig.projectId = parsed.projectId;
+      if (parsed.firestoreDatabaseId) firebaseConfig.firestoreDatabaseId = parsed.firestoreDatabaseId;
+    }
+  } catch (readErr) {
+    console.warn("Failed to dynamically load firebase-applet-config.json (using default resilient fallback):", readErr);
+  }
+
   let appInstance;
   if (admin.apps.length === 0) {
     appInstance = admin.initializeApp({
