@@ -44,6 +44,53 @@ import {
 } from 'lucide-react';
 import { EcomOrder, EcomCustomer } from '../types';
 
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
 interface CustomerAreaProps {
   onNavigateToView: (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm', id?: string) => void;
   initialEmail?: string;
@@ -120,8 +167,8 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
       setOrders(fetchedOrders);
       setOrdersLoading(false);
     }, (error) => {
-      console.error("Erro ao escutar pedidos em tempo real:", error);
       setOrdersLoading(false);
+      handleFirestoreError(error, OperationType.LIST, 'ecom_orders');
     });
 
     return () => unsubscribe();
@@ -147,8 +194,9 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
       } else {
         setProfile(null);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Erro ao carregar perfil do cliente:", e);
+      handleFirestoreError(e, OperationType.GET, `ecom_customers/${uid}`);
     } finally {
       setLoading(false);
     }
@@ -256,7 +304,11 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
         createdAt: new Date().toISOString()
       };
 
-      await setDoc(doc(db, 'ecom_customers', user.uid), customerDoc);
+      try {
+        await setDoc(doc(db, 'ecom_customers', user.uid), customerDoc);
+      } catch (e: any) {
+        handleFirestoreError(e, OperationType.WRITE, `ecom_customers/${user.uid}`);
+      }
       setProfile(customerDoc);
       setSuccessMsg('Cadastro criado com sucesso! Agora você está logado na Área de Cliente.');
     } catch (err: any) {
@@ -301,7 +353,11 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
         createdAt: profile?.createdAt || new Date().toISOString()
       };
 
-      await setDoc(doc(db, 'ecom_customers', currentUser.uid), customerDoc);
+      try {
+        await setDoc(doc(db, 'ecom_customers', currentUser.uid), customerDoc);
+      } catch (e: any) {
+        handleFirestoreError(e, OperationType.WRITE, `ecom_customers/${currentUser.uid}`);
+      }
       setProfile(customerDoc);
       
       // Update display name

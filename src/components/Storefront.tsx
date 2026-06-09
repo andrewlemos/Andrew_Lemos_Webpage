@@ -72,7 +72,7 @@ const ensureRobustUrl = (url: string) => {
 
     const lower = decoded.toLowerCase();
     if (lower === 'capa_curso_udemy_game.jpeg') {
-      return `https://cdn.jsdelivr.net/gh/andrewlemos/Andrew_Lemos_Webpage@main/public/arquivos/${encodeURIComponent(decoded)}`;
+      return `https://raw.githubusercontent.com/andrewlemos/Andrew_Lemos_Webpage/main/public/arquivos/${encodeURIComponent(decoded)}?v=${Date.now()}`;
     }
 
     if (

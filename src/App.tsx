@@ -112,7 +112,7 @@ export const ensureRobustUrl = (url: string) => {
     // Todas as outras mídias mais antigas, cujos arquivos originais estão corrompidos localmente/no repositório,
     // são buscadas de forma segura e impecável a partir do commit estável histórico '16eec916efc1342685e03616e5222f2ee1b1c784' via CDN.
     if (lower === 'capa_curso_udemy_game.jpeg') {
-      return `https://cdn.jsdelivr.net/gh/andrewlemos/Andrew_Lemos_Webpage@main/public/arquivos/${encodeURIComponent(decoded)}`;
+      return `https://raw.githubusercontent.com/andrewlemos/Andrew_Lemos_Webpage/main/public/arquivos/${encodeURIComponent(decoded)}?v=${Date.now()}`;
     }
 
     if (
