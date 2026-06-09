@@ -217,6 +217,81 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
   const { customerInfo, items, subtotal, shippingCost, total } = order;
   const generatedPixString = generatePixCode(total, "andrewfmlemos@gmail.com", "Andrew Lemos", "Rio de Janeiro");
 
+  if (order.paymentUrl) {
+    return (
+      <div className="bg-brand-paper min-h-screen py-12 px-6 font-sans">
+        <div className="max-w-xl mx-auto space-y-6">
+          <div className="bg-white p-8 rounded-3xl border border-brand-wood/5 shadow-md space-y-6 text-center">
+            
+            <div className="bg-emerald-50 text-emerald-600 p-4 rounded-full border border-emerald-100 w-16 h-16 flex items-center justify-center mx-auto">
+              <ShieldCheck className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="font-serif font-bold text-2xl text-brand-ink">Seu pedido foi registrado!</h2>
+              <p className="text-gray-400 text-xs uppercase tracking-widest font-bold">Checkout Integrado com Mercado Pago</p>
+            </div>
+
+            <div className="bg-gray-50 p-5 rounded-2xl border text-left space-y-2.5">
+              <div className="flex justify-between items-center text-xs text-gray-500 pb-2 border-b">
+                <span>Código do Pedido:</span>
+                <span className="font-mono font-bold text-brand-wood">{order.id}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-gray-500 pb-2 border-b">
+                <span>Destinatário:</span>
+                <span className="font-bold">{customerInfo.name}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-gray-500 pb-2 border-b">
+                <span>Frete Selecionado (Melhor Envio):</span>
+                <span className="font-bold">{order.shippingMethod}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs pt-1">
+                <span className="font-bold text-gray-700">Valor Total Seguro:</span>
+                <span className="text-base font-bold text-brand-clay font-mono">
+                  R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              <p className="text-slate-500 text-xs leading-relaxed">
+                Clique no botão oficial do Mercado Pago abaixo para concluir o pagamento. Você poderá pagar por <strong>Pix (com aprovação instantânea)</strong>, Cartão de Crédito ou Boleto diretamente na plataforma oficial.
+              </p>
+
+              <a 
+                href={order.paymentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 px-6 rounded-full font-bold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2.5 shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer"
+              >
+                <QrCode className="w-5 h-5 flex-shrink-0" />
+                <span>Pagar R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} com Mercado Pago</span>
+                <ArrowRight className="w-4 h-4 text-white" />
+              </a>
+
+              <div className="flex items-center justify-center gap-2 text-xs text-gray-400 mt-4">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Aguardando a confirmação do pagamento...</span>
+              </div>
+            </div>
+
+            <div className="text-[10px] text-gray-400 pt-4 border-t border-gray-100 flex items-center justify-center gap-1.5 leading-none font-medium">
+              <span>Transação 100% criptografada e segura</span>
+            </div>
+
+          </div>
+
+          <button 
+            onClick={() => onNavigateToView('vendas')}
+            className="w-full text-center text-gray-400 hover:text-gray-600 transition-colors text-xs font-semibold py-2 cursor-pointer"
+          >
+            ← Voltar para a loja e continuar comprando
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-brand-paper min-h-screen py-12 px-6 font-sans">
       
