@@ -14,7 +14,11 @@ import {
   Package,
   Edit2,
   DollarSign,
-  Layers
+  Layers,
+  Printer,
+  RefreshCw,
+  ExternalLink,
+  AlertCircle
 } from 'lucide-react';
 import { db, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, setDoc, auth } from '../firebase';
 import { EcomProduct, EcomOrder, ShippingQuote, PackagingSettings } from '../types';
@@ -391,6 +395,67 @@ export const AdminStore = () => {
       alert("Código de rastreamento salvo e atrelado ao pedido do cliente com sucesso!");
     } catch (err: any) {
       console.error("Failed saving tracking code:", err);
+    }
+  };
+
+  const [shippingActionLoading, setShippingActionLoading] = useState<string | null>(null);
+
+  const handleSyncTracking = async (orderId: string) => {
+    setShippingActionLoading('sync-' + orderId);
+    try {
+      const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : 'dev-bypass-token';
+      const res = await fetch('/api/vendas/shipment/sync-tracking', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ orderId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert("Rastreamento sincronizado com sucesso! Status atual do Melhor Envio: " + (data.order?.melhorEnvioStatusText || "Sincronizado"));
+        if (selectedOrder && selectedOrder.id === orderId) {
+          setSelectedOrder(data.order);
+        }
+      } else {
+        alert("Falha na sincronização: " + (data.error || "Erro desconhecido"));
+      }
+    } catch (err: any) {
+      console.error("Error syncing tracking:", err);
+      alert("Erro ao conectar com o servidor para sincronização: " + err.message);
+    } finally {
+      setShippingActionLoading(null);
+    }
+  };
+
+  const handleForceGenerateLabel = async (orderId: string) => {
+    if (!window.confirm("Deseja gerar/comprar a etiqueta no Melhor Envio agora para este pedido?")) return;
+    setShippingActionLoading('generate-' + orderId);
+    try {
+      const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : 'dev-bypass-token';
+      const res = await fetch('/api/vendas/shipment/generate-label', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ orderId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert("Etiqueta processada com sucesso no Melhor Envio!");
+        if (selectedOrder && selectedOrder.id === orderId) {
+          setSelectedOrder(data.order);
+        }
+      } else {
+        alert("Falha na geração: " + (data.error || "Erro de validação ou de saldo do Melhor Envio. Detalhes: " + (data.error || "")));
+      }
+    } catch (err: any) {
+      console.error("Error generating label:", err);
+      alert("Erro de conexão ao tentar gerar etiqueta: " + err.message);
+    } finally {
+      setShippingActionLoading(null);
     }
   };
 
@@ -1245,6 +1310,99 @@ export const AdminStore = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Melhor Envio Integration Section */}
+                  <div className="md:col-span-2 bg-[#FAFCFF] p-5 rounded-2xl border border-blue-100 space-y-4">
+                    <div className="flex items-center justify-between border-b pb-2 flex-wrap gap-2">
+                      <span className="font-bold text-[10px] text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <Truck className="w-4 h-4 text-blue-600" />
+                        <span>Integração Oficial Melhor Envio</span>
+                      </span>
+                      {selectedOrder.melhorEnvioShipmentId && (
+                        <span className="font-mono text-[9px] text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-100 font-bold">
+                          ID ENVIO: {selectedOrder.melhorEnvioShipmentId}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-4 text-[11px] items-center">
+                      <div className="space-y-2 text-gray-600 font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <span>Status do Envio:</span>
+                          <span className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wide border ${
+                            selectedOrder.melhorEnvioStatus === "error"
+                              ? "bg-red-50 text-red-700 border-red-200"
+                              : selectedOrder.melhorEnvioStatus === "released" || selectedOrder.melhorEnvioStatus === "delivered" || selectedOrder.melhorEnvioStatus === "posted"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-gray-50 text-gray-600 border-gray-200"
+                          }`}>
+                            {selectedOrder.melhorEnvioStatusText || "Não iniciado / Sem etiqueta"}
+                          </span>
+                        </div>
+                        {selectedOrder.melhorEnvioTrackingCode && (
+                          <div className="flex items-center gap-1.5">
+                            <span>Rastreamento Corrente:</span>
+                            <span className="font-bold font-mono text-brand-wood bg-amber-50 px-2 py-0.5 rounded border border-amber-200 animate-pulse text-[10px]">
+                              {selectedOrder.melhorEnvioTrackingCode}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-2 sm:items-end">
+                        {/* 1. Print button */}
+                        {selectedOrder.melhorEnvioLabelUrl ? (
+                          <a
+                            href={selectedOrder.melhorEnvioLabelUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold transition-all text-[10.5px] uppercase tracking-wider cursor-pointer shadow-sm hover:shadow-md"
+                          >
+                            <Printer className="w-4 h-4" />
+                            <span>Imprimir Etiqueta</span>
+                          </a>
+                        ) : (
+                          <div className="text-[10px] font-semibold text-gray-400 italic bg-gray-50 border px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 text-gray-400" />
+                            <span>Etiqueta pendente no Melhor Envio</span>
+                          </div>
+                        )}
+
+                        {/* 2. Control triggers buttons */}
+                        <div className="flex gap-2 flex-wrap mt-1">
+                          {/* Force Generate/Regenerate button */}
+                          <button
+                            disabled={shippingActionLoading !== null}
+                            onClick={() => handleForceGenerateLabel(selectedOrder.id!)}
+                            className="inline-flex items-center gap-1.5 bg-blue-600 disabled:bg-blue-300 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-bold transition-all text-[9px] uppercase tracking-wider cursor-pointer"
+                          >
+                            {shippingActionLoading?.startsWith('generate-') ? (
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Plus className="w-3 h-3" />
+                            )}
+                            <span>{selectedOrder.melhorEnvioShipmentId ? "Regerar Envio" : "Gerar Etiqueta"}</span>
+                          </button>
+
+                          {/* Sync tracking button */}
+                          {selectedOrder.melhorEnvioShipmentId && (
+                            <button
+                              disabled={shippingActionLoading !== null}
+                              onClick={() => handleSyncTracking(selectedOrder.id!)}
+                              className="inline-flex items-center gap-1.5 bg-white disabled:bg-gray-100 border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded-lg font-bold transition-all text-[9px] uppercase tracking-wider cursor-pointer"
+                            >
+                              {shippingActionLoading?.startsWith('sync-') ? (
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <RefreshCw className="w-3 h-3" />
+                              )}
+                              <span>Sincronizar Rastreio</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-2 border-t pt-4">
@@ -1310,9 +1468,17 @@ export const AdminStore = () => {
                       <div className="font-bold text-brand-ink">{selectedQuote.customerInfo.name}</div>
                       <div>E-mail: {selectedQuote.customerInfo.email}</div>
                       <div>Telefone: {selectedQuote.customerInfo.phone}</div>
+                      {selectedQuote.customerInfo.cpf && <div>CPF: {selectedQuote.customerInfo.cpf}</div>}
                       <div>CEP: {selectedQuote.customerInfo.cep}</div>
+                      {selectedQuote.customerInfo.street && (
+                        <div>
+                          Endereço: {selectedQuote.customerInfo.street}, {selectedQuote.customerInfo.number}
+                          {selectedQuote.customerInfo.complement && ` - ${selectedQuote.customerInfo.complement}`}
+                        </div>
+                      )}
+                      {selectedQuote.customerInfo.neighborhood && <div>Bairro: {selectedQuote.customerInfo.neighborhood}</div>}
                       <div>Cidade/Estado: {selectedQuote.customerInfo.city}, {selectedQuote.customerInfo.state}</div>
-                      <div>País: {selectedQuote.customerInfo.country}</div>
+                      <div>País: {selectedQuote.customerInfo.country || "Brasil"}</div>
                     </div>
                   </div>
 
@@ -1321,12 +1487,33 @@ export const AdminStore = () => {
                     <div>
                       <span className="font-bold text-[10px] text-brand-wood uppercase tracking-wider block flex items-center gap-1">
                         <Package className="w-3.5 h-3.5" />
-                        <span>Produto Solicitado</span>
+                        <span>Produtos Solicitados (Orçamento)</span>
                       </span>
-                      <div className="mt-2 text-[11px] text-gray-600 font-medium space-y-0.5">
-                        <div className="font-bold text-brand-ink">{selectedQuote.productName}</div>
-                        <div>Preço unitário: R$ {selectedQuote.productPrice?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div>Quantidade solicitada: <span className="font-mono font-bold text-brand-wood">{selectedQuote.quantity} un.</span></div>
+                      <div className="mt-2 text-[11px] text-gray-600 font-medium space-y-1">
+                        {selectedQuote.items && selectedQuote.items.length > 0 ? (
+                          <div className="space-y-1.5 pt-1">
+                            {selectedQuote.items.map((item: any, idx: number) => (
+                              <div key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border text-xs">
+                                <div>
+                                  <span className="font-bold text-brand-wood">{item.quantity}x</span>{' '}
+                                  <span className="font-semibold text-brand-ink">{item.name}</span>
+                                </div>
+                                <span className="font-mono text-gray-500 font-semibold shrink-0 ml-1">
+                                  R$ {(item.price * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                            ))}
+                            <div className="pt-2 border-t font-bold text-brand-ink text-right text-xs">
+                              Subtotal Obras: R$ {selectedQuote.productPrice?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="font-bold text-brand-ink">{selectedQuote.productName}</div>
+                            <div>Preço unitário: R$ {selectedQuote.productPrice?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                            <div>Quantidade solicitada: <span className="font-mono font-bold text-brand-wood">{selectedQuote.quantity} un.</span></div>
+                          </>
+                        )}
                         {selectedQuote.notes && (
                           <div className="mt-2 text-xs italic bg-white p-2 border rounded-md">
                             " {selectedQuote.notes} "
@@ -1334,7 +1521,7 @@ export const AdminStore = () => {
                         )}
                       </div>
                     </div>
-                    {selectedQuote.productImage && (
+                    {(!selectedQuote.items || selectedQuote.items.length === 0) && selectedQuote.productImage && (
                       <div className="h-12 w-full mt-2 rounded border overflow-hidden bg-slate-100 flex items-center justify-center p-1 self-end">
                         <img src={ensureRobustUrl(selectedQuote.productImage)} className="max-h-full max-w-full object-contain" referrerPolicy="no-referrer" />
                       </div>

@@ -65,12 +65,18 @@ export interface EcomOrder {
     length: number;
   }[];
   shippingMethod: string;
+  shippingServiceId?: string;
   shippingCost: number;
   subtotal: number;
   total: number;
   status: 'Aguardando pagamento' | 'Pago' | 'Separação' | 'Enviado' | 'Entregue' | 'Cancelado';
   paymentId?: string;
   trackingCode?: string;
+  melhorEnvioShipmentId?: string;
+  melhorEnvioTrackingCode?: string;
+  melhorEnvioStatus?: string;
+  melhorEnvioStatusText?: string;
+  melhorEnvioLabelUrl?: string;
   gateway?: string;
   gatewayError?: string;
   paymentUrl?: string;

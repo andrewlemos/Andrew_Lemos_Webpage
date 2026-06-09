@@ -299,11 +299,6 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
 
   // Handle Cart Operations
   const addToCart = (product: EcomProduct) => {
-    if (product.shippingType === 'quote') {
-      setSelectedProduct(product);
-      setIsQuoteFormOpen(true);
-      return;
-    }
     if (product.stock <= 0) return;
     setCart(prev => {
       const exists = prev.find(item => item.id === product.id);
@@ -340,6 +335,21 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
     const cleanedCep = cepToUse.replace(/\D/g, "");
     if (cleanedCep.length !== 8) {
       setShippingError('Por favor, informe um CEP válido com 8 dígitos.');
+      return;
+    }
+
+    const hasQuoteItem = cart.some(item => item.shippingType === 'quote');
+    if (hasQuoteItem) {
+      setLoadingShipping(false);
+      setShippingError('');
+      setShippingServices([]);
+      setSelectedShipping({
+        id: 'quote',
+        name: 'Frete sob consulta (Orçamento personalizado)',
+        price: 0,
+        delivery_time: 'A definir',
+        company_name: 'Sob Consulta'
+      } as any);
       return;
     }
 
@@ -450,6 +460,65 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
       return;
     }
 
+    const hasQuoteItem = cart.some(item => item.shippingType === 'quote');
+    if (hasQuoteItem) {
+      setCheckoutStep('submitting');
+      try {
+        const subtotalVal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const quoteDoc = {
+          productId: "multi",
+          productName: cart.map(item => `${item.quantity}x ${item.name}`).join(' + '),
+          productPrice: subtotalVal,
+          productImage: cart[0]?.images?.[0] || "",
+          quantity: 1,
+          customerInfo: {
+            name: customerInfo.name.trim(),
+            email: customerInfo.email.trim(),
+            phone: customerInfo.phone.trim(),
+            cep: customerInfo.cep.replace(/\D/g, ""),
+            street: customerInfo.street.trim(),
+            number: customerInfo.number.trim(),
+            neighborhood: customerInfo.neighborhood.trim(),
+            complement: (customerInfo.complement || "").trim(),
+            city: customerInfo.city.trim(),
+            state: customerInfo.state.trim(),
+            cpf: customerInfo.cpf.trim(),
+            country: "Brasil"
+          },
+          items: cart.map(item => ({
+            productId: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            images: item.images,
+            weight: item.weight || 0.3,
+            height: item.height || 11,
+            width: item.width || 11,
+            length: item.length || 16
+          })),
+          status: "Nova",
+          userId: userId || "guest",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        await addDoc(collection(db, 'ecom_quotes'), quoteDoc);
+
+        // Clear shopping cart
+        setCart([]);
+        localStorage.removeItem('ecom_cart');
+        setCheckoutStep('browsing');
+        setIsCartOpen(false);
+
+        alert("Sua solicitação de orçamento de frete foi enviada com sucesso! O mestre Andrew avaliará seu CEP e enviará as propostas de transporte e o link de checkout no seu e-mail cadastrado.");
+      } catch (err: any) {
+        console.error("Erro ao registrar cotação do carrinho:", err);
+        alert(`Falha ao registrar orçamento: ${err.message || err}`);
+        setCheckoutStep('details');
+      }
+      return;
+    }
+
     setCheckoutStep('submitting');
     
     try {
@@ -468,6 +537,7 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
           length: item.length || 16
         })),
         shippingMethod: selectedShipping.name,
+        shippingServiceId: selectedShipping.id,
         shippingCost: selectedShipping.price
       };
 
@@ -824,8 +894,16 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                       <div className="pt-6 mt-6 border-t border-brand-wood/10 space-y-4">
                         <div className="flex items-center gap-1.5">
                           <Truck className="w-4 h-4 text-brand-wood" />
-                          <h4 className="text-sm font-bold text-brand-ink uppercase tracking-wide">Cálculo de Frete (MelhorEnvio)</h4>
+                          <h4 className="text-sm font-bold text-brand-ink uppercase tracking-wide">
+                            {cart.some(item => item.shippingType === 'quote') ? 'Cotação de Frete Especial' : 'Cálculo de Frete (MelhorEnvio)'}
+                          </h4>
                         </div>
+
+                        {cart.some(item => item.shippingType === 'quote') && (
+                          <div className="bg-amber-50 border border-amber-200/50 rounded-xl p-3 text-[11px] text-amber-900 leading-relaxed font-sans">
+                            🚚 <strong>Carrinho especial:</strong> O seu carrinho possui obra(s) com <strong>frete sob consulta</strong>. Para esses itens, o frete total de todos os produtos do pedido será cotado detalhadamente pelo mestre após o envio do formulário.
+                          </div>
+                        )}
 
                         <div className="flex gap-2">
                           <input 
@@ -845,11 +923,24 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                           <button 
                             onClick={() => calculateShippingCost(shippingCep)}
                             disabled={loadingShipping}
-                            className="bg-brand-wood text-white px-5 rounded-xl text-xs font-bold hover:bg-brand-clay transition-all disabled:opacity-50"
+                            className="bg-brand-wood text-white px-5 rounded-xl text-xs font-bold hover:bg-brand-clay transition-all disabled:opacity-50 cursor-pointer"
                           >
-                            {loadingShipping ? 'Calculando...' : 'Consultar'}
+                            {loadingShipping ? 'Calculando...' : (cart.some(item => item.shippingType === 'quote') ? 'Ok' : 'Consultar')}
                           </button>
                         </div>
+
+                        {cart.some(item => item.shippingType === 'quote') && selectedShipping && (
+                          <div className="flex items-center justify-between p-3 border border-emerald-100 rounded-xl bg-emerald-50/50 text-[11px]">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <div>
+                                <div className="font-bold text-emerald-900">Orçamento Solicitado para este CEP</div>
+                                <div className="text-[9px] text-emerald-700">Calculado para o CEP {shippingCep}</div>
+                              </div>
+                            </div>
+                            <span className="font-bold text-emerald-800 text-[10px] bg-emerald-100/70 px-2 py-0.5 rounded shrink-0 uppercase tracking-wider font-mono">Sob Consulta</span>
+                          </div>
+                        )}
 
                         {shippingError && (
                           <p className="text-xs text-rose-500 font-semibold flex items-center gap-1">
@@ -1126,7 +1217,7 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                         onClick={handleCheckoutSubmit}
                         className="w-full bg-brand-ink text-white py-4 rounded-full font-bold text-sm tracking-wide shadow-lg hover:bg-brand-wood hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 group cursor-pointer"
                       >
-                        <span>Finalizar Compra / Pagar</span>
+                        <span>{cart.some(item => item.shippingType === 'quote') ? 'Solicitar Orçamento de Frete' : 'Finalizar Compra / Pagar'}</span>
                         <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                       </button>
                     )}
@@ -1274,7 +1365,7 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                     }`}
                   >
                     {selectedProduct.stock > 0 
-                      ? (selectedProduct.shippingType === 'quote' ? 'Solicitar Cotação de Frete' : 'Adicionar ao Carrinho de Compras') 
+                      ? (selectedProduct.shippingType === 'quote' ? 'Adicionar ao Carrinho (Frete sob consulta)' : 'Adicionar ao Carrinho de Compras') 
                       : 'Produto Indisponível'
                     }
                   </button>

@@ -1013,6 +1013,9 @@ async function updateOrderStatusInDatabase(orderId: string, status: string, paym
     // Send payment email confirmation
     const finalBaseUrl = baseUrl || "http://localhost:3000";
     sendOrderPaymentConfirmationEmail(orderId, orderData, finalBaseUrl).catch(e => console.error("Async sending of payment confirmation failed:", e));
+
+    // Automatized automatic shipping label generation on Melhor Envio
+    processMelhorEnvioShipmentForPaidOrder(orderId, orderData).catch(e => console.error("[Melhor Envio] Auto-processing failure:", e));
   }
 
   // Update Order Status in database
@@ -1204,12 +1207,27 @@ app.post("/api/vendas/quotes/respond", checkAdminAuth, async (req, res) => {
 
     const quoteData = quoteSnap.data();
 
+    if (!quoteData) {
+      return res.status(404).json({ error: "Dados da cotação inválidos." });
+    }
+
     // Generate unique pending purchase order ID
     const orderId = "ORD-Q-" + Math.random().toString(36).substr(2, 6).toUpperCase();
     const productPrice = Number(quoteData.productPrice) || 0;
     const quantity = Number(quoteData.quantity) || 1;
     const shippingCost = Number(responseValue.shippingCost) || 0;
-    const subtotal = productPrice * quantity;
+
+    const orderItems = quoteData.items && quoteData.items.length > 0 
+      ? quoteData.items 
+      : [{
+          productId: quoteData.productId,
+          name: quoteData.productName,
+          price: productPrice,
+          quantity: quantity,
+          images: quoteData.productImage ? [quoteData.productImage] : []
+        }];
+
+    const subtotal = orderItems.reduce((sum: number, itm: any) => sum + (Number(itm.price) * Number(itm.quantity)), 0);
     const total = subtotal + shippingCost;
 
     // Create purchase order in database
@@ -1222,18 +1240,13 @@ app.post("/api/vendas/quotes/respond", checkAdminAuth, async (req, res) => {
         cep: quoteData.customerInfo.cep,
         city: quoteData.customerInfo.city || "",
         state: quoteData.customerInfo.state || "",
-        street: "Endereço por Confirmar",
-        number: "S/N",
-        neighborhood: "Bairro por Confirmar",
-        complement: ""
+        street: quoteData.customerInfo.street || "Endereço por Confirmar",
+        number: quoteData.customerInfo.number || "S/N",
+        neighborhood: quoteData.customerInfo.neighborhood || "Bairro por Confirmar",
+        complement: quoteData.customerInfo.complement || "",
+        cpf: quoteData.customerInfo.cpf || ""
       },
-      items: [{
-        productId: quoteData.productId,
-        name: quoteData.productName,
-        price: productPrice,
-        quantity: quantity,
-        images: quoteData.productImage ? [quoteData.productImage] : []
-      }],
+      items: orderItems,
       shippingMethod: responseValue.carrier || "Transportadora",
       shippingCost: shippingCost,
       subtotal: subtotal,
@@ -1339,7 +1352,681 @@ app.post("/api/vendas/quotes/respond", checkAdminAuth, async (req, res) => {
   }
 });
 
+// --- MELHOR ENVIO AUTOMATED LABEL GENERATION ENGINE & EP ---
+
+function validateShipmentData(orderData: any): string[] {
+  if (!orderData) {
+    return ["Dados do pedido estão vazios ou corrompidos."];
+  }
+  
+  const customerInfo = orderData.customerInfo;
+  if (!customerInfo) {
+    return ["Informações do destinatário (customerInfo) estão ausentes no pedido."];
+  }
+
+  const errors: string[] = [];
+
+  // Destination validations
+  if (!customerInfo.name || customerInfo.name.trim().length < 2) {
+    errors.push("Nome do destinatário inválido ou muito curto.");
+  }
+  
+  const phoneDigits = (customerInfo.phone || "").replace(/\D/g, "");
+  if (phoneDigits.length < 10) {
+    errors.push("Telefone do destinatário inválido (mínimo de 10 dígitos com DDD).");
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!customerInfo.email || !emailRegex.test(customerInfo.email)) {
+    errors.push("E-mail do destinatário inválido.");
+  }
+
+  const cpfDigits = (customerInfo.cpf || "").replace(/\D/g, "");
+  if (cpfDigits.length !== 11 && cpfDigits.length !== 14) {
+    errors.push("CPF ou CNPJ do destinatário precisa conter exatamente 11 ou 14 dígitos.");
+  }
+
+  if (!customerInfo.street || customerInfo.street.trim().length === 0) {
+    errors.push("Endereço (rua) do destinatário é obrigatório.");
+  }
+
+  if (!customerInfo.number || String(customerInfo.number).trim().length === 0) {
+    errors.push("Número da residência é obrigatório.");
+  }
+
+  if (!customerInfo.neighborhood || customerInfo.neighborhood.trim().length === 0) {
+    errors.push("Bairro do destinatário é obrigatório.");
+  }
+
+  if (!customerInfo.city || customerInfo.city.trim().length === 0) {
+    errors.push("Cidade do destinatário é obrigatória.");
+  }
+
+  const stateAbbr = (customerInfo.state || "").trim().toUpperCase();
+  if (stateAbbr.length !== 2) {
+    errors.push("Estado (UF) do destinatário deve possuir 2 letras (ex: SP, RJ).");
+  }
+
+  const toCep = (customerInfo.cep || "").replace(/\D/g, "");
+  if (toCep.length !== 8) {
+    errors.push(`CEP de destino (${toCep}) é inválido. Deve possuir 8 dígitos.`);
+  }
+
+  // Source validations
+  const fromCep = (process.env.MELHORENVIO_FROM_CEP || "13630000").replace(/\D/g, "");
+  if (fromCep.length !== 8) {
+    errors.push(`CEP de origem do ateliê (${fromCep}) é inválido. Deve possuir 8 dígitos.`);
+  }
+
+  // Weights & dimensions validations
+  const items = orderData.items || [];
+  if (items.length === 0) {
+    errors.push("O carrinho de compras do pedido está vazio.");
+  }
+
+  items.forEach((item: any, idx: number) => {
+    const name = item.name || `Produto #${idx + 1}`;
+    const weight = Number(item.weight);
+    const height = Number(item.height);
+    const width = Number(item.width);
+    const length = Number(item.length);
+    const qty = Number(item.quantity || 1);
+
+    if (isNaN(weight) || weight <= 0) {
+      errors.push(`Peso inválido para o item [${name}]: deve ser maior que zero.`);
+    }
+    if (isNaN(height) || height <= 0) {
+      errors.push(`Altura inválida para o item [${name}]: deve ser maior que zero.`);
+    }
+    if (isNaN(width) || width <= 0) {
+      errors.push(`Largura inválida para o item [${name}]: deve ser maior que zero.`);
+    }
+    if (isNaN(length) || length <= 0) {
+      errors.push(`Comprimento inválido para o item [${name}]: deve ser maior que zero.`);
+    }
+    if (isNaN(qty) || qty <= 0) {
+      errors.push(`Quantidade inválida para o item [${name}]: deve ser de pelo menos 1.`);
+    }
+  });
+
+  return errors;
+}
+
+async function processMelhorEnvioShipmentForPaidOrder(orderId: string, orderData: any) {
+  console.log(`[Melhor Envio Automatizado] Iniciando processamento de frete para o pedido ${orderId}...`);
+  try {
+    const valErrors = validateShipmentData(orderData);
+    if (valErrors.length > 0) {
+      const errMessage = `Erro de Validação Logística: ${valErrors.join(" | ")}`;
+      console.warn(`[Melhor Envio Automatizado] Falha de validação para o pedido ${orderId}: ${errMessage}`);
+      if (adminDb) {
+        await adminDb.collection("ecom_orders").doc(orderId).update({
+          melhorEnvioStatus: "error",
+          melhorEnvioStatusText: `Erro de Validação: ${valErrors.slice(0, 3).join(", ")}${valErrors.length > 3 ? '...' : ''}`,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      return;
+    }
+    const token = process.env.MELHORENVIO_TOKEN;
+    const isMockMode = !token || token.includes("MOCK_") || token.startsWith("eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.MOCK_MELHORENVIO_TOKEN_FOR_SECURITY");
+
+    if (isMockMode) {
+      console.log(`[Melhor Envio Automatizado] Modo Simulação Ativo para pedido ${orderId} (sem token real). Gerando dados simulados...`);
+      const mockShipmentId = "ME-SIM-" + Math.random().toString(36).substr(2, 8).toUpperCase();
+      const mockTracking = "ME" + Math.random().toString(36).substr(2, 9).toUpperCase() + "BR";
+      const mockLabelUrl = `/api/vendas/shipment/print-mock?id=${orderId}`;
+      const mockStatus = "released";
+      const mockStatusText = getPortugueseStatusText(mockStatus);
+
+      if (adminDb) {
+        await adminDb.collection("ecom_orders").doc(orderId).update({
+          melhorEnvioShipmentId: mockShipmentId,
+          trackingCode: mockTracking,
+          melhorEnvioTrackingCode: mockTracking,
+          melhorEnvioLabelUrl: mockLabelUrl,
+          melhorEnvioStatus: mockStatus,
+          melhorEnvioStatusText: mockStatusText,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log(`[Melhor Envio Automatizado] Pedido ${orderId} atualizado no banco de dados com simulação virtual com sucesso.`);
+      }
+      return;
+    }
+
+    // REAL MELHOR ENVIO INTEGRATION
+    const isSandboxToken = token.includes("sandbox") || process.env.MELHORENVIO_ENV === "sandbox";
+    const meBaseUrl = isSandboxToken
+      ? "https://sandbox.melhorenvio.com.br"
+      : "https://www.melhorenvio.com.br";
+
+    const fromCep = (process.env.MELHORENVIO_FROM_CEP || "13630000").replace(/\D/g, "");
+    const toCep = (orderData.customerInfo.cep || "").replace(/\D/g, "");
+
+    // Resolve service id.
+    let serviceId = 1; // Default PAC (Correios)
+    const methodStr = String(orderData.shippingMethod || "").toUpperCase();
+    if (methodStr.includes("SEDEX")) {
+      serviceId = 2;
+    } else if (methodStr.includes("JADLOG") && methodStr.includes(".COM")) {
+      serviceId = 4;
+    } else if (methodStr.includes("JADLOG") && methodStr.includes("PACKAGE")) {
+      serviceId = 3;
+    } else if (orderData.shippingServiceId) {
+      const parsedId = parseInt(orderData.shippingServiceId, 10);
+      if (!isNaN(parsedId)) {
+        serviceId = parsedId;
+      }
+    }
+
+    // Build sender
+    const senderFrom = {
+      name: process.env.MELHORENVIO_FROM_NAME || "Ateliê Andrew Lemos",
+      phone: (process.env.MELHORENVIO_FROM_PHONE || "19999999999").replace(/\D/g, ""),
+      email: process.env.MELHORENVIO_FROM_EMAIL || "andrewfmlemos@gmail.com",
+      document: (process.env.MELHORENVIO_FROM_DOCUMENT || "12345678909").replace(/\D/g, ""),
+      address: process.env.MELHORENVIO_FROM_ADDRESS || "Avenida Juca de Souza",
+      number: process.env.MELHORENVIO_FROM_NUMBER || "123",
+      complement: process.env.MELHORENVIO_FROM_COMPLEMENT || "",
+      district: process.env.MELHORENVIO_FROM_DISTRICT || "Centro",
+      city: process.env.MELHORENVIO_FROM_CITY || "Pirassununga",
+      state_abbr: process.env.MELHORENVIO_FROM_STATE_ABBR || "SP",
+      postal_code: fromCep
+    };
+
+    // Build recipient
+    const customerInfo = orderData.customerInfo;
+    const recipientTo = {
+      name: customerInfo.name,
+      phone: (customerInfo.phone || "11999999998").replace(/\D/g, ""),
+      email: customerInfo.email || "cliente@email.com",
+      document: (customerInfo.cpf || "").replace(/\D/g, ""),
+      address: customerInfo.street,
+      number: customerInfo.number,
+      complement: customerInfo.complement || "",
+      district: customerInfo.neighborhood || "Centro",
+      city: customerInfo.city,
+      state_abbr: customerInfo.state,
+      postal_code: toCep
+    };
+
+    // Construct products list
+    const items = orderData.items || [];
+    const products = items.map((itm: any, idx: number) => ({
+      name: itm.name.substring(0, 250),
+      quantity: Number(itm.quantity || 1),
+      unitary_value: Number(itm.price || 10),
+      weight: Number(itm.weight || 0.3)
+    }));
+
+    // Construct volumes package (standard dimensional packaging)
+    const totalWeight = items.reduce((sum: number, it: any) => sum + (Number(it.weight || 0.3) * Number(it.quantity || 1)), 0);
+    const maxHeight = Math.max(...items.map((it: any) => Number(it.height || 11)));
+    const maxWidth = Math.max(...items.map((it: any) => Number(it.width || 11)));
+    const totalLength = items.reduce((sum: number, it: any) => sum + (Number(it.length || 16) * Number(it.quantity || 1)), 0);
+
+    const volumes = [{
+      height: Math.max(11, maxHeight),
+      width: Math.max(11, maxWidth),
+      length: Math.max(16, totalLength),
+      weight: Math.max(0.1, totalWeight)
+    }];
+
+    const totalOrderValue = Number(orderData.subtotal || 10);
+
+    const cartPayload = {
+      service: serviceId,
+      from: senderFrom,
+      to: recipientTo,
+      products: products,
+      volumes: volumes,
+      options: {
+        insurance_value: totalOrderValue,
+        receipt: false,
+        own_hand: false,
+        reverse: false,
+        non_commercial: true,
+        platform: "Ateliê Andrew Lemos",
+        tags: [
+          {
+            tag: orderId,
+            url: `https://andrewlemos.art.br/admin`
+          }
+        ]
+      }
+    };
+
+    console.log(`[Melhor Envio Automatizado] Inserindo frete no carrinho para o pedido ${orderId}...`);
+    const userAgentContact = "Atelie_Andrew_Lemos(andrewfmlemos@gmail.com)";
+    const cartRes = await fetch(`${meBaseUrl}/api/v2/me/cart`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": userAgentContact
+      },
+      body: JSON.stringify(cartPayload)
+    });
+
+    if (!cartRes.ok) {
+      const errText = await cartRes.text().catch(() => "");
+      throw new Error(`Erro na inserção do carrinho Melhor Envio. Status: ${cartRes.status}, Retorno: ${errText}`);
+    }
+
+    const cartData: any = await cartRes.json();
+    const shipmentId = cartData.id;
+    if (!shipmentId) {
+      throw new Error(`Resposta de inserção do carrinho não retornou o shipment ID. Retorno: ${JSON.stringify(cartData)}`);
+    }
+
+    console.log(`[Melhor Envio Automatizado] Envio inserido com ID ${shipmentId}. Prosseguindo para Checkout/Compra...`);
+
+    // 2. CHECKOUT/COMPRA
+    const checkoutRes = await fetch(`${meBaseUrl}/api/v2/me/shipment/checkout`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": userAgentContact
+      },
+      body: JSON.stringify({
+        orders: [shipmentId]
+      })
+    });
+
+    if (!checkoutRes.ok) {
+      const errText = await checkoutRes.text().catch(() => "");
+      console.warn(`[Melhor Envio Automatizado] Falha na compra automática da etiqueta do envio ${shipmentId} (talvez saldo insuficiente). Status: ${checkoutRes.status}. Causa: ${errText}`);
+      
+      // We still record the Shipment ID so the merchant can complete, pay, and print the label manually
+      if (adminDb) {
+        await adminDb.collection("ecom_orders").doc(orderId).update({
+          melhorEnvioShipmentId: shipmentId,
+          melhorEnvioStatus: "cart",
+          melhorEnvioStatusText: "No carrinho de compras (Pagamento pendente no saldo)",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      return;
+    }
+
+    console.log(`[Melhor Envio Automatizado] Etiqueta comprada com sucesso para o envio ${shipmentId}. Gerando impressão pública...`);
+
+    // 3. GENERATE LABEL PRINT LINK
+    let labelUrl = "";
+    try {
+      const printRes = await fetch(`${meBaseUrl}/api/v2/me/shipment/print`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "User-Agent": userAgentContact
+        },
+        body: JSON.stringify({
+          mode: "public",
+          orders: [shipmentId]
+        })
+      });
+
+      if (printRes.ok) {
+        const printData: any = await printRes.json();
+        labelUrl = printData.url || printData.link || "";
+        console.log(`[Melhor Envio Automatizado] Link público de etiqueta gerado: ${labelUrl}`);
+      } else {
+        const errText = await printRes.text().catch(() => "");
+        console.warn(`[Melhor Envio Automatizado] Falha ao gerar link público. Status: ${printRes.status}, Retorno: ${errText}`);
+      }
+    } catch (printErr) {
+      console.error("[Melhor Envio Automatizado] Erro ao obter link de impressão:", printErr);
+    }
+
+    // 4. FETCH INITIAL TRACKING INFO
+    let trackingCode = "";
+    let meStatusText = "Etiqueta Gerada";
+    let meStatus = "released";
+
+    try {
+      const trackingRes = await fetch(`${meBaseUrl}/api/v2/me/shipment/tracking`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "User-Agent": userAgentContact
+        },
+        body: JSON.stringify({
+          orders: [shipmentId]
+        })
+      });
+
+      if (trackingRes.ok) {
+        const trackingData: any = await trackingRes.json();
+        const info = trackingData[shipmentId];
+        if (info) {
+          trackingCode = info.tracking || "";
+          meStatus = info.status || "released";
+          meStatusText = getPortugueseStatusText(meStatus);
+        }
+      }
+    } catch (trackingErr) {
+      console.error("[Melhor Envio Automatizado] Erro ao obter código de rastreamento inicial:", trackingErr);
+    }
+
+    // Update the DB!
+    if (adminDb) {
+      await adminDb.collection("ecom_orders").doc(orderId).update({
+        melhorEnvioShipmentId: shipmentId,
+        trackingCode: trackingCode || orderData.trackingCode || "",
+        melhorEnvioTrackingCode: trackingCode || "",
+        melhorEnvioLabelUrl: labelUrl || "",
+        melhorEnvioStatus: meStatus,
+        melhorEnvioStatusText: meStatusText,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      console.log(`[Melhor Envio Automatizado] Processo real concluído com êxito para o pedido ${orderId}!`);
+    }
+
+  } catch (error: any) {
+    console.error(`[Melhor Envio Automatizado] Falha no processamento de envio para o pedido ${orderId}:`, error);
+  }
+}
+
+// Translate state of Melhor Envio labels to clear Portuguese
+function getPortugueseStatusText(meStatus: string): string {
+  switch (meStatus) {
+    case "cart": return "No carrinho de compras do Melhor Envio";
+    case "pending": return "Etiqueta reservada/Aguardando pagamento";
+    case "released": return "Pronta para envio (Etiqueta gerada)";
+    case "posted": return "Postado / Objeto em trânsito";
+    case "delivered": return "Entregue ao destinatário";
+    case "canceled": return "Cancelado";
+    default: return meStatus || "Pronto para postagem";
+  }
+}
+
+// 1. Manual label trigger endpoint for backups or retries
+app.post("/api/vendas/shipment/generate-label", checkAdminAuth, async (req, res) => {
+  const { orderId } = req.body;
+  if (!orderId) {
+    return res.status(400).json({ error: "orderId é obrigatório" });
+  }
+
+  try {
+    if (!adminDb) {
+      return res.status(500).json({ error: "Banco de dados indisponível." });
+    }
+
+    console.log(`[Melhor Envio Admin] Forçando geração de etiqueta para pedido ${orderId} por requisição manual...`);
+    const orderSnap = await adminDb.collection("ecom_orders").doc(orderId).get();
+    if (!orderSnap.exists) {
+      return res.status(404).json({ error: "Pedido não encontrado no banco de dados." });
+    }
+
+    const orderData = orderSnap.data();
+    await processMelhorEnvioShipmentForPaidOrder(orderId, orderData);
+
+    // Fetch updated document as verification
+    const updatedSnap = await adminDb.collection("ecom_orders").doc(orderId).get();
+    res.json({ success: true, order: updatedSnap.data() });
+  } catch (err: any) {
+    console.error("Falha manual:", err);
+    res.status(500).json({ error: formatFirebaseError(err) || "Falha ao gerar etiqueta." });
+  }
+});
+
+// 2. Tracking synchronization endpoint
+app.post("/api/vendas/shipment/sync-tracking", checkAdminAuth, async (req, res) => {
+  const { orderId } = req.body;
+  if (!orderId) {
+    return res.status(400).json({ error: "orderId é obrigatório" });
+  }
+
+  try {
+    if (!adminDb) {
+      return res.status(500).json({ error: "Banco de dados indisponível." });
+    }
+
+    const orderSnap = await adminDb.collection("ecom_orders").doc(orderId).get();
+    if (!orderSnap.exists) {
+      return res.status(404).json({ error: "Pedido não localizado." });
+    }
+
+    const orderData = orderSnap.data();
+    if (!orderData) {
+      return res.status(400).json({ error: "Pedido corrompido." });
+    }
+
+    const shipmentId = orderData.melhorEnvioShipmentId;
+    const token = process.env.MELHORENVIO_TOKEN;
+    const isMock = !shipmentId || !token || token.includes("MOCK_") || token.startsWith("eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.MOCK_MELHORENVIO_TOKEN_FOR_SECURITY");
+
+    if (isMock) {
+      console.log(`[Melhor Envio Rastreamento] Sincronização em modo simulado para o pedido ${orderId}...`);
+      
+      // Simulate random progression through statuses
+      let nextStatus = orderData.melhorEnvioStatus || "released";
+      let overallStatus = orderData.status || "Pago";
+
+      if (nextStatus === "released") {
+        nextStatus = "posted";
+        overallStatus = "Enviado";
+      } else if (nextStatus === "posted") {
+        nextStatus = "delivered";
+        overallStatus = "Entregue";
+      }
+
+      const mockTracking = orderData.melhorEnvioTrackingCode || "BR-RE-SIM-9204A";
+      const statusText = getPortugueseStatusText(nextStatus);
+
+      await adminDb.collection("ecom_orders").doc(orderId).update({
+        trackingCode: mockTracking,
+        melhorEnvioTrackingCode: mockTracking,
+        melhorEnvioStatus: nextStatus,
+        melhorEnvioStatusText: statusText,
+        status: overallStatus,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      const finalSnap = await adminDb.collection("ecom_orders").doc(orderId).get();
+      return res.json({ success: true, message: "Sincronizado via Simulador de Logística", order: finalSnap.data() });
+    }
+
+    // REAL MELHOR ENVIO CALL
+    const isSandboxToken = token.includes("sandbox") || process.env.MELHORENVIO_ENV === "sandbox";
+    const meBaseUrl = isSandboxToken
+      ? "https://sandbox.melhorenvio.com.br"
+      : "https://www.melhorenvio.com.br";
+    const userAgentContact = "Atelie_Andrew_Lemos(andrewfmlemos@gmail.com)";
+
+    console.log(`[Melhor Envio Rastreamento] Buscando histórico em tempo real da etiqueta ${shipmentId} para o pedido ${orderId}...`);
+    const trackRes = await fetch(`${meBaseUrl}/api/v2/me/shipment/tracking`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": userAgentContact
+      },
+      body: JSON.stringify({
+        orders: [shipmentId]
+      })
+    });
+
+    if (!trackRes.ok) {
+      const errText = await trackRes.text().catch(() => "");
+      throw new Error(`Erro ao buscar rastreio na API. Status: ${trackRes.status}, Retorno: ${errText}`);
+    }
+
+    const trackingData: any = await trackRes.json();
+    const info = trackingData[shipmentId];
+
+    if (!info) {
+      return res.status(404).json({ error: `O Melhor Envio não retornou informações válidas para a etiqueta ${shipmentId}.` });
+    }
+
+    const trackingCode = info.tracking || "";
+    const meStatus = info.status || "released";
+    const meStatusText = getPortugueseStatusText(meStatus);
+
+    let overallStatus = orderData.status || "Pago";
+    if (meStatus === "posted") {
+      overallStatus = "Enviado";
+    } else if (meStatus === "delivered") {
+      overallStatus = "Entregue";
+    } else if (meStatus === "canceled") {
+      overallStatus = "Cancelado";
+    }
+
+    const updatePayload: any = {
+      melhorEnvioStatus: meStatus,
+      melhorEnvioStatusText: meStatusText,
+      status: overallStatus,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    if (trackingCode) {
+      updatePayload.trackingCode = trackingCode;
+      updatePayload.melhorEnvioTrackingCode = trackingCode;
+    }
+
+    // Also attempt to refresh print link if it was empty
+    if (!orderData.melhorEnvioLabelUrl) {
+      try {
+        const printRes = await fetch(`${meBaseUrl}/api/v2/me/shipment/print`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": userAgentContact
+          },
+          body: JSON.stringify({
+            mode: "public",
+            orders: [shipmentId]
+          })
+        });
+
+        if (printRes.ok) {
+          const printData: any = await printRes.json();
+          const publicUrl = printData.url || printData.link || "";
+          if (publicUrl) {
+            updatePayload.melhorEnvioLabelUrl = publicUrl;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed print url refresh on sync:", e);
+      }
+    }
+
+    await adminDb.collection("ecom_orders").doc(orderId).update(updatePayload);
+
+    const finalSnap = await adminDb.collection("ecom_orders").doc(orderId).get();
+    res.json({ success: true, message: "Status sincronizado com sucesso diretamente no Melhor Envio", order: finalSnap.data() });
+
+  } catch (err: any) {
+    console.error("Falha no sincronismo de rastreio:", err);
+    res.status(500).json({ error: err.message || "Erro interno ao consultar rastreamento." });
+  }
+});
+
+// 3. Mock Printable Layout Viewer
+app.get("/api/vendas/shipment/print-mock", async (req, res) => {
+  const { id } = req.query;
+  const orderId = String(id || "");
+  
+  try {
+    if (!adminDb) {
+      return res.status(500).send("Banco de dados indisponível.");
+    }
+    const orderSnap = await adminDb.collection("ecom_orders").doc(orderId).get();
+    if (!orderSnap.exists) {
+      return res.status(404).send("Pedido não localizado para gerar a etiqueta.");
+    }
+    const order = orderSnap.data();
+    if (!order) {
+      return res.status(400).send("Sem dados no pedido.");
+    }
+
+    const tracking = order.melhorEnvioTrackingCode || "BR-RE-SIM-9204A";
+    
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Etiqueta de Envio Simulada — Ateliê Andrew Lemos</title>
+        <style>
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f1f1f1; display: flex; justify-content: center; }
+          .label-container { width: 380px; background: white; padding: 25px; border: 1px solid #ddd; box-shadow: 0 4px 12px rgba(0,0,0,0.1); box-sizing: border-box; }
+          .header { border-bottom: 3px solid #000; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+          .logo { font-size: 15px; font-weight: 900; letter-spacing: -0.5px; font-family: sans-serif; }
+          .carrier-badge { background: #000; color: #fff; padding: 4px 10px; font-size: 10px; font-weight: 800; border-radius: 4px; text-transform: uppercase; }
+          .barcode-box { border: 2px solid #000; height: 65px; display: flex; flex-direction: column; justify-content: center; align-items: center; margin: 15px 0; }
+          .barcode-bars { letter-spacing: 2px; font-size: 28px; font-family: monospace; font-weight: bold; }
+          .barcode-number { font-size: 9px; font-weight: bold; margin-top: 3px; font-family: monospace; }
+          .section-title { font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #555; margin-bottom: 4px; }
+          .address-section { font-size: 11px; line-height: 1.45; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 12px; }
+          .name { font-weight: bold; font-size: 12px; color: #000; }
+          .footer { text-align: center; font-size: 8px; color: #888; margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px; }
+          @media print {
+            body { background: white; padding: 0; }
+            .label-container { border: none; box-shadow: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="label-container">
+          <div class="header">
+            <span class="logo">MELHOR ENVIO — ETIQUETA</span>
+            <span class="carrier-badge">${order.shippingMethod || 'Correios PAC'}</span>
+          </div>
+          
+          <div class="address-section">
+            <div class="section-title">Destinatário</div>
+            <div class="name">${order.customerInfo.name}</div>
+            <div>Rua: ${order.customerInfo.street}, ${order.customerInfo.number} ${order.customerInfo.complement ? `(${order.customerInfo.complement})` : ''}</div>
+            <div>Bairro: ${order.customerInfo.neighborhood}</div>
+            <div>CEP: <b>${order.customerInfo.cep}</b></div>
+            <div>${order.customerInfo.city} — ${order.customerInfo.state}</div>
+          </div>
+
+          <div class="barcode-box">
+            <div class="barcode-bars">||||||| | ||||| || || | |||| ||||</div>
+            <div class="barcode-number">Rastreamento: ${tracking}</div>
+          </div>
+          
+          <div class="address-section" style="border: none; padding-bottom: 0;">
+            <div class="section-title">Remetente</div>
+            <div class="name">Ateliê Andrew Lemos</div>
+            <div>Avenida Juca de Souza, 123</div>
+            <div>CEP: <b>13630-000</b></div>
+            <div>Pirassununga — SP</div>
+          </div>
+
+          <div class="footer">
+            Ateliê Andrew Lemos © — Esta é uma Etiqueta de Envio simulada em Modo de Integração.
+          </div>
+        </div>
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 600);
+          }
+        </script>
+      </body>
+      </html>
+    `);
+  } catch (err: any) {
+    res.status(500).send("Erro ao gerar etiqueta de simulação: " + err.message);
+  }
+});
+
 // Endpoint de segurança para baixar cópia de segurança robusta do projeto
+
 app.get("/api/download-zip", checkAdminAuth, (req, res) => {
   try {
     const zip = new AdmZip();

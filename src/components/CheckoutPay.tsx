@@ -15,6 +15,66 @@ import {
 import { db, doc, onSnapshot } from '../firebase';
 import { EcomOrder } from '../types';
 
+// Helper functions for CRC16 calculation and valid static Pix code generation
+const calculateCRC16 = (str: string): string => {
+  let crc = 0xFFFF;
+  for (let c = 0; c < str.length; c++) {
+    const charCode = str.charCodeAt(c);
+    crc ^= (charCode << 8);
+    for (let i = 0; i < 8; i++) {
+      if ((crc & 0x8000) !== 0) {
+        crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+      } else {
+        crc = (crc << 1) & 0xFFFF;
+      }
+    }
+  }
+  let hex = crc.toString(16).toUpperCase();
+  while (hex.length < 4) {
+    hex = '0' + hex;
+  }
+  return hex;
+};
+
+const generatePixCode = (amount: number, key: string, name: string, city: string) => {
+  const cleanKey = key.trim();
+  const cleanName = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9 ]/g, "")
+    .substring(0, 25)
+    .trim() || 'Andrew Lemos';
+  const cleanCity = city
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9 ]/g, "")
+    .substring(0, 15)
+    .trim() || 'Rio de Janeiro';
+  
+  const amountStr = amount.toFixed(2);
+  
+  const f00 = "000201";
+  const f01 = "010211";
+  
+  // Field 26 (Merchant Account Information)
+  const gui = "0014br.gov.bcb.pix";
+  const keyField = `01${String(cleanKey.length).padStart(2, '0')}${cleanKey}`;
+  const f26 = `26${String(gui.length + keyField.length).padStart(2, '0')}${gui}${keyField}`;
+  
+  const f52 = "52040000";
+  const f53 = "5303986";
+  const f54 = `54${String(amountStr.length).padStart(2, '0')}${amountStr}`;
+  const f58 = "5802BR";
+  const f59 = `59${String(cleanName.length).padStart(2, '0')}${cleanName}`;
+  const f60 = `60${String(cleanCity.length).padStart(2, '0')}${cleanCity}`;
+  const f62 = "62070503***";
+  const f63 = "6304";
+  
+  const rawPayload = f00 + f01 + f26 + f52 + f53 + f54 + f58 + f59 + f60 + f62 + f63;
+  const crc = calculateCRC16(rawPayload);
+  return rawPayload + crc;
+};
+
 interface CheckoutPayProps {
   orderId: string;
   onNavigateToView: (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm', id?: string) => void;
@@ -155,6 +215,7 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
   }
 
   const { customerInfo, items, subtotal, shippingCost, total } = order;
+  const generatedPixString = generatePixCode(total, "andrewfmlemos@gmail.com", "Andrew Lemos", "Rio de Janeiro");
 
   return (
     <div className="bg-brand-paper min-h-screen py-12 px-6 font-sans">
@@ -277,194 +338,255 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
               
               {/* PIX VIEW */}
               {activeTab === 'pix' && (
-                <div className="space-y-5 text-center flex flex-col items-center">
-                  <div className="flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug w-full text-left">
-                    <Clock className="w-4 h-4 flex-shrink-0 animate-pulse" />
-                    <span>Pague via PIX e tenha aprovação imediata com liberação agilizada do estoque da obra.</span>
-                  </div>
-
-                  <div className="p-3 bg-white border border-brand-wood/10 rounded-2xl flex items-center justify-center w-40 h-40 shadow-inner relative">
-                    {/* Mock decorative QR Code image */}
-                    <svg className="w-full h-full text-slate-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <rect x="2" y="2" width="6" height="6" />
-                      <rect x="2" y="16" width="6" height="6" />
-                      <rect x="16" y="2" width="6" height="6" />
-                      <path d="M12 2v6m-4 0h8M12 16v6M16 16h6v6h-6zm0-4h4" />
-                      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-                    </svg>
-                  </div>
-
-                  <div className="space-y-3 w-full">
-                    <p className="text-xs text-gray-400">Escaneie o QR Code acima ou copie a linha de transferência abaixo:</p>
-                    <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        readOnly 
-                        value="00020101021226830014br.gov.bcb.pix2561pix.pagseguro.com.br/v2/cob/93f7e...98651" 
-                        className="bg-[#FAFAFA] border border-gray-100 font-mono text-[10px] flex-grow text-gray-500 px-3 py-2.5 rounded-xl outline-none select-all"
-                      />
-                      <button 
-                        onClick={() => handleCopyToClipboard("00020101021226830014br.gov.bcb.pix2561pix.pagseguro.com.br/v2/cob/93f7e...98651")}
-                        className="bg-brand-wood text-white px-4 rounded-xl text-xs font-semibold hover:bg-brand-clay hover:scale-[1.03] transition-all flex items-center gap-1.5"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>{copied ? 'Copiado!' : 'Copiar'}</span>
-                      </button>
+                order.paymentUrl ? (
+                  <div className="space-y-5 text-center flex flex-col items-center">
+                    <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug w-full text-left">
+                      <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
+                      <span>Você selecionou o pagamento via <strong>PIX</strong> no Mercado Pago.</span>
                     </div>
+                    <p className="text-xs text-gray-500 leading-relaxed px-2">
+                      Pague via PIX integrado do Mercado Pago e tenha aprovação imediata para liberação agilizada do estoque da sua obra. Clique no botão abaixo para abrir o checkout seguro.
+                    </p>
+                    <a 
+                      href={order.paymentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-full font-bold text-sm hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    >
+                      <QrCode className="w-5 h-5" />
+                      <span>Ir pagar PIX Oficial no Mercado Pago</span>
+                    </a>
                   </div>
+                ) : (
+                  <div className="space-y-5 text-center flex flex-col items-center">
+                    <div className="flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug w-full text-left font-sans">
+                      <Clock className="w-4 h-4 flex-shrink-0 animate-pulse" />
+                      <span>Modo Simulação: Código de Pix de teste gerado nos padrões oficiais do Banco Central (EMV).</span>
+                    </div>
 
-                  <button 
-                    disabled={processing}
-                    onClick={() => executeSimulatedPayment('pix')}
-                    className="w-full bg-emerald-600 text-white py-4 rounded-full font-bold text-sm hover:bg-emerald-700 hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    {processing ? (
-                      <span className="flex items-center gap-2">
-                        <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                        Verificando Transferência...
-                      </span>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-5 h-5" />
-                        <span>Confirmar Pagamento Simulado</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+                    <div className="p-3 bg-white border border-brand-wood/10 rounded-2xl flex items-center justify-center w-40 h-40 shadow-inner relative overflow-hidden">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(generatedPixString)}`}
+                        alt="QR Code Pix"
+                        className="w-full h-full object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+
+                    <div className="space-y-3 w-full text-left">
+                      <p className="text-xs text-gray-400 text-center">Escaneie o QR Code acima ou copie a linha de transferência abaixo:</p>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          readOnly 
+                          value={generatedPixString}
+                          className="bg-[#FAFAFA] border border-gray-100 font-mono text-[10px] flex-grow text-gray-500 px-3 py-2.5 rounded-xl outline-none select-all"
+                        />
+                        <button 
+                          onClick={() => handleCopyToClipboard(generatedPixString)}
+                          className="bg-brand-wood text-white px-4 rounded-xl text-xs font-semibold hover:bg-brand-clay hover:scale-[1.03] transition-all flex items-center gap-1.5 shrink-0"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>{copied ? 'Copiado!' : 'Copiar'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <button 
+                      disabled={processing}
+                      onClick={() => executeSimulatedPayment('pix')}
+                      className="w-full bg-emerald-600 text-white py-4 rounded-full font-bold text-sm hover:bg-emerald-700 hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {processing ? (
+                        <span className="flex items-center gap-2">
+                          <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                          Verificando Transferência...
+                        </span>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-5 h-5" />
+                          <span>Confirmar Pagamento Simulado</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )
               )}
 
               {/* CARD PREVIEW FORM */}
               {activeTab === 'card' && (
-                <form onSubmit={(e) => { e.preventDefault(); executeSimulatedPayment('card'); }} className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Número do Cartão *</label>
-                    <input 
-                      type="text" 
-                      placeholder="0000 0000 0000 0000" 
-                      required
-                      value={cardData.number}
-                      onChange={e => setCardData({...cardData, number: e.target.value.replace(/\D/g, "").replace(/(\d{4})/g, "$1 ").trim()})}
-                      className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-mono tracking-wider font-semibold"
-                    />
+                order.paymentUrl ? (
+                  <div className="space-y-5 text-center flex flex-col items-center">
+                    <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug w-full text-left">
+                      <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
+                      <span>Você selecionou o pagamento via <strong>Cartão de Crédito</strong> no Mercado Pago.</span>
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed px-2">
+                      Pague parcelado em até 3x sem juros no seu cartão com total segurança no ambiente integrado do Mercado Pago. Clique no botão abaixo para preencher os seus dados de pagamento.
+                    </p>
+                    <a 
+                      href={order.paymentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-full font-bold text-sm hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    >
+                      <CreditCard className="w-5 h-5" />
+                      <span>Pagar com Cartão Oficial no Mercado Pago</span>
+                    </a>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Nome do Titular *</label>
-                    <input 
-                      type="text" 
-                      placeholder="Como impresso no cartão" 
-                      required
-                      value={cardData.name}
-                      onChange={e => setCardData({...cardData, name: e.target.value.toUpperCase()})}
-                      className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-semibold"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
+                ) : (
+                  <form onSubmit={(e) => { e.preventDefault(); executeSimulatedPayment('card'); }} className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Validade *</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Número do Cartão *</label>
                       <input 
                         type="text" 
-                        placeholder="MM/AA" 
+                        placeholder="0000 0000 0000 0000" 
                         required
-                        maxLength={5}
-                        value={cardData.expiry}
-                        onChange={e => setCardData({...cardData, expiry: e.target.value.replace(/\D/g, "").replace(/^(\d{2})/, "$1/")})}
-                        className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-mono text-center font-bold"
+                        value={cardData.number}
+                        onChange={e => setCardData({...cardData, number: e.target.value.replace(/\D/g, "").replace(/(\d{4})/g, "$1 ").trim()})}
+                        className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-mono tracking-wider font-semibold"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Cód. SegurançaCVV *</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Nome do Titular *</label>
                       <input 
-                        type="password" 
-                        placeholder="123" 
+                        type="text" 
+                        placeholder="Como impresso no cartão" 
                         required
-                        maxLength={4}
-                        value={cardData.cvv}
-                        onChange={e => setCardData({...cardData, cvv: e.target.value.replace(/\D/g, "")})}
-                        className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-mono text-center font-bold"
+                        value={cardData.name}
+                        onChange={e => setCardData({...cardData, name: e.target.value.toUpperCase()})}
+                        className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-semibold"
                       />
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Parcelas</label>
-                    <select 
-                      value={cardData.installments} 
-                      onChange={e => setCardData({...cardData, installments: e.target.value})}
-                      className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-bold"
-                    >
-                      <option value="1">1x de R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Sem Juros</option>
-                      <option value="2">2x de R$ {(total / 2).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Sem Juros</option>
-                      <option value="3">3x de R$ {(total / 3).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Sem Juros</option>
-                    </select>
-                  </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Validade *</label>
+                        <input 
+                          type="text" 
+                          placeholder="MM/AA" 
+                          required
+                          maxLength={5}
+                          value={cardData.expiry}
+                          onChange={e => setCardData({...cardData, expiry: e.target.value.replace(/\D/g, "").replace(/^(\d{2})/, "$1/")})}
+                          className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-mono text-center font-bold"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Cód. SegurançaCVV *</label>
+                        <input 
+                          type="password" 
+                          placeholder="123" 
+                          required
+                          maxLength={4}
+                          value={cardData.cvv}
+                          onChange={e => setCardData({...cardData, cvv: e.target.value.replace(/\D/g, "")})}
+                          className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-mono text-center font-bold"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Parcelas</label>
+                      <select 
+                        value={cardData.installments} 
+                        onChange={e => setCardData({...cardData, installments: e.target.value})}
+                        className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-bold"
+                      >
+                        <option value="1">1x de R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Sem Juros</option>
+                        <option value="2">2x de R$ {(total / 2).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Sem Juros</option>
+                        <option value="3">3x de R$ {(total / 3).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Sem Juros</option>
+                      </select>
+                    </div>
 
-                  <button 
-                    type="submit" 
-                    disabled={processing}
-                    className="w-full bg-brand-wood text-white py-4 rounded-full font-bold text-sm hover:bg-brand-clay hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer mt-4"
-                  >
-                    {processing ? (
-                      <span className="flex items-center gap-2">
-                        <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                        Processando Aprovação de Crédito...
-                      </span>
-                    ) : (
-                      <>
-                        <CreditCard className="w-5 h-5" />
-                        <span>Confirmar Pagamento Simulado</span>
-                      </>
-                    )}
-                  </button>
-                </form>
+                    <button 
+                      type="submit" 
+                      disabled={processing}
+                      className="w-full bg-brand-wood text-white py-4 rounded-full font-bold text-sm hover:bg-brand-clay hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer mt-4"
+                    >
+                      {processing ? (
+                        <span className="flex items-center gap-2">
+                          <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                          Processando Aprovação de Crédito...
+                        </span>
+                      ) : (
+                        <>
+                          <CreditCard className="w-5 h-5" />
+                          <span>Confirmar Pagamento Simulado</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+                )
               )}
 
               {/* BOLETO STRINGS */}
               {activeTab === 'boleto' && (
-                <div className="space-y-4 text-center">
-                  <div className="flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug text-left">
-                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                    <span>Boletos levam de 1 a 2 dias úteis para compensação bancária e confirmação de estoque automática.</span>
-                  </div>
-
-                  <div className="p-4 bg-gray-50 border border-gray-150 rounded-2xl flex flex-col gap-2 shadow-inner font-mono text-xs text-gray-600 text-left">
-                    <span className="text-[10px] font-bold text-brand-wood uppercase tracking-wider">Código de Barras Boleto</span>
-                    <span>34191.79001 01043.513184 91020.150008 7 934500000{Math.round(total)}</span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => handleCopyToClipboard(`34191.79001 01043.513184 91020.150008 7 934500000${Math.round(total)}`)}
-                      className="bg-gray-100 hover:bg-gray-200 text-slate-800 font-semibold text-xs px-4 py-3.5 rounded-xl flex-grow flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                order.paymentUrl ? (
+                  <div className="space-y-5 text-center flex flex-col items-center">
+                    <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug w-full text-left">
+                      <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
+                      <span>Você selecionou o pagamento via <strong>Boleto Bancário</strong> no Mercado Pago.</span>
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed px-2">
+                      Gere o boleto bancário oficial do seu pedido de forma segura. A compensação do boleto pode levar de 1 a 2 dias úteis para atualização no estoque.
+                    </p>
+                    <a 
+                      href={order.paymentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-full font-bold text-sm hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
                     >
-                      <Copy className="w-4 h-4" />
-                      <span>{copied ? 'Copiado!' : 'Copiar Código'}</span>
-                    </button>
+                      <Barcode className="w-5 h-5" />
+                      <span>Gerar Boleto Oficial no Mercado Pago</span>
+                    </a>
+                  </div>
+                ) : (
+                  <div className="space-y-4 text-center">
+                    <div className="flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug text-left">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      <span>Boletos levam de 1 a 2 dias úteis para compensação bancária e confirmação de estoque automática.</span>
+                    </div>
+
+                    <div className="p-4 bg-gray-50 border border-gray-150 rounded-2xl flex flex-col gap-2 shadow-inner font-mono text-xs text-gray-600 text-left">
+                      <span className="text-[10px] font-bold text-brand-wood uppercase tracking-wider">Código de Barras Boleto</span>
+                      <span>34191.79001 01043.513184 91020.150008 7 934500000{Math.round(total)}</span>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => handleCopyToClipboard(`34191.79001 01043.513184 91020.150008 7 934500000${Math.round(total)}`)}
+                        className="bg-gray-100 hover:bg-gray-200 text-slate-800 font-semibold text-xs px-4 py-3.5 rounded-xl flex-grow flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Copy className="w-4 h-4" />
+                        <span>{copied ? 'Copiado!' : 'Copiar Código'}</span>
+                      </button>
+                      <button 
+                        onClick={() => alert("Simulação de PDF de Boleto gerado com sucesso!")}
+                        className="bg-gray-100 hover:bg-gray-200 text-slate-800 font-semibold text-xs px-4 py-3.5 rounded-xl flex-grow flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Baixar PDF</span>
+                      </button>
+                    </div>
+
                     <button 
-                      onClick={() => alert("Simulação de PDF de Boleto gerado com sucesso!")}
-                      className="bg-gray-100 hover:bg-gray-200 text-slate-800 font-semibold text-xs px-4 py-3.5 rounded-xl flex-grow flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                      disabled={processing}
+                      onClick={() => executeSimulatedPayment('boleto')}
+                      className="w-full bg-brand-wood text-white py-4 rounded-full font-bold text-sm hover:bg-brand-clay hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer mt-6"
                     >
-                      <Download className="w-4 h-4" />
-                      <span>Baixar PDF</span>
+                      {processing ? (
+                        <span className="flex items-center gap-2">
+                          <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                          Simulando Pagamento...
+                        </span>
+                      ) : (
+                        <>
+                          <Barcode className="w-5 h-5" />
+                          <span>Pagar Boleto (Simulado Online)</span>
+                        </>
+                      )}
                     </button>
                   </div>
-
-                  <button 
-                    disabled={processing}
-                    onClick={() => executeSimulatedPayment('boleto')}
-                    className="w-full bg-brand-ink text-white py-4 rounded-full font-bold text-sm hover:bg-brand-wood hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer mt-6"
-                  >
-                    {processing ? (
-                      <span className="flex items-center gap-2">
-                        <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                        Simulando Pagamento...
-                      </span>
-                    ) : (
-                      <>
-                        <Barcode className="w-5 h-5" />
-                        <span>Pagar Boleto (Simulado Online)</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+                )
               )}
             </div>
           </div>
