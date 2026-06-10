@@ -15,10 +15,12 @@ import {
   ChevronRight,
   Eye,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from 'lucide-react';
-import { db, collection, query, onSnapshot, orderBy, handleFirestoreError, OperationType, addDoc } from '../firebase';
+import { db, auth, setDoc, collection, query, onSnapshot, orderBy, handleFirestoreError, OperationType, addDoc } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { EcomProduct, CartItem, EcomCustomer } from '../types';
 
 // Helper to handle Google Drive image links and path conversion
@@ -136,6 +138,9 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
     city: '',
     state: ''
   });
+
+  const [checkoutPassword, setCheckoutPassword] = useState('');
+  const [checkoutConfirmPassword, setCheckoutConfirmPassword] = useState('');
 
   // Load customer profile if logged in
   useEffect(() => {
@@ -453,6 +458,23 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
       missingFields.push("Forma de Envio");
     }
 
+    if (!userId) {
+      if (!checkoutPassword) {
+        missingFields.push("Senha para acesso posterior");
+      } else if (checkoutPassword.length < 6) {
+        const passErr = "A senha de cadastro deve ter no mínimo 6 caracteres.";
+        setCheckoutValidationError(passErr);
+        alert(passErr);
+        return;
+      }
+      if (checkoutPassword !== checkoutConfirmPassword) {
+        const passMatchErr = "As senhas digitadas não coincidem.";
+        setCheckoutValidationError(passMatchErr);
+        alert(passMatchErr);
+        return;
+      }
+    }
+
     if (missingFields.length > 0) {
       const errorMsgText = missingFields.join(", ");
       setCheckoutValidationError(errorMsgText);
@@ -460,9 +482,54 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
       return;
     }
 
+    setCheckoutStep('submitting');
+
+    let activeUserId = userId;
+
+    // 1. DYNAMIC REGISTRATION BEFORE PLACING ORDER
+    if (!activeUserId) {
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, customerInfo.email.trim(), checkoutPassword);
+        const user = cred.user;
+        
+        await updateProfile(user, { displayName: customerInfo.name.trim() });
+        
+        const customerDoc: EcomCustomer = {
+          name: customerInfo.name.trim(),
+          email: customerInfo.email.trim(),
+          phone: customerInfo.phone.trim(),
+          cpf: customerInfo.cpf.replace(/\D/g, '').trim(),
+          cep: customerInfo.cep.replace(/\D/g, '').trim(),
+          street: customerInfo.street.trim(),
+          number: customerInfo.number.trim(),
+          complement: (customerInfo.complement || "").trim(),
+          neighborhood: customerInfo.neighborhood.trim(),
+          city: customerInfo.city.trim(),
+          state: customerInfo.state.trim(),
+          createdAt: new Date().toISOString()
+        };
+        
+        await setDoc(doc(db, 'ecom_customers', user.uid), customerDoc);
+        activeUserId = user.uid;
+      } catch (authErr: any) {
+        console.error("Auth creation at checkout failed:", authErr);
+        let errorFriendly = "Falha ao criar sua conta de acesso. Por favor, verifique os dados ou tente novamente.";
+        if (authErr.code === 'auth/email-already-in-use') {
+          errorFriendly = "Este e-mail já está cadastrado em nosso sistema. Por favor, clique no botão 'Fazer Login' acima para entrar em sua conta antes de continuar a compra.";
+        } else if (authErr.code === 'auth/invalid-email') {
+          errorFriendly = "O e-mail especificado é inválido.";
+        } else if (authErr.message) {
+          errorFriendly = authErr.message;
+        }
+        alert(errorFriendly);
+        setCheckoutValidationError(errorFriendly);
+        setCheckoutStep('details');
+        return;
+      }
+    }
+
     const hasQuoteItem = cart.some(item => item.shippingType === 'quote');
     if (hasQuoteItem) {
-      setCheckoutStep('submitting');
       try {
         const subtotalVal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         const quoteDoc = {
@@ -497,7 +564,7 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
             length: item.length || 16
           })),
           status: "Nova",
-          userId: userId || "guest",
+          userId: activeUserId || "guest",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
@@ -518,12 +585,10 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
       }
       return;
     }
-
-    setCheckoutStep('submitting');
     
     try {
       const orderData = {
-        userId: userId || 'guest',
+        userId: activeUserId || 'guest',
         customerInfo,
         items: cart.map(item => ({
           productId: item.id,
@@ -834,6 +899,8 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                     onClick={() => {
                       if (checkoutStep === 'details') {
                         setCheckoutStep('browsing');
+                        setCheckoutPassword('');
+                        setCheckoutConfirmPassword('');
                       } else {
                         setIsCartOpen(false);
                       }
@@ -1015,6 +1082,36 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                         onChange={e => setCustomerInfo({...customerInfo, email: e.target.value})}
                         className="w-full bg-[#FAFAFA] border border-gray-100 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-medium"
                       />
+
+                      {!userId && (
+                        <div className="bg-brand-wood/5 border border-brand-wood/10 rounded-2xl p-4 space-y-3 my-3">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#8d6e63] uppercase tracking-wider">
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Crie sua senha de acesso</span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 leading-normal">
+                            Defina uma senha para criar sua conta de acesso e poder entrar a qualquer momento na Área do Cliente para acompanhar suas compras.
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input 
+                              type="password" 
+                              placeholder="Senha de Acesso *" 
+                              required 
+                              value={checkoutPassword} 
+                              onChange={e => setCheckoutPassword(e.target.value)}
+                              className="w-full bg-white border border-gray-200/60 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-medium"
+                            />
+                            <input 
+                              type="password" 
+                              placeholder="Confirmar Senha *" 
+                              required 
+                              value={checkoutConfirmPassword} 
+                              onChange={e => setCheckoutConfirmPassword(e.target.value)}
+                              className="w-full bg-white border border-gray-200/60 px-4 py-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-brand-wood font-medium"
+                            />
+                          </div>
+                        </div>
+                      )}
                       <div className="grid grid-cols-2 gap-2">
                         <input 
                           type="text" 

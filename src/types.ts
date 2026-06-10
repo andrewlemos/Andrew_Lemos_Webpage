@@ -70,6 +70,9 @@ export interface EcomOrder {
   subtotal: number;
   total: number;
   status: 'Aguardando pagamento' | 'Pago' | 'Separação' | 'Enviado' | 'Entregue' | 'Cancelado';
+  refundedAmount?: number;
+  refundStatus?: 'none' | 'partial' | 'total';
+  refundNotes?: string;
   paymentId?: string;
   trackingCode?: string;
   melhorEnvioShipmentId?: string;

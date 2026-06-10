@@ -909,7 +909,7 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
                                     </span>
                                     <button
                                       onClick={() => copyToClipboard(order.trackingCode || '', order.id || '')}
-                                      className="text-brand-wood hover:text-brand-clay text-[9px] font-bold p-1 border border-brand-wood/10 roundedbg-white inline-flex items-center gap-1 transition-all cursor-pointer outline-none"
+                                      className="text-brand-wood hover:text-brand-clay text-[9px] font-bold p-1 border border-brand-wood/10 rounded bg-white inline-flex items-center gap-1 transition-all cursor-pointer outline-none"
                                     >
                                       <Copy className="w-2.5 h-2.5" />
                                       <span>{copiedOrderId === order.id ? 'Copiado!' : 'Copiar'}</span>
@@ -922,9 +922,9 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
                               )}
                             </div>
 
-                            {/* CTAs */}
-                            <div className="flex gap-2 w-full justify-end mt-1">
-                              {order.trackingCode && (
+                            {/* Tracking CTAs */}
+                            {order.trackingCode && (
+                              <div className="flex gap-2 w-full justify-end mt-1">
                                 <a 
                                   href={getTrackingUrl(order.trackingCode)}
                                   target="_blank"
@@ -934,27 +934,35 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
                                   <span>Rastrear Obras</span>
                                   <ExternalLink className="w-3 h-3" />
                                 </a>
-                              )}
-
-                              {order.status === 'Aguardando pagamento' && (
-                                <button
-                                  onClick={() => {
-                                    if (order.paymentUrl) {
-                                      window.open(order.paymentUrl, '_blank');
-                                    } else {
-                                      onNavigateToView('checkout-pay', order.id);
-                                    }
-                                  }}
-                                  className="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-1.5 rounded-lg font-bold text-[10px] inline-flex items-center gap-1 cursor-pointer outline-none shadow-xs"
-                                >
-                                  <CreditCard className="w-3 h-3" />
-                                  <span>Concluir Pagamento</span>
-                                </button>
-                              )}
-                            </div>
-
+                              </div>
+                            )}
                           </div>
                         </div>
+
+                        {/* GENERAL ORDER-LEVEL ACTIONS FOOTER */}
+                        {order.status === 'Aguardando pagamento' && (
+                          <div className="bg-amber-50/60 border border-amber-200/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-3">
+                            <div className="flex items-center gap-2">
+                              <CreditCard className="w-4 h-4 text-amber-600 animate-pulse" />
+                              <span className="text-xs font-bold text-amber-800">
+                                Pagamento Pendente do Pedido
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (order.paymentUrl) {
+                                  window.open(order.paymentUrl, '_blank');
+                                } else {
+                                  onNavigateToView('checkout-pay', order.id);
+                                }
+                              }}
+                              className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs inline-flex items-center gap-2 cursor-pointer outline-none shadow-xs hover:shadow-sm transition-all sm:self-center flex-shrink-0"
+                            >
+                              <CreditCard className="w-3.5 h-3.5" />
+                              <span>Concluir Pagamento do Pedido</span>
+                            </button>
+                          </div>
+                        )}
 
                       </div>
                     );
