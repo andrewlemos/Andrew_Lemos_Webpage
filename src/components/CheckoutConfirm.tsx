@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { db, doc, onSnapshot } from '../firebase';
 import { EcomOrder } from '../types';
+import { ensureRobustUrl } from '../App';
 
 interface CheckoutConfirmProps {
   orderId: string;
@@ -91,6 +92,32 @@ export const CheckoutConfirm: React.FC<CheckoutConfirmProps> = ({ orderId, onNav
 
   return (
     <div className="bg-brand-paper min-h-screen py-16 px-6 font-sans">
+      
+      {/* BRAND HEADER CONNECTION */}
+      <div className="max-w-3xl mx-auto mb-8 flex flex-col items-center justify-between gap-4 border-b border-brand-wood/10 pb-6">
+        <a 
+          href="#home" 
+          onClick={(e) => { e.preventDefault(); onNavigateToView('vendas'); }}
+          className="hover:opacity-80 transition-opacity"
+        >
+          <img 
+            src={ensureRobustUrl("/arquivos/LOGO ANDREW.png")} 
+            alt="Andrew Lemos Logo" 
+            className="h-14 md:h-16 w-auto object-contain mx-auto"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        </a>
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-clay">
+          <span>Sacola</span>
+          <span className="text-gray-300">/</span>
+          <span>Pagamento Seguro</span>
+          <span className="text-gray-300">/</span>
+          <span className="text-brand-wood font-bold underline underline-offset-4 decoration-2">Confirmação</span>
+        </div>
+      </div>
+
       <div className="max-w-3xl mx-auto space-y-8">
         
         {/* TOP GLORIOUS PANEL */}
@@ -219,7 +246,12 @@ export const CheckoutConfirm: React.FC<CheckoutConfirmProps> = ({ orderId, onNav
                 <div className="flex gap-2.5 items-center min-w-0">
                   <div className="bg-gray-100 flex items-center justify-center rounded-lg p-1 w-10 h-10 border flex-shrink-0">
                     {item.images && item.images.length > 0 ? (
-                      <img src={item.images[0]} className="w-full h-full object-contain" alt="" />
+                      <img 
+                        src={ensureRobustUrl(item.images[0])} 
+                        className="w-full h-full object-contain" 
+                        alt="" 
+                        referrerPolicy="no-referrer"
+                      />
                     ) : null}
                   </div>
                   <span className="font-bold text-brand-wood font-mono">{item.quantity}x</span>

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { db, doc, onSnapshot } from '../firebase';
 import { EcomOrder } from '../types';
+import { ensureRobustUrl } from '../App';
 
 // Helper functions for CRC16 calculation and valid static Pix code generation
 const calculateCRC16 = (str: string): string => {
@@ -320,6 +321,31 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
   return (
     <div className="bg-brand-paper min-h-screen py-12 px-6 font-sans">
       
+      {/* BRAND HEADER CONNECTION */}
+      <div className="max-w-4xl mx-auto mb-8 flex flex-col items-center justify-between gap-4 border-b border-brand-wood/10 pb-6">
+        <a 
+          href="#home" 
+          onClick={(e) => { e.preventDefault(); onNavigateToView('vendas'); }}
+          className="hover:opacity-80 transition-opacity"
+        >
+          <img 
+            src={ensureRobustUrl("/arquivos/LOGO ANDREW.png")} 
+            alt="Andrew Lemos Logo" 
+            className="h-14 md:h-16 w-auto object-contain mx-auto"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        </a>
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-clay">
+          <span>Sacola</span>
+          <span className="text-gray-300">/</span>
+          <span className="text-brand-wood font-bold underline underline-offset-4 decoration-2">Pagamento Seguro</span>
+          <span className="text-gray-300">/</span>
+          <span className="text-gray-400">Confirmação</span>
+        </div>
+      </div>
+      
       {/* ERROR MESSAGE NOTIFICATION */}
       {errorMsg && (
         <div className="max-w-4xl mx-auto mb-6 bg-rose-50 border border-rose-200 text-rose-900 rounded-2xl p-4 shadow-sm flex gap-3 items-center">
@@ -364,10 +390,8 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
                 <div>
                   <h2 className="font-serif font-bold text-lg text-brand-ink leading-tight flex items-center gap-2">
                     <span>Checkout Seguro</span>
-                    {mpConfig.isMockMode ? (
+                    {mpConfig.isMockMode && (
                       <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-sans">Simulado</span>
-                    ) : (
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-sans">Produção Real</span>
                     )}
                   </h2>
                   <p className="text-[10px] uppercase text-gray-400 tracking-wider font-bold">Mercado Pago Oficial Transparente</p>
