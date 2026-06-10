@@ -875,6 +875,64 @@ app.get("/api/vendas/checkout/config", (req, res) => {
   });
 });
 
+// Helper functions for CRC16 calculation and valid static Pix code generation in backend
+const apiCalculateCRC16 = (str: string): string => {
+  let crc = 0xFFFF;
+  for (let c = 0; c < str.length; c++) {
+    const charCode = str.charCodeAt(c);
+    crc ^= (charCode << 8);
+    for (let i = 0; i < 8; i++) {
+      if ((crc & 0x8000) !== 0) {
+        crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+      } else {
+        crc = (crc << 1) & 0xFFFF;
+      }
+    }
+  }
+  let hex = crc.toString(16).toUpperCase();
+  while (hex.length < 4) {
+    hex = '0' + hex;
+  }
+  return hex;
+};
+
+const apiGeneratePixCode = (amount: number, key: string, name: string, city: string) => {
+  const cleanKey = key.trim();
+  const cleanName = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9 ]/g, "")
+    .substring(0, 25)
+    .trim() || 'Andrew Lemos';
+  const cleanCity = city
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9 ]/g, "")
+    .substring(0, 15)
+    .trim() || 'Rio de Janeiro';
+  
+  const amountStr = amount.toFixed(2);
+  
+  const f00 = "000201";
+  const f01 = "010211";
+  const gui = "0014br.gov.bcb.pix";
+  const keyField = `01${String(cleanKey.length).padStart(2, '0')}${cleanKey}`;
+  const f26 = `26${String(gui.length + keyField.length).padStart(2, '0')}${gui}${keyField}`;
+  
+  const f52 = "52040000";
+  const f53 = "5303986";
+  const f54 = `54${String(amountStr.length).padStart(2, '0')}${amountStr}`;
+  const f58 = "5802BR";
+  const f59 = `59${String(cleanName.length).padStart(2, '0')}${cleanName}`;
+  const f60 = `60${String(cleanCity.length).padStart(2, '0')}${cleanCity}`;
+  const f62 = "62070503***";
+  const f63 = "6304";
+  
+  const rawPayload = f00 + f01 + f26 + f52 + f53 + f54 + f58 + f59 + f60 + f62 + f63;
+  const crc = apiCalculateCRC16(rawPayload);
+  return rawPayload + crc;
+};
+
 // 2.1 Direct Checkout Transparente Payment API (Pix, Boleto, Credit Card)
 app.post("/api/vendas/checkout/transparent-pay", async (req, res) => {
   const { orderId, paymentMethodType, cardToken, installments, cardPaymentMethodId, securityCode } = req.body;
@@ -911,7 +969,7 @@ app.post("/api/vendas/checkout/transparent-pay", async (req, res) => {
       
       if (paymentMethodType === 'pix') {
         // Return simulated fully compliant central bank EMV string for Pix
-        const simulatedQrCode = "00020101021126360014br.gov.bcb.pix0132pix-simulado@atelierteste.com.br5204000053039865405" + Number(total).toFixed(2) + "5802BR5924Andrew Lemos (Simulado)6014Rio de Janeiro62070503***6304D12E";
+        const simulatedQrCode = apiGeneratePixCode(total, "4575f44d-6239-4a20-a080-fe114593b094", "Andrew Lemos", "Rio de Janeiro");
         
         await orderRef.update({
           gateway: "Mercado Pago Transparente (Simulado)",

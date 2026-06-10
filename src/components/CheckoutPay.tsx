@@ -315,7 +315,7 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
   }
 
   const { customerInfo, items, subtotal, shippingCost, total } = order;
-  const generatedPixString = order.transparentPixCode || generatePixCode(total, "pix-simulado@atelierteste.com.br", "Andrew Lemos (Simulado)", "Rio de Janeiro");
+  const generatedPixString = order.transparentPixCode || generatePixCode(total, "4575f44d-6239-4a20-a080-fe114593b094", "Andrew Lemos", "Rio de Janeiro");
 
   return (
     <div className="bg-brand-paper min-h-screen py-12 px-6 font-sans">
