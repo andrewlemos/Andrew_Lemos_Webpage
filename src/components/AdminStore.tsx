@@ -44,6 +44,14 @@ export const AdminStore = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<EcomOrder | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<ShippingQuote | null>(null);
+  
+  // Custom in-app Confirmation popup state (bypasses iframe parent confirm blocks)
+  const [confirmConfig, setConfirmConfig] = useState<{
+    title: string;
+    message: string;
+    isDestructive?: boolean;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
 
   // Registered customers collection
   const [customers, setCustomers] = useState<any[]>([]);
@@ -373,13 +381,20 @@ export const AdminStore = () => {
     }
   };
 
-  const handleDeleteProduct = async (prodId: string) => {
-    if (!window.confirm("Deseja realmente remover permanentemente este produto do catálogo da loja?")) return;
-    try {
-      await deleteDoc(doc(db, 'ecom_products', prodId));
-    } catch (err: any) {
-      console.error("Failed deleting product:", err);
-    }
+  const handleDeleteProduct = (prodId: string) => {
+    setConfirmConfig({
+      title: "Excluir Produto",
+      message: "Deseja realmente remover permanentemente este produto do catálogo da loja?",
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'ecom_products', prodId));
+        } catch (err: any) {
+          console.error("Failed deleting product:", err);
+          alert(`Falha ao excluir produto: ${err.message}`);
+        }
+      }
+    });
   };
 
   const handleUpdateStatus = async (orderId: string, newStatus: string) => {
@@ -439,86 +454,101 @@ export const AdminStore = () => {
     }
   };
 
-  const handleForceGenerateLabel = async (orderId: string) => {
-    if (!window.confirm("Deseja gerar/comprar a etiqueta no Melhor Envio agora para este pedido?")) return;
-    setShippingActionLoading('generate-' + orderId);
-    try {
-      const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : 'dev-bypass-token';
-      const res = await fetch('/api/vendas/shipment/generate-label', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({ orderId })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        alert("Etiqueta processada com sucesso no Melhor Envio!");
-        if (selectedOrder && selectedOrder.id === orderId) {
-          setSelectedOrder(data.order);
+  const handleForceGenerateLabel = (orderId: string) => {
+    setConfirmConfig({
+      title: "Gerar Etiqueta",
+      message: "Deseja realmente gerar/comprar a etiqueta no Melhor Envio agora para este pedido?",
+      onConfirm: async () => {
+        setShippingActionLoading('generate-' + orderId);
+        try {
+          const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : 'dev-bypass-token';
+          const res = await fetch('/api/vendas/shipment/generate-label', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify({ orderId })
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            alert("Etiqueta processada com sucesso no Melhor Envio!");
+            if (selectedOrder && selectedOrder.id === orderId) {
+              setSelectedOrder(data.order);
+            }
+          } else {
+            alert("Falha na geração: " + (data.error || "Erro de validação ou de saldo do Melhor Envio. Detalhes: " + (data.error || "")));
+          }
+        } catch (err: any) {
+          console.error("Error generating label:", err);
+          alert("Erro de conexão ao tentar gerar etiqueta: " + err.message);
+        } finally {
+          setShippingActionLoading(null);
         }
-      } else {
-        alert("Falha na geração: " + (data.error || "Erro de validação ou de saldo do Melhor Envio. Detalhes: " + (data.error || "")));
       }
-    } catch (err: any) {
-      console.error("Error generating label:", err);
-      alert("Erro de conexão ao tentar gerar etiqueta: " + err.message);
-    } finally {
-      setShippingActionLoading(null);
-    }
+    });
   };
 
-  const handleDeleteOrderItem = async (orderId: string, itemIndexToRemove: number) => {
+  const handleDeleteOrderItem = (orderId: string, itemIndexToRemove: number) => {
     if (!selectedOrder) return;
     if (selectedOrder.items.length <= 1) {
       alert("Não é possível remover o único item do pedido. Se deseja cancelar a venda inteira, por favor altere o status do pedido para 'Cancelado'.");
       return;
     }
     
-    if (!window.confirm("Deseja realmente remover este item do pedido? O subtotal e o total geral serão recalculados.")) return;
-    
-    try {
-      const updatedItems = selectedOrder.items.filter((_, idx) => idx !== itemIndexToRemove);
-      const newSubtotal = updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      const newTotal = newSubtotal + selectedOrder.shippingCost;
-      
-      await updateDoc(doc(db, 'ecom_orders', orderId), {
-        items: updatedItems,
-        subtotal: newSubtotal,
-        total: newTotal,
-        updatedAt: new Date().toISOString()
-      });
-      
-      setSelectedOrder(prev => prev ? {
-        ...prev,
-        items: updatedItems,
-        subtotal: newSubtotal,
-        total: newTotal
-      } : null);
-      
-      alert("Item removido e pedido recalculado com sucesso!");
-    } catch (err: any) {
-      console.error("Failed to delete order item:", err);
-      alert(`Falha ao remover item: ${err.message}`);
-    }
-  };
-
-  const handleDeleteOrder = async (orderId: string) => {
-    if (!window.confirm(`ATENÇÃO: Você está prestes a EXCLUIR DEFINITIVAMENTE o pedido ${orderId} do banco de dados!\n\nEsta ação removerá permanentemente os registros da sua loja (útil para apagar seus pedidos de testes). Essa ação não poderá ser desfeita. Deseja prosseguir?`)) return;
-    try {
-      await deleteDoc(doc(db, 'ecom_orders', orderId));
-      if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder(null);
+    setConfirmConfig({
+      title: "Remover Item do Pedido",
+      message: "Deseja realmente remover este item do pedido? O subtotal e o total geral serão recalculados.",
+      onConfirm: async () => {
+        try {
+          const updatedItems = selectedOrder.items.filter((_, idx) => idx !== itemIndexToRemove);
+          const newSubtotal = updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+          const newTotal = newSubtotal + selectedOrder.shippingCost;
+          
+          await updateDoc(doc(db, 'ecom_orders', orderId), {
+            items: updatedItems,
+            subtotal: newSubtotal,
+            total: newTotal,
+            updatedAt: new Date().toISOString()
+          });
+          
+          setSelectedOrder(prev => prev ? {
+            ...prev,
+            items: updatedItems,
+            subtotal: newSubtotal,
+            total: newTotal
+          } : null);
+          
+          alert("Item removido e pedido recalculado com sucesso!");
+        } catch (err: any) {
+          console.error("Failed to delete order item:", err);
+          alert(`Falha ao remover item: ${err.message}`);
+        }
       }
-      alert("Pedido excluído permanentemente com sucesso!");
-    } catch (err: any) {
-      console.error("Failed to delete order:", err);
-      alert(`Falha ao excluir pedido: ${err.message}`);
-    }
+    });
   };
 
-  const handleRefundOrder = async (orderId: string, refundValStr: string, notes: string) => {
+  const handleDeleteOrder = (orderId: string) => {
+    setConfirmConfig({
+      title: "Excluir Pedido Definitivamente",
+      message: `ATENÇÃO: Você está prestes a EXCLUIR DEFINITIVAMENTE o pedido ${orderId} do banco de dados!\n\nEsta ação removerá permanentemente os registros da sua loja (útil para apagar seus pedidos de testes). Essa ação não poderá ser desfeita e os dados de vendas serão removidos.\n\nDeseja prosseguir?`,
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'ecom_orders', orderId));
+          if (selectedOrder && selectedOrder.id === orderId) {
+            setSelectedOrder(null);
+          }
+          alert("Pedido excluído permanentemente com sucesso!");
+        } catch (err: any) {
+          console.error("Failed to delete order:", err);
+          alert(`Falha ao excluir pedido: ${err.message}`);
+        }
+      }
+    });
+  };
+
+  const handleRefundOrder = (orderId: string, refundValStr: string, notes: string) => {
     if (!selectedOrder) return;
     const value = parseFloat(refundValStr);
     if (isNaN(value) || value <= 0) {
@@ -534,37 +564,49 @@ export const AdminStore = () => {
       return;
     }
 
-    if (!window.confirm(`Deseja realmente processar o estorno no valor de R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?\n\nSe o pagamento foi feito via Mercado Pago de forma real, o estorno financeiro de saldo será solicitado diretamente ao gateway.`)) return;
+    const paymentId = selectedOrder.paymentId;
+    const isSimulated = !paymentId || paymentId.startsWith("PAY-SIM-");
 
-    try {
-      const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : 'dev-bypass-token';
-      const res = await fetch('/api/vendas/order/refund', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({
-          orderId,
-          amount: value,
-          notes: notes.trim()
-        })
-      });
+    const warningMessage = isSimulated
+      ? `🚨 ESTE PEDIDO FOI PAGO EM MODO DE SIMULAÇÃO/TESTE (ID: ${paymentId || "ausente"}).\n\nNenhum dinheiro real foi debitado do comprador, logo o estorno será simulado localmente no banco de dados para os seus testes de fluxo de caixa.\n\nDeseja registrar o estorno simulado de R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`
+      : `⚠️ ATENÇÃO: ESTE É UM PEDIDO REAL (ID: ${paymentId}).\n\nAo confirmar, uma solicitação real de estorno financeiro de saldo será enviada diretamente à API do Mercado Pago.\n\nDeseja realmente realizar o estorno de R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`;
 
-      const resData = await res.json();
-      if (!res.ok) {
-        throw new Error(resData.error || "Ocorreu um erro ao comunicar com a API do estorno.");
+    setConfirmConfig({
+      title: isSimulated ? "Estornar Transação Simulada" : "Solicitar Estorno Financeiro Real (Mercado Pago)",
+      message: warningMessage,
+      isDestructive: !isSimulated,
+      onConfirm: async () => {
+        try {
+          const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : 'dev-bypass-token';
+          const res = await fetch('/api/vendas/order/refund', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify({
+              orderId,
+              amount: value,
+              notes: notes.trim()
+            })
+          });
+
+          const resData = await res.json();
+          if (!res.ok) {
+            throw new Error(resData.error || "Ocorreu um erro ao comunicar com a API do estorno.");
+          }
+
+          if (resData.order) {
+            setSelectedOrder(resData.order);
+          }
+
+          alert(resData.message || `Estorno de R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} registrado com sucesso!`);
+        } catch (err: any) {
+          console.error("Failed to refund order:", err);
+          alert(`Falha ao registrar estorno: ${err.message}`);
+        }
       }
-
-      if (resData.order) {
-        setSelectedOrder(resData.order);
-      }
-
-      alert(resData.message || `Estorno de R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} registrado com sucesso!`);
-    } catch (err: any) {
-      console.error("Failed to refund order:", err);
-      alert(`Falha ao registrar estorno: ${err.message}`);
-    }
+    });
   };
 
   return (
@@ -1863,6 +1905,48 @@ export const AdminStore = () => {
                     </form>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Inter-app Confirmation Overlay (Bypasses parent iframe block constraints) */}
+      <AnimatePresence>
+        {confirmConfig && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-fade-in">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setConfirmConfig(null)} />
+            <div className="bg-white rounded-2xl w-full max-w-md p-6 relative shadow-2xl z-10 text-xs font-sans space-y-4 border border-gray-100 text-left">
+              <h4 className="text-sm font-bold font-serif text-brand-ink text-left pb-2.5 flex items-center gap-2 border-b border-gray-100">
+                <AlertCircle className={`w-5 h-5 shrink-0 ${confirmConfig.isDestructive ? 'text-red-500' : 'text-brand-wood'}`} />
+                <span>{confirmConfig.title}</span>
+              </h4>
+              <p className="text-gray-600 text-xs leading-relaxed whitespace-pre-line text-left">
+                {confirmConfig.message}
+              </p>
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmConfig(null)}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4.5 py-2.5 rounded-xl text-[10px] cursor-pointer transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const action = confirmConfig.onConfirm;
+                    setConfirmConfig(null);
+                    await action();
+                  }}
+                  className={`font-bold px-4.5 py-2.5 rounded-xl text-[10px] text-white cursor-pointer transition-all ${
+                    confirmConfig.isDestructive 
+                      ? 'bg-red-500 hover:bg-red-600' 
+                      : 'bg-brand-wood hover:bg-brand-clay'
+                  }`}
+                >
+                  Confirmar Ação
+                </button>
               </div>
             </div>
           </div>

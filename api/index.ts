@@ -2333,9 +2333,16 @@ app.post("/api/vendas/order/refund", checkAdminAuth, async (req, res) => {
     const mpToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
     const paymentId = orderData.paymentId;
     let gatewayRefunded = false;
+    let isMockOrSimulated = !paymentId || paymentId.startsWith("PAY-SIM-");
 
-    // If we have a real Mercado Pago Access Token configured and a real paymentId (not starting with our mock prefix PAY-SIM-), we perform the HTTP call
-    if (mpToken && paymentId && !paymentId.startsWith("PAY-SIM-")) {
+    // If we have a real paymentId (not starting with our mock prefix PAY-SIM-), we perform the real HTTP call
+    if (!isMockOrSimulated) {
+      if (!mpToken || mpToken.startsWith("MOCK") || mpToken.includes("MOCK_MELHORENVIO_TOKEN_FOR_SECURITY")) {
+        return res.status(400).json({ 
+          error: `Este é um pedido real (ID do pagamento: ${paymentId}), mas a credencial de produção MERCADOPAGO_ACCESS_TOKEN não está configurada ou é fictícia nos Secrets do servidor. O estorno financeiro real não pôde ser solicitado do Mercado Pago.` 
+        });
+      }
+
       console.log(`[Mercado Pago Refund] Efetuando estorno real no gateway Mercado Pago para o pagamento id: ${paymentId}, valor: R$ ${amount}`);
       try {
         const mpRefundUrl = `https://api.mercadopago.com/v1/payments/${paymentId}/refunds`;
@@ -2367,11 +2374,11 @@ app.post("/api/vendas/order/refund", checkAdminAuth, async (req, res) => {
       } catch (mpErr: any) {
         console.error("[Mercado Pago Refund Exception]", mpErr);
         return res.status(500).json({ 
-          error: `O estorno financeiro real no Mercado Pago falhou. Nenhuma alteração foi efetuada na sua conta ou no banco de dados. Motivo: ${mpErr.message || mpErr}` 
+          error: `O estorno financeiro real no Mercado Pago falhou. Nenhuma alteração foi efetuada no banco de dados. Motivo: ${mpErr.message || mpErr}` 
         });
       }
     } else {
-      console.log(`[E-Commerce Refund] Estorno simulado local ativado (Ambiente de testes: sem token real de produção ou id de pagamento fictício).`);
+      console.log(`[E-Commerce Refund] Estorno simulado local ativado (Ambiente de testes: id de pagamento fictício '${paymentId || "ausente"}').`);
     }
 
     // Update database values
@@ -2394,11 +2401,18 @@ app.post("/api/vendas/order/refund", checkAdminAuth, async (req, res) => {
     const finalSnap = await orderRef.get();
     const finalOrder = { id: orderId, ...finalSnap.data() };
 
+    let successMsg = "Estorno financeiro realizado e creditado com sucesso no Mercado Pago!";
+    if (isMockOrSimulated) {
+      if (!paymentId) {
+        successMsg = "Este pedido não possui identificação de pagamento ativa (ainda não foi pago ou ID ausente). O status foi alterado para 'Cancelado' e registrado localmente sem qualquer movimentação bancária.";
+      } else {
+        successMsg = `⚠️ ATENÇÃO: Esse pedido foi pago em MODO DE SIMULAÇÃO (TESTE) com o identificador fictício '${paymentId}'. Nenhum valor de verdade foi cobrado do comprador, portanto nenhum dinheiro real saiu da sua conta bancária. O status foi alterado no banco de dados local da loja apenas para simulações de testes de fluxo de caixa.`;
+      }
+    }
+
     return res.json({
       success: true,
-      message: gatewayRefunded 
-        ? "Estorno financeiro realizado e creditado com sucesso no Mercado Pago!" 
-        : "Estorno simulado local gravado com sucesso no banco de dados!",
+      message: successMsg,
       order: finalOrder,
       gatewayRefunded
     });
