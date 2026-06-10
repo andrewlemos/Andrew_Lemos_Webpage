@@ -2345,12 +2345,14 @@ app.post("/api/vendas/order/refund", checkAdminAuth, async (req, res) => {
 
       console.log(`[Mercado Pago Refund] Efetuando estorno real no gateway Mercado Pago para o pagamento id: ${paymentId}, valor: R$ ${amount}`);
       try {
+        const refundIdempotencyKey = `ref-${orderId}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`.toLowerCase();
         const mpRefundUrl = `https://api.mercadopago.com/v1/payments/${paymentId}/refunds`;
         const mpResponse = await fetch(mpRefundUrl, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${mpToken}`,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "X-Idempotency-Key": refundIdempotencyKey
           },
           body: JSON.stringify({
             amount: Number(amount.toFixed(2))
