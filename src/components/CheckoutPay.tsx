@@ -88,6 +88,31 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
   const [processing, setProcessing] = useState(false);
   const [cardData, setCardData] = useState({ number: '', name: '', expiry: '', cvv: '', installments: '1' });
   const [errorMsg, setErrorMsg] = useState('');
+  const [mpConfig, setMpConfig] = useState<{ publicKey: string; isTokenSet: boolean; isMockMode: boolean }>({
+    publicKey: "APP_USR-d216741e-5bf3-4877-85d6-87c653f1cdb0",
+    isTokenSet: false,
+    isMockMode: true
+  });
+
+  // Carrega configurações dinâmicas do Mercado Pago
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch("/api/vendas/checkout/config");
+        if (res.ok) {
+          const data = await res.json();
+          setMpConfig({
+            publicKey: data.publicKey || "APP_USR-d216741e-5bf3-4877-85d6-87c653f1cdb0",
+            isTokenSet: !!data.isTokenSet,
+            isMockMode: !!data.isMockMode
+          });
+        }
+      } catch (err) {
+        console.warn("[CheckoutPay] Falha ao carregar configuração do Mercado Pago:", err);
+      }
+    };
+    fetchConfig();
+  }, []);
 
   // Sincroniza em tempo real com o Firestore para carregar o pedido gerado pela rota
   useEffect(() => {
@@ -190,20 +215,7 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
 
           console.log(`[Mercado Pago] Tokenizando cartão de início '${cleanNumber.substring(0, 6)}' com bandeira ${cardPaymentMethodId}...`);
           
-          let mpPublicKey = "APP_USR-d216741e-5bf3-4877-85d6-87c653f1cdb0";
-          try {
-            const configRes = await fetch("/api/vendas/checkout/config");
-            if (configRes.ok) {
-              const configData = await configRes.json();
-              if (configData.publicKey) {
-                mpPublicKey = configData.publicKey;
-              }
-            }
-          } catch (configErr) {
-            console.warn("[CheckoutPay] Falha ao carregar chave pública dinâmica do Mercado Pago. Usando fallback.", configErr);
-          }
-
-          const tokenRes = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${mpPublicKey}`, {
+          const tokenRes = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${mpConfig.publicKey}`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json"
@@ -317,21 +329,21 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
       )}
 
       {/* DIAGNOSTIC WARNING BANNER FOR CLIENT */}
-      {order.gateway?.includes("Virtual") && (
+      {mpConfig.isMockMode && (
         <div className="max-w-4xl mx-auto mb-6 bg-amber-50 border-2 border-amber-200 text-amber-900 rounded-3xl p-5 shadow-xs space-y-3">
           <div className="flex gap-3 items-start">
-            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5 animate-pulse" />
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
               <h4 className="font-serif font-bold text-sm text-amber-800">Carrinho em Modo Teste / Simulação de Checkout Transparente</h4>
               <p className="text-xs leading-relaxed text-amber-700">
-                Você está visualizando a tela de finalização de pagamento em modo simulado porque a variável de ambiente <strong>MERCADOPAGO_ACCESS_TOKEN</strong> não está cadastrada no servidor.
+                Você está visualizando a tela de finalização de pagamento em modo simulado porque a credencial de produção <strong>MERCADOPAGO_ACCESS_TOKEN</strong> não foi cadastrada no servidor ou é uma chave fictícia.
               </p>
               <div className="text-[11px] font-medium text-amber-800 pt-2 border-t border-amber-200/50 mt-2">
                 <strong>💡 Como ativar o Mercado Pago REAL na sua loja:</strong>
                 <ol className="list-decimal pl-4 mt-1 space-y-1">
                   <li>No painel do AI Studio (Settings &gt; Secrets), adicione a chave: <strong>MERCADOPAGO_ACCESS_TOKEN</strong></li>
                   <li>Insira como valor seu Access Token de Produção (Ex: <code className="bg-amber-200/50 px-1 rounded font-mono text-[10px]">APP_USR-...</code>).</li>
-                  <li>Lembre-se de salvar para que o servidor de banco de dados realize transações reais diretamente com as chaves Pix e Cartão oficiais de forma transparente!</li>
+                  <li>Lembre-se de salvar de modo que o servidor realize transações reais diretamente com as chaves oficiais!</li>
                 </ol>
               </div>
             </div>
@@ -350,7 +362,14 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="font-serif font-bold text-lg text-brand-ink leading-tight">Checkout Seguro</h2>
+                  <h2 className="font-serif font-bold text-lg text-brand-ink leading-tight flex items-center gap-2">
+                    <span>Checkout Seguro</span>
+                    {mpConfig.isMockMode ? (
+                      <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-sans">Simulado</span>
+                    ) : (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-sans">Produção Real</span>
+                    )}
+                  </h2>
                   <p className="text-[10px] uppercase text-gray-400 tracking-wider font-bold">Mercado Pago Oficial Transparente</p>
                 </div>
               </div>

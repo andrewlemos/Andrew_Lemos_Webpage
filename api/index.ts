@@ -854,8 +854,24 @@ app.post("/api/vendas/checkout", async (req, res) => {
 
 // Endpoint to retrieve public key and other config safely
 app.get("/api/vendas/checkout/config", (req, res) => {
+  const mpToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  const mpPublicKey = process.env.MERCADOPAGO_PUBLIC_KEY;
+
+  const isTokenSet = !!mpToken;
+  const isMockMode = !mpToken || mpToken.includes("MOCK_") || mpToken.startsWith("eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.MOCK_");
+
+  console.log("[Mercado Pago Config Diagnostics]", {
+    hasAccessToken: isTokenSet,
+    accessTokenPrefix: mpToken ? mpToken.substring(0, 15) + "..." : null,
+    hasPublicKey: !!mpPublicKey,
+    publicKeyPrefix: mpPublicKey ? mpPublicKey.substring(0, 15) + "..." : null,
+    isMockMode
+  });
+
   return res.json({
-    publicKey: process.env.MERCADOPAGO_PUBLIC_KEY || "APP_USR-d216741e-5bf3-4877-85d6-87c653f1cdb0"
+    publicKey: mpPublicKey || "APP_USR-d216741e-5bf3-4877-85d6-87c653f1cdb0",
+    isTokenSet,
+    isMockMode
   });
 });
 
