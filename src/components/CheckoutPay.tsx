@@ -147,40 +147,128 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Triggers mock webhook callback payment processing
-  const executeSimulatedPayment = async (methodName: string) => {
+  // Triggers transparent e-commerce payment creation
+  const handleTransparentPayment = async (methodName: 'pix' | 'boleto' | 'card') => {
     if (!order) return;
     setProcessing(true);
     setErrorMsg('');
 
     try {
-      const paymentId = `PAY-SIM-${methodName.toUpperCase()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      let cardToken = '';
+      let cardPaymentMethodId = '';
 
-      const response = await fetch('/api/vendas/webhook-mercadopago', {
+      if (methodName === 'card') {
+        const isMockOption = order.gateway?.includes("Virtual") || !order.gateway;
+        if (!isMockOption) {
+          // Tokenize the card with Mercado Pago Public API
+          const cleanNumber = cardData.number.replace(/\s/g, "");
+          const cleanCvv = cardData.cvv ? cardData.cvv.trim() : "";
+          const parts = cardData.expiry.split("/");
+          if (parts.length !== 2 || cleanNumber.length < 15 || cleanCvv.length < 3) {
+            setErrorMsg("Por favor, preencha as informações do cartão corretamente (Número, Validade e CVV).");
+            setProcessing(false);
+            return;
+          }
+
+          const expMonth = Number(parts[0]);
+          const expYear = Number("20" + parts[1]);
+
+          // Simple local detection for paymentMethodId
+          if (cleanNumber.startsWith('4')) {
+            cardPaymentMethodId = 'visa';
+          } else if (/^(5[1-5]|2[2-7])/.test(cleanNumber)) {
+            cardPaymentMethodId = 'master';
+          } else if (/^(34|37)/.test(cleanNumber)) {
+            cardPaymentMethodId = 'amex';
+          } else if (/^(6011|622|64|65)/.test(cleanNumber)) {
+            cardPaymentMethodId = 'discover';
+          } else if (/^(30[0-5]|[368])/.test(cleanNumber)) {
+            cardPaymentMethodId = 'diners';
+          } else {
+            cardPaymentMethodId = 'visa'; // fallback
+          }
+
+          console.log(`[Mercado Pago] Tokenizando cartão de início '${cleanNumber.substring(0, 6)}' com bandeira ${cardPaymentMethodId}...`);
+          
+          let mpPublicKey = "APP_USR-d216741e-5bf3-4877-85d6-87c653f1cdb0";
+          try {
+            const configRes = await fetch("/api/vendas/checkout/config");
+            if (configRes.ok) {
+              const configData = await configRes.json();
+              if (configData.publicKey) {
+                mpPublicKey = configData.publicKey;
+              }
+            }
+          } catch (configErr) {
+            console.warn("[CheckoutPay] Falha ao carregar chave pública dinâmica do Mercado Pago. Usando fallback.", configErr);
+          }
+
+          const tokenRes = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${mpPublicKey}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              card_number: cleanNumber,
+              security_code: cleanCvv,
+              expiration_month: expMonth,
+              expiration_year: expYear,
+              cardholder: {
+                name: cardData.name,
+                identification: {
+                  type: "CPF",
+                  number: order.customerInfo.cpf ? order.customerInfo.cpf.replace(/\D/g, "") : ""
+                }
+              }
+            })
+          });
+
+          const tokenData = await tokenRes.json();
+          if (!tokenRes.ok) {
+            console.error("[Mercado Pago Tokenize Fail]", tokenData);
+            let errMsg = "Falha ao validar os dados do seu cartão no Mercado Pago.";
+            if (tokenData.message) errMsg = tokenData.message;
+            if (tokenData.cause && Array.isArray(tokenData.cause) && tokenData.cause.length > 0) {
+              errMsg = tokenData.cause.map((c: any) => `${c.code}: ${c.description}`).join(" | ");
+            }
+            throw new Error(errMsg);
+          }
+
+          cardToken = tokenData.id;
+          console.log(`[Mercado Pago] Token gerado com sucesso: ${cardToken}`);
+        }
+      }
+
+      const response = await fetch('/api/vendas/checkout/transparent-pay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderId: order.id || orderId,
-          status: 'Pago',
-          paymentId: paymentId
+          orderId: order.id,
+          paymentMethodType: methodName,
+          cardToken,
+          cardPaymentMethodId,
+          installments: cardData.installments
         })
       });
 
       if (response.ok) {
         const resData = await response.json();
         if (resData.success) {
-          // Webhook processed stock extraction and status adjustment successfully! 
-          // Our realtime Firestore snap will witness state transition and redirect to the confirmation screen
+          if (methodName === 'card' && resData.status === 'approved') {
+            // Instantly route to success if approved
+            onNavigateToView('checkout-confirm', order.id);
+          }
         } else {
-          alert(`Erro no gateway: ${resData.error}`);
-          setProcessing(false);
+          setErrorMsg(resData.error || "Erro ao processar o pagamento.");
         }
       } else {
-        throw new Error('Falha HTTP ao registrar o webhook simulador do PagSeguro.');
+        const errorDetail = await response.json().catch(() => ({ error: "Erro de comunicação corporativa." }));
+        setErrorMsg(errorDetail.error || "O Mercado Pago recusou esta forma de pagamento. Verifique o limite e os dados digitados.");
       }
     } catch (err: any) {
-      console.error("Payment simulator webhook failed:", err);
-      setErrorMsg('Houve um erro processando o pagamento simulado. Tente novamente.');
+      console.error("Transparent checkout exception details:", err);
+      setErrorMsg(err.message || 'Erro durante a comunicação segura com o Mercado Pago. Tente novamente.');
+    } finally {
       setProcessing(false);
     }
   };
@@ -196,7 +284,7 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
     );
   }
 
-  if (errorMsg || !order) {
+  if (errorMsg && !order) {
     return (
       <div className="min-h-screen bg-brand-paper flex items-center justify-center p-6">
         <div className="bg-white p-8 rounded-3xl border shadow-xl max-w-md text-center space-y-4">
@@ -215,107 +303,16 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
   }
 
   const { customerInfo, items, subtotal, shippingCost, total } = order;
-  const generatedPixString = generatePixCode(total, "andrewfmlemos@gmail.com", "Andrew Lemos", "Rio de Janeiro");
-
-  if (order.paymentUrl) {
-    return (
-      <div className="bg-brand-paper min-h-screen py-12 px-6 font-sans">
-        <div className="max-w-xl mx-auto space-y-6">
-          <div className="bg-white p-8 rounded-3xl border border-brand-wood/5 shadow-md space-y-6 text-center">
-            
-            <div className="bg-emerald-50 text-emerald-600 p-4 rounded-full border border-emerald-100 w-16 h-16 flex items-center justify-center mx-auto">
-              <ShieldCheck className="w-8 h-8" />
-            </div>
-
-            <div className="space-y-2">
-              <h2 className="font-serif font-bold text-2xl text-brand-ink">Seu pedido foi registrado!</h2>
-              <p className="text-gray-400 text-xs uppercase tracking-widest font-bold">Checkout Integrado com Mercado Pago</p>
-            </div>
-
-            <div className="bg-gray-50 p-5 rounded-2xl border text-left space-y-2.5">
-              <div className="flex justify-between items-center text-xs text-gray-500 pb-2 border-b">
-                <span>Código do Pedido:</span>
-                <span className="font-mono font-bold text-brand-wood">{order.id}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs text-gray-500 pb-2 border-b">
-                <span>Destinatário:</span>
-                <span className="font-bold">{customerInfo.name}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs text-gray-500 pb-2 border-b">
-                <span>Frete Selecionado (Melhor Envio):</span>
-                <span className="font-bold">{order.shippingMethod}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs pt-1">
-                <span className="font-bold text-gray-700">Valor Total Seguro:</span>
-                <span className="text-base font-bold text-brand-clay font-mono">
-                  R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-4 pt-2">
-              <p className="text-slate-500 text-xs leading-relaxed">
-                Clique no botão oficial do Mercado Pago abaixo para concluir o pagamento. Você poderá pagar por <strong>Pix (com aprovação instantânea)</strong>, Cartão de Crédito ou Boleto diretamente na plataforma oficial.
-              </p>
-
-              <a 
-                href={order.paymentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 px-6 rounded-full font-bold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2.5 shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer"
-              >
-                <QrCode className="w-5 h-5 flex-shrink-0" />
-                <span>Pagar R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} com Mercado Pago</span>
-                <ArrowRight className="w-4 h-4 text-white" />
-              </a>
-
-              <div className="flex items-center justify-center gap-2 text-xs text-gray-400 mt-4">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Aguardando a confirmação do pagamento...</span>
-              </div>
-            </div>
-
-            <div className="text-[10px] text-gray-400 pt-4 border-t border-gray-100 flex items-center justify-center gap-1.5 leading-none font-medium">
-              <span>Transação 100% criptografada e segura</span>
-            </div>
-
-          </div>
-
-          <button 
-            onClick={() => onNavigateToView('vendas')}
-            className="w-full text-center text-gray-400 hover:text-gray-600 transition-colors text-xs font-semibold py-2 cursor-pointer"
-          >
-            ← Voltar para a loja e continuar comprando
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const generatedPixString = order.transparentPixCode || generatePixCode(total, "andrewlemos@outlook.com.br", "Andrew Lemos", "Rio de Janeiro");
 
   return (
     <div className="bg-brand-paper min-h-screen py-12 px-6 font-sans">
       
-      {/* REAL PAYMENT CORRECTION REDIRECT */}
-      {order.paymentUrl && (
-        <div className="max-w-4xl mx-auto mb-6 bg-emerald-50 border-2 border-emerald-300 text-emerald-900 rounded-2xl p-5 shadow-sm space-y-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex gap-3 items-start">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-            <div className="space-y-0.5">
-              <h4 className="font-serif font-bold text-sm text-emerald-800">Link de Pagamento Oficial Ativo</h4>
-              <p className="text-xs text-emerald-700">
-                Uma preferência real do Mercado Pago foi registrada com sucesso para esta compra.
-              </p>
-            </div>
-          </div>
-          <a 
-            href={order.paymentUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-3 rounded-xl transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 shadow-sm hover:shadow hover:scale-[1.01] active:scale-[0.99]"
-          >
-            <span>Ir para o Mercado Pago Oficial</span>
-            <ArrowRight className="w-4 h-4" />
-          </a>
+      {/* ERROR MESSAGE NOTIFICATION */}
+      {errorMsg && (
+        <div className="max-w-4xl mx-auto mb-6 bg-rose-50 border border-rose-200 text-rose-900 rounded-2xl p-4 shadow-sm flex gap-3 items-center">
+          <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+          <p className="text-xs font-bold">{errorMsg}</p>
         </div>
       )}
 
@@ -325,22 +322,16 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
           <div className="flex gap-3 items-start">
             <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5 animate-pulse" />
             <div className="space-y-1">
-              <h4 className="font-serif font-bold text-sm text-amber-800">Carrinho em Modo Teste / Simulação Virtual de Pagamento</h4>
+              <h4 className="font-serif font-bold text-sm text-amber-800">Carrinho em Modo Teste / Simulação de Checkout Transparente</h4>
               <p className="text-xs leading-relaxed text-amber-700">
-                Você foi redirecionado para esta tela de sandbox local porque a integração real do <strong>Mercado Pago</strong> não está ativada.
+                Você está visualizando a tela de finalização de pagamento em modo simulado porque a variável de ambiente <strong>MERCADOPAGO_ACCESS_TOKEN</strong> não está cadastrada no servidor.
               </p>
-              {order.gatewayError && (
-                <div className="bg-amber-100/50 p-3 rounded-2xl text-[10px] font-mono text-amber-800 mt-2 border border-amber-200/50">
-                  <strong>Mensagem Diagnóstica Técnica:</strong> {order.gatewayError}
-                </div>
-              )}
               <div className="text-[11px] font-medium text-amber-800 pt-2 border-t border-amber-200/50 mt-2">
-                <strong>💡 Como configurar e ativar pagamento REAL na sua loja:</strong>
+                <strong>💡 Como ativar o Mercado Pago REAL na sua loja:</strong>
                 <ol className="list-decimal pl-4 mt-1 space-y-1">
-                  <li>No painel da Vercel (ou do servidor onde fez o deploy), vá em <strong>Settings &gt; Environment Variables</strong>.</li>
-                  <li>Adicione a variável de ambiente: <strong>MERCADOPAGO_ACCESS_TOKEN</strong></li>
-                  <li>Preencha o valor com o seu Access Token de Produção obtido no painel de desenvolvedores do Mercado Pago (normalmente começa com <code className="bg-amber-200/50 px-1 rounded font-mono text-[10px]">APP_USR-...</code>).</li>
-                  <li>Importante: <strong>Refaça o Deployment</strong> do seu projeto para que o servidor carregue a nova variável de ambiente.</li>
+                  <li>No painel do AI Studio (Settings &gt; Secrets), adicione a chave: <strong>MERCADOPAGO_ACCESS_TOKEN</strong></li>
+                  <li>Insira como valor seu Access Token de Produção (Ex: <code className="bg-amber-200/50 px-1 rounded font-mono text-[10px]">APP_USR-...</code>).</li>
+                  <li>Lembre-se de salvar para que o servidor de banco de dados realize transações reais diretamente com as chaves Pix e Cartão oficiais de forma transparente!</li>
                 </ol>
               </div>
             </div>
@@ -360,7 +351,7 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
                 </div>
                 <div>
                   <h2 className="font-serif font-bold text-lg text-brand-ink leading-tight">Checkout Seguro</h2>
-                  <p className="text-[10px] uppercase text-gray-400 tracking-wider font-bold">Gateway Mercado Pago Integrado</p>
+                  <p className="text-[10px] uppercase text-gray-400 tracking-wider font-bold">Mercado Pago Oficial Transparente</p>
                 </div>
               </div>
               <div className="text-right">
@@ -413,35 +404,16 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
               
               {/* PIX VIEW */}
               {activeTab === 'pix' && (
-                order.paymentUrl ? (
+                order.transparentPixCode ? (
                   <div className="space-y-5 text-center flex flex-col items-center">
                     <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug w-full text-left">
                       <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
-                      <span>Você selecionou o pagamento via <strong>PIX</strong> no Mercado Pago.</span>
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed px-2">
-                      Pague via PIX integrado do Mercado Pago e tenha aprovação imediata para liberação agilizada do estoque da sua obra. Clique no botão abaixo para abrir o checkout seguro.
-                    </p>
-                    <a 
-                      href={order.paymentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-full font-bold text-sm hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
-                    >
-                      <QrCode className="w-5 h-5" />
-                      <span>Ir pagar PIX Oficial no Mercado Pago</span>
-                    </a>
-                  </div>
-                ) : (
-                  <div className="space-y-5 text-center flex flex-col items-center">
-                    <div className="flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug w-full text-left font-sans">
-                      <Clock className="w-4 h-4 flex-shrink-0 animate-pulse" />
-                      <span>Modo Simulação: Código de Pix de teste gerado nos padrões oficiais do Banco Central (EMV).</span>
+                      <span>Seu código Pix seguro já foi gerado na sua conta corporativa do Mercado Pago!</span>
                     </div>
 
-                    <div className="p-3 bg-white border border-brand-wood/10 rounded-2xl flex items-center justify-center w-40 h-40 shadow-inner relative overflow-hidden">
+                    <div className="p-3 bg-white border border-brand-wood/10 rounded-2xl flex items-center justify-center w-48 h-48 shadow-md relative overflow-hidden">
                       <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(generatedPixString)}`}
+                        src={order.transparentPixQrCodeBase64 || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(order.transparentPixCode)}`}
                         alt="QR Code Pix"
                         className="w-full h-full object-contain"
                         referrerPolicy="no-referrer"
@@ -449,16 +421,16 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
                     </div>
 
                     <div className="space-y-3 w-full text-left">
-                      <p className="text-xs text-gray-400 text-center">Escaneie o QR Code acima ou copie a linha de transferência abaixo:</p>
+                      <p className="text-xs text-gray-400 text-center">Escaneie o QR Code acima usando seu aplicativo bancário ou copie a chave de pagamento abaixo:</p>
                       <div className="flex gap-2">
                         <input 
                           type="text" 
                           readOnly 
-                          value={generatedPixString}
-                          className="bg-[#FAFAFA] border border-gray-100 font-mono text-[10px] flex-grow text-gray-500 px-3 py-2.5 rounded-xl outline-none select-all"
+                          value={order.transparentPixCode}
+                          className="bg-[#FAFAFA] border border-gray-150 font-mono text-[10px] flex-grow text-gray-500 px-3 py-2.5 rounded-xl outline-none select-all"
                         />
                         <button 
-                          onClick={() => handleCopyToClipboard(generatedPixString)}
+                          onClick={() => handleCopyToClipboard(order.transparentPixCode || "")}
                           className="bg-brand-wood text-white px-4 rounded-xl text-xs font-semibold hover:bg-brand-clay hover:scale-[1.03] transition-all flex items-center gap-1.5 shrink-0"
                         >
                           <Copy className="w-3.5 h-3.5" />
@@ -467,20 +439,30 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
                       </div>
                     </div>
 
+                    <div className="flex items-center justify-center gap-2 text-xs text-brand-clay font-semibold py-2.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Aguardando a confirmação do Pix em tempo real...</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-5 text-center flex flex-col items-center py-4">
+                    <p className="text-xs text-gray-500 leading-relaxed px-4">
+                      Selecione Pix e tenha a aprovação instantânea da sua obra de arte. O Mercado Pago processa e garante a liberação imediata do produto no nosso estoque.
+                    </p>
                     <button 
                       disabled={processing}
-                      onClick={() => executeSimulatedPayment('pix')}
-                      className="w-full bg-emerald-600 text-white py-4 rounded-full font-bold text-sm hover:bg-emerald-700 hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      onClick={() => handleTransparentPayment('pix')}
+                      className="w-full bg-emerald-600 text-white py-4 rounded-full font-bold text-sm hover:bg-emerald-700 hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95"
                     >
                       {processing ? (
-                        <span className="flex items-center gap-2">
+                        <>
                           <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                          Verificando Transferência...
-                        </span>
+                          <span>Comunicando com Mercado Pago...</span>
+                        </>
                       ) : (
                         <>
-                          <CheckCircle2 className="w-5 h-5" />
-                          <span>Confirmar Pagamento Simulado</span>
+                          <QrCode className="w-5 h-5" />
+                          <span>Gerar Código PIX Oficial</span>
                         </>
                       )}
                     </button>
@@ -490,173 +472,143 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
 
               {/* CARD PREVIEW FORM */}
               {activeTab === 'card' && (
-                order.paymentUrl ? (
-                  <div className="space-y-5 text-center flex flex-col items-center">
-                    <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug w-full text-left">
-                      <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
-                      <span>Você selecionou o pagamento via <strong>Cartão de Crédito</strong> no Mercado Pago.</span>
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed px-2">
-                      Pague parcelado em até 3x sem juros no seu cartão com total segurança no ambiente integrado do Mercado Pago. Clique no botão abaixo para preencher os seus dados de pagamento.
-                    </p>
-                    <a 
-                      href={order.paymentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-full font-bold text-sm hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
-                    >
-                      <CreditCard className="w-5 h-5" />
-                      <span>Pagar com Cartão Oficial no Mercado Pago</span>
-                    </a>
+                <form onSubmit={(e) => { e.preventDefault(); handleTransparentPayment('card'); }} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Número do Cartão *</label>
+                    <input 
+                      type="text" 
+                      placeholder="0000 0000 0000 0000" 
+                      required
+                      value={cardData.number}
+                      onChange={e => setCardData({...cardData, number: e.target.value.replace(/\D/g, "").replace(/(\d{4})/g, "$1 ").trim()})}
+                      className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-mono tracking-wider font-semibold"
+                    />
                   </div>
-                ) : (
-                  <form onSubmit={(e) => { e.preventDefault(); executeSimulatedPayment('card'); }} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Nome do Titular *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Como impresso no cartão" 
+                      required
+                      value={cardData.name}
+                      onChange={e => setCardData({...cardData, name: e.target.value.toUpperCase()})}
+                      className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-semibold"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Número do Cartão *</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Validade *</label>
                       <input 
                         type="text" 
-                        placeholder="0000 0000 0000 0000" 
+                        placeholder="MM/AA" 
                         required
-                        value={cardData.number}
-                        onChange={e => setCardData({...cardData, number: e.target.value.replace(/\D/g, "").replace(/(\d{4})/g, "$1 ").trim()})}
-                        className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-mono tracking-wider font-semibold"
+                        maxLength={5}
+                        value={cardData.expiry}
+                        onChange={e => setCardData({...cardData, expiry: e.target.value.replace(/\D/g, "").replace(/^(\d{2})/, "$1/")})}
+                        className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-mono text-center font-bold"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Nome do Titular *</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Cód. Segurança (CVV) *</label>
                       <input 
-                        type="text" 
-                        placeholder="Como impresso no cartão" 
+                        type="password" 
+                        placeholder="123" 
                         required
-                        value={cardData.name}
-                        onChange={e => setCardData({...cardData, name: e.target.value.toUpperCase()})}
-                        className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-semibold"
+                        maxLength={4}
+                        value={cardData.cvv}
+                        onChange={e => setCardData({...cardData, cvv: e.target.value.replace(/\D/g, "")})}
+                        className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-mono text-center font-bold"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Validade *</label>
-                        <input 
-                          type="text" 
-                          placeholder="MM/AA" 
-                          required
-                          maxLength={5}
-                          value={cardData.expiry}
-                          onChange={e => setCardData({...cardData, expiry: e.target.value.replace(/\D/g, "").replace(/^(\d{2})/, "$1/")})}
-                          className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-mono text-center font-bold"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Cód. SegurançaCVV *</label>
-                        <input 
-                          type="password" 
-                          placeholder="123" 
-                          required
-                          maxLength={4}
-                          value={cardData.cvv}
-                          onChange={e => setCardData({...cardData, cvv: e.target.value.replace(/\D/g, "")})}
-                          className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-mono text-center font-bold"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Parcelas</label>
-                      <select 
-                        value={cardData.installments} 
-                        onChange={e => setCardData({...cardData, installments: e.target.value})}
-                        className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-bold"
-                      >
-                        <option value="1">1x de R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Sem Juros</option>
-                        <option value="2">2x de R$ {(total / 2).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Sem Juros</option>
-                        <option value="3">3x de R$ {(total / 3).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Sem Juros</option>
-                      </select>
-                    </div>
-
-                    <button 
-                      type="submit" 
-                      disabled={processing}
-                      className="w-full bg-brand-wood text-white py-4 rounded-full font-bold text-sm hover:bg-brand-clay hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer mt-4"
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Parcelas</label>
+                    <select 
+                      value={cardData.installments} 
+                      onChange={e => setCardData({...cardData, installments: e.target.value})}
+                      className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl px-4 py-3 text-xs outline-none focus:ring-1 focus:ring-brand-wood font-bold"
                     >
-                      {processing ? (
-                        <span className="flex items-center gap-2">
-                          <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                          Processando Aprovação de Crédito...
-                        </span>
-                      ) : (
-                        <>
-                          <CreditCard className="w-5 h-5" />
-                          <span>Confirmar Pagamento Simulado</span>
-                        </>
-                      )}
-                    </button>
-                  </form>
-                )
+                      <option value="1">1x de R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Sem Juros</option>
+                      <option value="2">2x de R$ {(total / 2).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Sem Juros</option>
+                      <option value="3">3x de R$ {(total / 3).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Sem Juros</option>
+                    </select>
+                  </div>
+
+                  <button 
+                    type="submit" 
+                    disabled={processing}
+                    className="w-full bg-brand-wood hover:bg-brand-clay text-white py-4 rounded-full font-bold text-sm disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer mt-4"
+                  >
+                    {processing ? (
+                      <span className="flex items-center gap-2">
+                        <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                        Autorizando no Mercado Pago...
+                      </span>
+                    ) : (
+                      <>
+                        <CreditCard className="w-5 h-5" />
+                        <span>Concluir Pagamento com Cartão</span>
+                      </>
+                    )}
+                  </button>
+                </form>
               )}
 
               {/* BOLETO STRINGS */}
               {activeTab === 'boleto' && (
-                order.paymentUrl ? (
+                order.transparentBoletoBarcode ? (
                   <div className="space-y-5 text-center flex flex-col items-center">
                     <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug w-full text-left">
                       <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
-                      <span>Você selecionou o pagamento via <strong>Boleto Bancário</strong> no Mercado Pago.</span>
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed px-2">
-                      Gere o boleto bancário oficial do seu pedido de forma segura. A compensação do boleto pode levar de 1 a 2 dias úteis para atualização no estoque.
-                    </p>
-                    <a 
-                      href={order.paymentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-full font-bold text-sm hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
-                    >
-                      <Barcode className="w-5 h-5" />
-                      <span>Gerar Boleto Oficial no Mercado Pago</span>
-                    </a>
-                  </div>
-                ) : (
-                  <div className="space-y-4 text-center">
-                    <div className="flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug text-left">
-                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                      <span>Boletos levam de 1 a 2 dias úteis para compensação bancária e confirmação de estoque automática.</span>
+                      <span>Boleto Bancário emitido com sucesso na plataforma Mercado Pago!</span>
                     </div>
 
-                    <div className="p-4 bg-gray-50 border border-gray-150 rounded-2xl flex flex-col gap-2 shadow-inner font-mono text-xs text-gray-600 text-left">
-                      <span className="text-[10px] font-bold text-brand-wood uppercase tracking-wider">Código de Barras Boleto</span>
-                      <span>34191.79001 01043.513184 91020.150008 7 934500000{Math.round(total)}</span>
+                    <div className="p-4 bg-gray-50 border border-gray-150 rounded-2xl flex flex-col gap-2 shadow-inner font-mono text-xs text-gray-600 text-left w-full">
+                      <span className="text-[10px] font-bold text-brand-wood uppercase tracking-wider">Código de Barras</span>
+                      <span className="break-all whitespace-normal">{order.transparentBoletoBarcode}</span>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 w-full">
                       <button 
-                        onClick={() => handleCopyToClipboard(`34191.79001 01043.513184 91020.150008 7 934500000${Math.round(total)}`)}
-                        className="bg-gray-100 hover:bg-gray-200 text-slate-800 font-semibold text-xs px-4 py-3.5 rounded-xl flex-grow flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                        onClick={() => handleCopyToClipboard(order.transparentBoletoBarcode || "")}
+                        className="bg-gray-100 hover:bg-gray-200 text-slate-800 font-semibold text-xs px-4 py-3.5 rounded-xl flex-grow flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer border"
                       >
                         <Copy className="w-4 h-4" />
                         <span>{copied ? 'Copiado!' : 'Copiar Código'}</span>
                       </button>
-                      <button 
-                        onClick={() => alert("Simulação de PDF de Boleto gerado com sucesso!")}
-                        className="bg-gray-100 hover:bg-gray-200 text-slate-800 font-semibold text-xs px-4 py-3.5 rounded-xl flex-grow flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                      >
-                        <Download className="w-4 h-4" />
-                        <span>Baixar PDF</span>
-                      </button>
+                      {order.transparentBoletoPdfUrl && (
+                        <a 
+                          href={order.transparentBoletoPdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 py-3.5 rounded-xl flex-grow flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-xs"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>Baixar Boleto PDF</span>
+                        </a>
+                      )}
                     </div>
-
+                  </div>
+                ) : (
+                  <div className="space-y-4 text-center py-4">
+                    <div className="flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug text-left">
+                      <Clock className="w-4 h-4 flex-shrink-0" />
+                      <span>Os boletos bancários levam de 1 a 2 dias úteis para compensação após o pagamento ocorrer.</span>
+                    </div>
                     <button 
                       disabled={processing}
-                      onClick={() => executeSimulatedPayment('boleto')}
-                      className="w-full bg-brand-wood text-white py-4 rounded-full font-bold text-sm hover:bg-brand-clay hover:shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer mt-6"
+                      onClick={() => handleTransparentPayment('boleto')}
+                      className="w-full bg-brand-wood hover:bg-brand-clay text-white py-4 rounded-full font-bold text-sm disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95"
                     >
                       {processing ? (
-                        <span className="flex items-center gap-2">
+                        <>
                           <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                          Simulando Pagamento...
-                        </span>
+                          <span>Gerando registro bancário...</span>
+                        </>
                       ) : (
                         <>
                           <Barcode className="w-5 h-5" />
-                          <span>Pagar Boleto (Simulado Online)</span>
+                          <span>Gerar Boleto Bancário Oficial</span>
                         </>
                       )}
                     </button>
@@ -719,3 +671,4 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
     </div>
   );
 };
+

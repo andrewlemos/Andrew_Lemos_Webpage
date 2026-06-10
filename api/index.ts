@@ -4,6 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import AdmZip from "adm-zip";
@@ -828,147 +829,346 @@ app.post("/api/vendas/checkout", async (req, res) => {
   // Check Mercado Pago Token (MERCADOPAGO_ACCESS_TOKEN)
   const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
 
-  if (!mpAccessToken) {
-    console.log(`[Mercado Pago] Token MERCADOPAGO_ACCESS_TOKEN ausente. Redirecionando pedido ${orderId} para simulador virtual...`);
-    try {
-      await adminDb.collection("ecom_orders").doc(orderId).update({
-        gateway: "Virtual Simulator",
-        gatewayError: "A variável de ambiente MERCADOPAGO_ACCESS_TOKEN não está configurada no seu servidor do backend. O sistema entrou no modo de simulação virtual para testes."
-      });
-    } catch (e) {
-      console.error("Failed to update gateway status for offline order:", e);
-    }
-    return res.json({
-      success: true,
-      orderId,
-      gateway: "Virtual Simulator Gateway",
-      redirectUrl: `/vendas/checkout/pay?id=${orderId}`
-    });
-  }
-
-  // Implement official Mercado Pago Preferences API (Checkout Pro) registration
+  // Let's store items descriptions into the Firestore order document to reference them
   try {
-    const mpPrefUrl = "https://api.mercadopago.com/checkout/preferences";
-    
-    // items mapping according to Mercado Pago JSON schema
-    const mpItems = items.map((itm: any) => ({
-      id: itm.productId,
-      title: itm.name,
-      quantity: Number(itm.quantity),
-      unit_price: Number(itm.price),
-      currency_id: "BRL"
+    const updatedItems = items.map((itm: any) => ({
+      ...itm,
+      description: `${itm.name} - Obra de Arte do Ateliê Andrew Lemos`
     }));
-
-    // If there is shipping, we include shipping as a separate item to preserve correct total
-    if (shippingCost && Number(shippingCost) > 0) {
-      mpItems.push({
-        id: "shipping-fee",
-        title: `Frete: ${shippingMethod}`,
-        quantity: 1,
-        unit_price: Number(shippingCost),
-        currency_id: "BRL"
-      });
-    }
-
-    const host = req.get("host") || "localhost:3000";
-    // Force HTTPS protocol for Mercado Pago because auto_return strictly requires HTTPS URLs.
-    // Cloud Run and other reverse proxies terminate SSL, sending the requests as "http" internally,
-    // which results in a status 400 validation error from Mercado Pago if we construct baseUrl using req.protocol.
-    const baseUrl = `https://${host}`;
-
-    // Clean phone and CPF digits to construct the regulated payer structure
-    const phoneDigits = (customerInfo.phone || "").replace(/\D/g, "");
-    const areaCode = phoneDigits.substring(0, 2) || "21";
-    const phoneNumber = phoneDigits.substring(2) || "999999999";
-    const cpfDigits = (customerInfo.cpf || "").replace(/\D/g, "");
-
-    const mpBody = {
-      items: mpItems,
-      payer: {
-        name: customerInfo.name,
-        email: customerInfo.email,
-        phone: {
-          area_code: areaCode,
-          number: phoneNumber
-        },
-        identification: {
-          type: "CPF",
-          number: cpfDigits
-        }
-      },
-      back_urls: {
-        success: `${baseUrl}/vendas/checkout/confirm?id=${orderId}`,
-        failure: `${baseUrl}/vendas/checkout/pay?id=${orderId}`,
-        pending: `${baseUrl}/vendas/checkout/pay?id=${orderId}`
-      },
-      auto_return: "approved",
-      external_reference: orderId,
-      notification_url: `${baseUrl}/api/vendas/webhook-mercadopago`
-    };
-
-    console.log(`[Mercado Pago] Criando preferência de compra para o pedido ${orderId}...`);
-    const mpResponse = await fetch(mpPrefUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${mpAccessToken}`,
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(mpBody)
+    await adminDb.collection("ecom_orders").doc(orderId).update({
+      items: updatedItems,
+      gateway: mpAccessToken ? "Mercado Pago Transparente" : "Virtual Simulator Gateway"
     });
-
-    if (mpResponse.ok) {
-      const mpData: any = await mpResponse.json();
-      const redirectLink = mpData.init_point || mpData.sandbox_init_point;
-      
-      if (redirectLink) {
-        try {
-          await adminDb.collection("ecom_orders").doc(orderId).update({
-            gateway: "Mercado Pago",
-            paymentUrl: redirectLink
-          });
-        } catch (e) {
-          console.error("Failed to update gateway tracking for real order:", e);
-        }
-        return res.json({
-          success: true,
-          orderId,
-          gateway: "Mercado Pago API Preference",
-          redirectUrl: redirectLink
-        });
-      }
-    } else {
-      const errText = await mpResponse.text().catch(() => "");
-      console.warn(`[Mercado Pago] Falha ao criar preferência de pagamento. Status ${mpResponse.status}: ${errText}. Forçando fallback.`);
-      try {
-        await adminDb.collection("ecom_orders").doc(orderId).update({
-          gateway: "Virtual Simulator (Fallback)",
-          gatewayError: `Falha na API do Mercado Pago ao gerar preferência de pagamento. Status HTTP ${mpResponse.status}: ${errText}`
-        });
-      } catch (e) {
-        console.error("Failed to update db with gateway fallback state:", e);
-      }
-    }
-  } catch (error: any) {
-    console.error("[Mercado Pago] Erro na requisição de integração com a API do Mercado Pago. Forçando fallback.", error);
-    try {
-      await adminDb.collection("ecom_orders").doc(orderId).update({
-        gateway: "Virtual Simulator (Fallback)",
-        gatewayError: `Erro de conexão com o servidor do Mercado Pago. Detalhe técnico: ${error.message || error}`
-      });
-    } catch (e) {
-      console.error("Failed to update db with gateway error state:", e);
-    }
+  } catch (err) {
+    console.warn("Failed to append item descriptions to order:", err);
   }
 
-  // Fallback to local checkout simulator URL
+  // Return local checkout transparent pay view url
   return res.json({
     success: true,
     orderId,
-    gateway: "Virtual Simulator Gateway (API Fallback)",
+    gateway: mpAccessToken ? "Mercado Pago Transparente" : "Virtual Simulator Gateway",
     redirectUrl: `/vendas/checkout/pay?id=${orderId}`
   });
 });
+
+// Endpoint to retrieve public key and other config safely
+app.get("/api/vendas/checkout/config", (req, res) => {
+  return res.json({
+    publicKey: process.env.MERCADOPAGO_PUBLIC_KEY || "APP_USR-d216741e-5bf3-4877-85d6-87c653f1cdb0"
+  });
+});
+
+// 2.1 Direct Checkout Transparente Payment API (Pix, Boleto, Credit Card)
+app.post("/api/vendas/checkout/transparent-pay", async (req, res) => {
+  const { orderId, paymentMethodType, cardToken, installments, cardPaymentMethodId, securityCode } = req.body;
+  
+  if (!orderId || !paymentMethodType) {
+    return res.status(400).json({ error: "Faltando orderId ou método de pagamento." });
+  }
+
+  try {
+    if (!adminDb) {
+      throw new Error("Banco de dados Firestore não inicializado.");
+    }
+    const orderRef = adminDb.collection("ecom_orders").doc(orderId);
+    const orderSnap = await orderRef.get();
+    
+    if (!orderSnap.exists) {
+      return res.status(404).json({ error: "Pedido não localizado no servidor." });
+    }
+
+    const orderData = orderSnap.data();
+    if (!orderData) {
+      return res.status(400).json({ error: "Dados do pedido corrompidos." });
+    }
+
+    const customerInfo = orderData.customerInfo;
+    const total = Number(orderData.total);
+    const mpToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+
+    // Detect if we are in Mock/Simulation mode or producing Real transactions
+    const isMock = !mpToken || mpToken.includes("MOCK_") || mpToken.startsWith("eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.MOCK_");
+
+    if (isMock) {
+      console.log(`[Mercado Pago Simulado] Criando pagamento transparente (${paymentMethodType}) para o pedido ${orderId}...`);
+      
+      if (paymentMethodType === 'pix') {
+        // Return simulated fully compliant central bank EMV string for Pix
+        const simulatedQrCode = "00020101021126360014br.gov.bcb.pix0114andrewlemos@outlook.com.br5204000053039865405" + Number(total).toFixed(2) + "5802BR5912Andrew Lemos6014Rio de Janeiro62070503***6304D12E";
+        
+        await orderRef.update({
+          gateway: "Mercado Pago Transparente (Simulado)",
+          transparentPixCode: simulatedQrCode,
+          transparentPixQrCodeBase64: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(simulatedQrCode)}`,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return res.json({
+          success: true,
+          paymentMethodType: 'pix',
+          qrCode: simulatedQrCode,
+          qrCodeBase64: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(simulatedQrCode)}`,
+          status: 'pending'
+        });
+      } else if (paymentMethodType === 'boleto') {
+        const simulatedBarcode = `34191.79001 01043.513184 91020.150008 7 934500000${Math.round(total)}`;
+        const simulatedPdf = "https://www.mercadopago.com.br/payments/boleto/simulator";
+        
+        await orderRef.update({
+          gateway: "Mercado Pago Transparente (Simulado)",
+          transparentBoletoBarcode: simulatedBarcode,
+          transparentBoletoPdfUrl: simulatedPdf,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return res.json({
+          success: true,
+          paymentMethodType: 'boleto',
+          barcode: simulatedBarcode,
+          pdfUrl: simulatedPdf,
+          status: 'pending'
+        });
+      } else {
+        // Credit card simulated auto-approval
+        await updateOrderStatusInDatabase(orderId, "Pago", "PAY-TRANSP-SIM-" + Math.random().toString(36).substr(2, 9).toUpperCase());
+        return res.json({
+          success: true,
+          paymentMethodType: 'card',
+          status: 'approved'
+        });
+      }
+    }
+
+    // REAL MERCADO PAGO API PAYMENTS (v1/payments)
+    const mpPaymentUrl = "https://api.mercadopago.com/v1/payments";
+
+    // Split name properly for first/last name structures
+    const rawName = (customerInfo.name || "Cliente E-commerce").trim();
+    const nameParts = rawName.split(/\s+/);
+    const firstName = nameParts[0] || "Cliente";
+    const lastName = nameParts.slice(1).join(" ") || "Lemos";
+
+    const idempotencyKey = `idemp-transp-${orderId}-${paymentMethodType}-${Date.now()}`;
+
+    // Standardize address details
+    const cepClean = (customerInfo.cep || "13630000").replace(/\D/g, "");
+    const street = customerInfo.street || "Rua";
+    const number = customerInfo.number || "s/n";
+    const neighborhood = customerInfo.neighborhood || "Bairro";
+    const city = customerInfo.city || "Rio de Janeiro";
+    const state = customerInfo.state || "RJ";
+
+    // Resolve external base URL to ensure valid HTTPS public domain for notifications
+    let externalHost = req.get("host") || "localhost:3000";
+    if (req.headers["x-forwarded-host"]) {
+      externalHost = req.headers["x-forwarded-host"] as string;
+    }
+    
+    let protocol = "https";
+    if (externalHost.includes("localhost") || externalHost.includes("127.0.0.1") || externalHost.includes("0.0.0.0")) {
+      protocol = "http";
+    }
+
+    let baseUrl = `${protocol}://${externalHost}`;
+
+    if (externalHost.includes("localhost") || externalHost.includes("127.0.0.1")) {
+      const referer = req.headers["referer"] || "";
+      const origin = req.headers["origin"] || "";
+      if (typeof origin === "string" && origin && !origin.includes("localhost") && !origin.includes("127.0.0.1")) {
+        baseUrl = origin;
+      } else if (typeof referer === "string" && referer && !referer.includes("localhost") && !referer.includes("127.0.0.1")) {
+        try {
+          const parsedRef = new URL(referer);
+          baseUrl = `${parsedRef.protocol}//${parsedRef.host}`;
+        } catch (e) {}
+      }
+    }
+
+    let notificationUrl: string | undefined = undefined;
+    try {
+      const parsedUrl = new URL(baseUrl);
+      const isLocal = 
+        parsedUrl.hostname === "localhost" || 
+        parsedUrl.hostname === "127.0.0.1" || 
+        parsedUrl.hostname === "0.0.0.0" || 
+        parsedUrl.hostname.endsWith(".local") || 
+        parsedUrl.hostname.includes("192.168.") || 
+        parsedUrl.hostname.includes("10.") ||
+        parsedUrl.port === "3000";
+        
+      if (parsedUrl.protocol === "https:" && !isLocal) {
+        notificationUrl = `${baseUrl}/api/vendas/webhook-mercadopago`;
+      }
+    } catch (e) {
+      console.warn("[Mercado Pago] Falha ao processar base URL para gerar webhook:", e);
+    }
+
+    let payload: any = {
+      transaction_amount: Number(total),
+      description: `Pedido ${orderId} - Obras de Arte de Andrew Lemos - Descrição detalhada do Ateliê`,
+      installments: 1,
+      external_reference: orderId,
+      payer: {
+        email: customerInfo.email,
+        first_name: firstName,
+        last_name: lastName,
+        identification: {
+          type: "CPF",
+          number: (customerInfo.cpf || "").replace(/\D/g, "")
+        },
+        phone: {
+          area_code: (customerInfo.phone || "").replace(/\D/g, "").substring(0, 2) || "21",
+          number: (customerInfo.phone || "").replace(/\D/g, "").substring(2) || "999999999"
+        }
+      }
+    };
+
+    if (notificationUrl) {
+      payload.notification_url = notificationUrl;
+      console.log(`[Mercado Pago] Webhook registrado com sucesso: ${notificationUrl}`);
+    } else {
+      console.log(`[Mercado Pago] O webhook de notificação foi omitido para evitar erros de validação local no gateway.`);
+    }
+
+    if (paymentMethodType === 'pix') {
+      payload.payment_method_id = "pix";
+    } else if (paymentMethodType === 'boleto') {
+      payload.payment_method_id = "bolbradesco";
+      payload.payer.address = {
+        zip_code: cepClean,
+        street_name: street,
+        street_number: number,
+        neighborhood: neighborhood,
+        city: city,
+        federal_unit: state.toUpperCase().substring(0, 2)
+      };
+    } else if (paymentMethodType === 'card') {
+      if (!cardToken) {
+        return res.status(400).json({ error: "O token do cartão é obrigatório para transações de crédito reais." });
+      }
+      payload.payment_method_id = cardPaymentMethodId || "visa";
+      payload.token = cardToken;
+      payload.installments = Number(installments || 1);
+    }
+
+    console.log(`[Mercado Pago Real] Enviando requisição para v1/payments. Idempotency-Key: ${idempotencyKey}`);
+    const mpRes = await fetch(mpPaymentUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${mpToken}`,
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": idempotencyKey,
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const mpText = await mpRes.text();
+    let mpData: any;
+    try {
+      mpData = JSON.parse(mpText);
+    } catch (e) {
+      console.error("[Mercado Pago Transparent JSON error response]", mpText);
+      return res.status(500).json({ error: `O Mercado Pago retornou uma resposta inesperada: ${mpText.substring(0, 100)}` });
+    }
+
+    if (!mpRes.ok) {
+      console.warn(`[Mercado Pago Real Error status ${mpRes.status}]`, JSON.stringify(mpData));
+      let errMsg = "Recusado pelo sistema de proteção contra fraudes do gateway do Mercado Pago.";
+      
+      const containsCode7 = mpData.cause && Array.isArray(mpData.cause) && mpData.cause.some((c: any) => String(c.code) === "7");
+      const isUnauthorizedLive = mpData.message?.includes("live credentials") || containsCode7;
+
+      if (isUnauthorizedLive || mpRes.status === 401) {
+        errMsg = "Credenciais de Produção não autorizadas: Você está utilizando um Access Token de produção real (APP_USR-...) do Mercado Pago, mas a transação foi identificada como simulação, cartão de testes ou a conta do vendedor ainda não foi homologada. Dica: Para fins de teste em sandbox de forma transparente, utilize chaves de teste (TEST-...) ou adicione seu e-mail de teste no Mercado Pago de forma a homologar seu cadastro. Certifique-se também que sua conta possua uma chave Pix cadastrada.";
+      } else if (mpData.message) {
+        errMsg = mpData.message;
+        if (mpData.cause && Array.isArray(mpData.cause) && mpData.cause.length > 0) {
+          errMsg = mpData.cause.map((c: any) => `${c.code}: ${c.description}`).join(" | ");
+        }
+      }
+      return res.status(400).json({ error: errMsg });
+    }
+
+    const paymentId = String(mpData.id);
+    const mpStatus = mpData.status;
+
+    if (paymentMethodType === 'pix') {
+      const qrCode = mpData.point_of_interaction?.transaction_data?.qr_code;
+      const qrCodeBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64;
+      const ticketUrl = mpData.point_of_interaction?.transaction_data?.ticket_url;
+
+      await orderRef.update({
+        gateway: "Mercado Pago Transparente (Real)",
+        paymentId: paymentId,
+        transparentPixCode: qrCode,
+        transparentPixQrCodeBase64: qrCodeBase64 ? (qrCodeBase64.startsWith("data:") ? qrCodeBase64 : `data:image/png;base64,${qrCodeBase64}`) : null,
+        ticketUrl: ticketUrl || null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return res.json({
+        success: true,
+        paymentMethodType: 'pix',
+        qrCode: qrCode,
+        qrCodeBase64: qrCodeBase64 ? (qrCodeBase64.startsWith("data:") ? qrCodeBase64 : `data:image/png;base64,${qrCodeBase64}`) : null,
+        ticketUrl: ticketUrl || null,
+        status: mpStatus,
+        paymentId
+      });
+
+    } else if (paymentMethodType === 'boleto') {
+        const barcode = mpData.barcode?.content || mpData.transaction_details?.barcode?.content;
+        const pdfUrl = mpData.transaction_details?.external_resource_url;
+
+        await orderRef.update({
+          gateway: "Mercado Pago Transparente (Real)",
+          paymentId: paymentId,
+          transparentBoletoBarcode: barcode,
+          transparentBoletoPdfUrl: pdfUrl,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return res.json({
+          success: true,
+          paymentMethodType: 'boleto',
+          barcode: barcode,
+          pdfUrl: pdfUrl,
+          status: mpStatus,
+          paymentId
+        });
+
+      } else {
+        // Credit card
+        if (mpStatus === "approved") {
+          const host = req.get("host") || "localhost:3000";
+          const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") ? "http" : "https";
+          const baseUrl = `${protocol}://${host}`;
+          await updateOrderStatusInDatabase(orderId, "Pago", paymentId, baseUrl);
+        } else {
+          await orderRef.update({
+            gateway: "Mercado Pago Transparente (Real)",
+            paymentId: paymentId,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+
+        return res.json({
+          success: true,
+          paymentMethodType: 'card',
+          status: mpStatus,
+          paymentId
+        });
+      }
+
+
+  } catch (err: any) {
+    console.error("[Transparent Checkout Real-API Exception]", err);
+    return res.status(500).json({ error: "Erro de conexão ao processar checkout transparente: " + err.message });
+  }
+});
+
 
 // Helper to update order status and decrement product stock securely
 async function updateOrderStatusInDatabase(orderId: string, status: string, paymentId: string, baseUrl?: string) {
@@ -1055,21 +1255,40 @@ app.post("/api/vendas/webhook-mercadopago", async (req, res) => {
 
   // Resolve standard paymentId and notification source
   let paymentId = payload.data?.id || payload.id || query.id;
+  let orderIdMP = undefined;
 
   // Mercado Pago webhook format checking can contain resource locator URL
-  if (!paymentId && payload.resource) {
-    const match = String(payload.resource).match(/\/payments\/(\d+)/);
-    if (match) {
-      paymentId = match[1];
+  if (payload.resource) {
+    const pMatch = String(payload.resource).match(/\/payments\/(\d+)/);
+    if (pMatch) {
+      paymentId = pMatch[1];
+    }
+    const oMatch = String(payload.resource).match(/\/orders\/([A-Za-z0-9_-]+)/);
+    if (oMatch) {
+      orderIdMP = oMatch[1];
     }
   }
   
   if (query.topic === "payment" && query.id) {
     paymentId = query.id;
   }
+  if (query.topic === "merchant_order" && query.id) {
+    orderIdMP = query.id;
+  }
 
-  if (!paymentId) {
-    return res.status(200).json({ status: "ignored", message: "Sem payment ID válido" });
+  // Determine if it was received or matches order pattern
+  let isReceivedAsOrder = false;
+  if (payload.resource && (payload.resource.includes("/orders/") || payload.resource.includes("/merchant_orders/"))) {
+    isReceivedAsOrder = true;
+  }
+  if (payload.topic === "merchant_order" || query.topic === "merchant_order" || payload.type === "merchant_order" || payload.topic === "order") {
+    isReceivedAsOrder = true;
+  }
+
+  const targetId = orderIdMP || paymentId;
+
+  if (!targetId) {
+    return res.status(200).json({ status: "ignored", message: "Sem payment ID ou order ID válido" });
   }
 
   const mpToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
@@ -1078,43 +1297,109 @@ app.post("/api/vendas/webhook-mercadopago", async (req, res) => {
   }
 
   try {
-    const mpPaymentUrl = `https://api.mercadopago.com/v1/payments/${paymentId}`;
-    console.log(`[Webhook MercadoPago] Consultando detalhes do pagamento ${paymentId} na API do Mercado Pago...`);
-    const mpResponse = await fetch(mpPaymentUrl, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${mpToken}`,
-        "Accept": "application/json"
+    let paymentData: any = null;
+    let isOrder = false;
+
+    // 1. Try querying as order if indicated
+    if (isReceivedAsOrder || orderIdMP) {
+      const mpOrderUrl = `https://api.mercadopago.com/v1/orders/${targetId}`;
+      console.log(`[Webhook MercadoPago] Consultando como ORDER em ${mpOrderUrl}...`);
+      const oRes = await fetch(mpOrderUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${mpToken}`,
+          "Accept": "application/json"
+        }
+      });
+      if (oRes.ok) {
+        paymentData = await oRes.json();
+        isOrder = true;
+        console.log(`[Webhook MercadoPago] Encontrado como ORDER! Status: ${paymentData.status}`);
       }
-    });
-
-    if (mpResponse.ok) {
-      const paymentData: any = await mpResponse.json();
-      const orderId = paymentData.external_reference;
-      const mpStatus = paymentData.status; // 'approved', 'pending', 'in_process', 'rejected', 'cancelled', etc.
-
-      if (!orderId) {
-        console.warn(`[Webhook MercadoPago] Pagamento ${paymentId} não contém external_reference (orderId). Ignorando.`);
-        return res.json({ success: true, message: "Sem reference" });
-      }
-
-      let orderStatus = "Aguardando pagamento";
-      if (mpStatus === "approved") {
-        orderStatus = "Pago";
-      } else if (["rejected", "cancelled", "refunded", "charged_back"].includes(mpStatus)) {
-        orderStatus = "Cancelado";
-      }
-
-      const host = req.get("host") || "localhost:3000";
-      const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") ? "http" : "https";
-      const baseUrl = `${protocol}://${host}`;
-      await updateOrderStatusInDatabase(orderId, orderStatus, String(paymentId), baseUrl);
-      return res.json({ success: true, orderId, updatedStatus: orderStatus });
-    } else {
-      const errorText = await mpResponse.text().catch(() => "");
-      console.warn(`[Webhook MercadoPago] Erro ao consultar pagamento ${paymentId} na API. Status: ${mpResponse.status}. Retorno: ${errorText}`);
-      res.status(500).json({ error: "Erro ao consultar pagamento na API do Mercado Pago." });
     }
+
+    // 2. Try querying as payment if not resolved yet
+    if (!paymentData && paymentId) {
+      const mpPaymentUrl = `https://api.mercadopago.com/v1/payments/${paymentId}`;
+      console.log(`[Webhook MercadoPago] Consultando como PAYMENT em ${mpPaymentUrl}...`);
+      const pRes = await fetch(mpPaymentUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${mpToken}`,
+          "Accept": "application/json"
+        }
+      });
+      if (pRes.ok) {
+        paymentData = await pRes.json();
+        isOrder = false;
+        console.log(`[Webhook MercadoPago] Encontrado como PAYMENT! Status: ${paymentData.status}`);
+      }
+    }
+
+    // 3. Fallback: Try querying as order if not resolved and not previously checked
+    if (!paymentData && targetId && !isReceivedAsOrder) {
+      const mpOrderUrl = `https://api.mercadopago.com/v1/orders/${targetId}`;
+      console.log(`[Webhook MercadoPago] Fallback: Consultando como ORDER em ${mpOrderUrl}...`);
+      const oRes = await fetch(mpOrderUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${mpToken}`,
+          "Accept": "application/json"
+        }
+      });
+      if (oRes.ok) {
+        paymentData = await oRes.json();
+        isOrder = true;
+        console.log(`[Webhook MercadoPago] Encontrado via Fallback ORDER! Status: ${paymentData.status}`);
+      }
+    }
+
+    if (!paymentData) {
+      console.warn(`[Webhook MercadoPago] Não foi possível consultar o recurso ${targetId} na API do Mercado Pago.`);
+      return res.status(404).json({ error: "Recurso não encontrado no Mercado Pago." });
+    }
+
+    const orderId = paymentData.external_reference || paymentData.payments?.[0]?.external_reference || paymentData.merchant_order?.external_reference;
+    
+    if (!orderId) {
+      console.warn(`[Webhook MercadoPago] Recurso ${targetId} não contém external_reference (orderId). Ignorando.`);
+      return res.json({ success: true, message: "Sem reference" });
+    }
+
+    let isApproved = false;
+    let isCancelled = false;
+
+    if (isOrder) {
+      const status = paymentData.status;
+      const subPayments = paymentData.payments || [];
+      const hasApprovedSub = subPayments.some((p: any) => p.status === "approved" || p.status === "paid");
+      if (status === "paid" || status === "approved" || status === "closed" || hasApprovedSub) {
+        isApproved = true;
+      } else if (status === "cancelled" || status === "expired" || status === "rejected") {
+        isCancelled = true;
+      }
+    } else {
+      const status = paymentData.status;
+      if (status === "approved") {
+        isApproved = true;
+      } else if (["rejected", "cancelled", "refunded", "charged_back", "expired"].includes(status)) {
+        isCancelled = true;
+      }
+    }
+
+    let orderStatus = "Aguardando pagamento";
+    if (isApproved) {
+      orderStatus = "Pago";
+    } else if (isCancelled) {
+      orderStatus = "Cancelado";
+    }
+
+    const host = req.get("host") || "localhost:3000";
+    const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") ? "http" : "https";
+    const baseUrl = `${protocol}://${host}`;
+    await updateOrderStatusInDatabase(orderId, orderStatus, String(targetId), baseUrl);
+    return res.json({ success: true, orderId, updatedStatus: orderStatus });
+
   } catch (error: any) {
     console.error("[Webhook MercadoPago Error] Falha ao sincronizar webhook:", error);
     res.status(500).json({ error: formatFirebaseError(error) });

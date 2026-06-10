@@ -80,6 +80,10 @@ export interface EcomOrder {
   gateway?: string;
   gatewayError?: string;
   paymentUrl?: string;
+  transparentPixCode?: string;
+  transparentPixQrCodeBase64?: string;
+  transparentBoletoBarcode?: string;
+  transparentBoletoPdfUrl?: string;
   createdAt?: any;
   updatedAt?: any;
 }
