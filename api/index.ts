@@ -911,7 +911,7 @@ app.post("/api/vendas/checkout/transparent-pay", async (req, res) => {
       
       if (paymentMethodType === 'pix') {
         // Return simulated fully compliant central bank EMV string for Pix
-        const simulatedQrCode = "00020101021126360014br.gov.bcb.pix0114andrewlemos@outlook.com.br5204000053039865405" + Number(total).toFixed(2) + "5802BR5912Andrew Lemos6014Rio de Janeiro62070503***6304D12E";
+        const simulatedQrCode = "00020101021126360014br.gov.bcb.pix0132pix-simulado@atelierteste.com.br5204000053039865405" + Number(total).toFixed(2) + "5802BR5924Andrew Lemos (Simulado)6014Rio de Janeiro62070503***6304D12E";
         
         await orderRef.update({
           gateway: "Mercado Pago Transparente (Simulado)",
@@ -1101,8 +1101,13 @@ app.post("/api/vendas/checkout/transparent-pay", async (req, res) => {
       } else if (mpData.message) {
         errMsg = mpData.message;
         if (mpData.cause && Array.isArray(mpData.cause) && mpData.cause.length > 0) {
-          errMsg = mpData.cause.map((c: any) => `${c.code}: ${c.description}`).join(" | ");
+          errMsg = mpData.cause.map((c: any) => `${c.code}: ${c.description || ""}`).join(" | ");
         }
+      }
+
+      // Check if the error is the KYC commercial identity verification block (Error 13253)
+      if (errMsg.includes("13253") || errMsg.includes("Financial Identity") || errMsg.includes("financial_identity")) {
+        errMsg = "⚠️ Erro 13253 (Validação Cadastral do Mercado Pago): A sua própria conta do Mercado Pago ativa como vendedora requer a conclusão da Verificação de Identidade (KYC) comercial ou que você possua ao menos uma Chave Pix cadastrada em seu aplicativo do Mercado Pago. Como resolver: Acesse o aplicativo oficial do Mercado Pago no celular com a mesma conta do e-commerce, realize o envio de seus documentos e selfie para validar sua identidade (Sua Conta -> Documentação Pendente) e adicione uma Chave Pix de Produção Ativa.";
       }
       return res.status(400).json({ error: errMsg });
     }

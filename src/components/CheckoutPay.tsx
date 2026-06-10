@@ -183,7 +183,7 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
       let cardPaymentMethodId = '';
 
       if (methodName === 'card') {
-        const isMockOption = order.gateway?.includes("Virtual") || !order.gateway;
+        const isMockOption = mpConfig.isMockMode;
         if (!isMockOption) {
           // Tokenize the card with Mercado Pago Public API
           const cleanNumber = cardData.number.replace(/\s/g, "");
@@ -315,7 +315,7 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
   }
 
   const { customerInfo, items, subtotal, shippingCost, total } = order;
-  const generatedPixString = order.transparentPixCode || generatePixCode(total, "andrewlemos@outlook.com.br", "Andrew Lemos", "Rio de Janeiro");
+  const generatedPixString = order.transparentPixCode || generatePixCode(total, "pix-simulado@atelierteste.com.br", "Andrew Lemos (Simulado)", "Rio de Janeiro");
 
   return (
     <div className="bg-brand-paper min-h-screen py-12 px-6 font-sans">
@@ -425,14 +425,27 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
               {activeTab === 'pix' && (
                 order.transparentPixCode ? (
                   <div className="space-y-5 text-center flex flex-col items-center">
-                    <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug w-full text-left">
-                      <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
-                      <span>Seu código Pix seguro já foi gerado na sua conta corporativa do Mercado Pago!</span>
-                    </div>
+                    {mpConfig.isMockMode ? (
+                      <div className="flex flex-col gap-2 bg-amber-50 text-amber-900 border border-amber-200 px-4 py-3 rounded-2xl text-[11px] leading-relaxed w-full text-left">
+                        <div className="flex items-center gap-2 font-bold text-amber-850">
+                          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 animate-pulse" />
+                          <span>MOCK / SIMULAÇÃO DE PAGAMENTO PIX</span>
+                        </div>
+                        <p className="text-amber-700 text-[10px]">
+                          <strong>Não transfira dinheiro real!</strong> O sistema está executando em modo testes.
+                          Utilize o botão verde abaixo para validar a aprovação do seu pedido instantaneamente.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-2xl text-[11px] leading-snug w-full text-left">
+                        <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
+                        <span>Seu código Pix seguro já foi gerado na sua conta corporativa do Mercado Pago!</span>
+                      </div>
+                    )}
 
                     <div className="p-3 bg-white border border-brand-wood/10 rounded-2xl flex items-center justify-center w-48 h-48 shadow-md relative overflow-hidden">
                       <img 
-                        src={order.transparentPixQrCodeBase64 || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(order.transparentPixCode)}`}
+                        src={order.transparentPixQrCodeBase64 || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(order.transparentPixCode || generatedPixString)}`}
                         alt="QR Code Pix"
                         className="w-full h-full object-contain"
                         referrerPolicy="no-referrer"
@@ -445,11 +458,11 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
                         <input 
                           type="text" 
                           readOnly 
-                          value={order.transparentPixCode}
+                          value={order.transparentPixCode || generatedPixString}
                           className="bg-[#FAFAFA] border border-gray-150 font-mono text-[10px] flex-grow text-gray-500 px-3 py-2.5 rounded-xl outline-none select-all"
                         />
                         <button 
-                          onClick={() => handleCopyToClipboard(order.transparentPixCode || "")}
+                          onClick={() => handleCopyToClipboard(order.transparentPixCode || generatedPixString)}
                           className="bg-brand-wood text-white px-4 rounded-xl text-xs font-semibold hover:bg-brand-clay hover:scale-[1.03] transition-all flex items-center gap-1.5 shrink-0"
                         >
                           <Copy className="w-3.5 h-3.5" />
@@ -458,9 +471,48 @@ export const CheckoutPay: React.FC<CheckoutPayProps> = ({ orderId, onNavigateToV
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-center gap-2 text-xs text-brand-clay font-semibold py-2.5">
-                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Aguardando a confirmação do Pix em tempo real...</span>
+                    <div className="flex flex-col items-center gap-2.5 w-full">
+                      <div className="flex items-center justify-center gap-2 text-xs text-brand-clay font-semibold py-1">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>Aguardando a confirmação do Pix em tempo real...</span>
+                      </div>
+                      
+                      {mpConfig.isMockMode && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setProcessing(true);
+                              setErrorMsg("");
+                              const res = await fetch("/api/vendas/webhook-mercadopago", {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  orderId: order.id,
+                                  status: "Pago"
+                                })
+                              });
+                              if (!res.ok) {
+                                const errData = await res.json().catch(() => ({}));
+                                setErrorMsg(errData.error || "Falha ao simular confirmação de pagamento.");
+                              }
+                            } catch (err: any) {
+                              setErrorMsg("Erro ao simular confirmação de pagamento: " + err.message);
+                            } finally {
+                              setProcessing(false);
+                            }
+                          }}
+                          disabled={processing}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-full text-xs transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          {processing ? (
+                            <span className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4" />
+                          )}
+                          <span>Confirmar Pagamento Simulado (Testes)</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
