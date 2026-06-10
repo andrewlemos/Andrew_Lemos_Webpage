@@ -504,6 +504,20 @@ export const AdminStore = () => {
     }
   };
 
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!window.confirm(`ATENÇÃO: Você está prestes a EXCLUIR DEFINITIVAMENTE o pedido ${orderId} do banco de dados!\n\nEsta ação removerá permanentemente os registros da sua loja (útil para apagar seus pedidos de testes). Essa ação não poderá ser desfeita. Deseja prosseguir?`)) return;
+    try {
+      await deleteDoc(doc(db, 'ecom_orders', orderId));
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder(null);
+      }
+      alert("Pedido excluído permanentemente com sucesso!");
+    } catch (err: any) {
+      console.error("Failed to delete order:", err);
+      alert(`Falha ao excluir pedido: ${err.message}`);
+    }
+  };
+
   const handleRefundOrder = async (orderId: string, refundValStr: string, notes: string) => {
     if (!selectedOrder) return;
     const value = parseFloat(refundValStr);
@@ -520,31 +534,33 @@ export const AdminStore = () => {
       return;
     }
 
-    if (!window.confirm(`Deseja realmente registrar um estorno no valor de R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`)) return;
+    if (!window.confirm(`Deseja realmente processar o estorno no valor de R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?\n\nSe o pagamento foi feito via Mercado Pago de forma real, o estorno financeiro de saldo será solicitado diretamente ao gateway.`)) return;
 
     try {
-      const refundStatus = proposedTotalRefunded >= selectedOrder.total ? 'total' : 'partial';
-      const updates: any = {
-        refundedAmount: proposedTotalRefunded,
-        refundStatus: refundStatus,
-        refundNotes: notes.trim(),
-        updatedAt: new Date().toISOString()
-      };
-
-      if (refundStatus === 'total') {
-        updates.status = 'Cancelado';
-      }
-
-      await updateDoc(doc(db, 'ecom_orders', orderId), {
-        ...updates
+      const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : 'dev-bypass-token';
+      const res = await fetch('/api/vendas/order/refund', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          orderId,
+          amount: value,
+          notes: notes.trim()
+        })
       });
 
-      setSelectedOrder(prev => prev ? {
-        ...prev,
-        ...updates
-      } : null);
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.error || "Ocorreu um erro ao comunicar com a API do estorno.");
+      }
 
-      alert(`Estorno de R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} registrado com sucesso!`);
+      if (resData.order) {
+        setSelectedOrder(resData.order);
+      }
+
+      alert(resData.message || `Estorno de R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} registrado com sucesso!`);
     } catch (err: any) {
       console.error("Failed to refund order:", err);
       alert(`Falha ao registrar estorno: ${err.message}`);
@@ -981,6 +997,14 @@ export const AdminStore = () => {
                       >
                         Ficha Completa
                       </button>
+
+                      <button
+                        onClick={() => handleDeleteOrder(order.id!)}
+                        title="Excluir pedido definitivamente"
+                        className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-red-100"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1346,9 +1370,18 @@ export const AdminStore = () => {
               </button>
 
               <div className="space-y-6">
-                <div>
-                  <h3 className="font-serif font-bold text-lg text-brand-ink leading-tight">Gasto Geral Detalhado do Pedido</h3>
-                  <span className="font-mono text-gray-400">{selectedOrder.id}</span>
+                <div className="flex justify-between items-start mr-8 flex-wrap gap-4">
+                  <div>
+                    <h3 className="font-serif font-bold text-lg text-brand-ink leading-tight">Gasto Geral Detalhado do Pedido</h3>
+                    <span className="font-mono text-gray-400">{selectedOrder.id}</span>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteOrder(selectedOrder.id!)}
+                    className="flex items-center gap-1.5 bg-red-50 text-red-600 hover:bg-red-100 px-3.5 py-1.5 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all cursor-pointer border border-red-200/50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Excluir Pedido</span>
+                  </button>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-4">

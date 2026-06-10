@@ -2296,6 +2296,119 @@ app.post("/api/vendas/shipment/sync-tracking", checkAdminAuth, async (req, res) 
   }
 });
 
+// 2.2 Payment refund endpoint via Mercado Pago with local fallback
+app.post("/api/vendas/order/refund", checkAdminAuth, async (req, res) => {
+  const { orderId, amount, notes } = req.body;
+
+  if (!orderId || typeof amount !== "number" || amount <= 0) {
+    return res.status(400).json({ error: "orderId e valor de estorno válido são obrigatórios." });
+  }
+
+  if (!adminDb) {
+    return res.status(500).json({ error: "Banco de dados Firestore não inicializado." });
+  }
+
+  try {
+    const orderRef = adminDb.collection("ecom_orders").doc(orderId);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) {
+      return res.status(404).json({ error: "Pedido não localizado no servidor." });
+    }
+
+    const orderData = orderSnap.data();
+    if (!orderData) {
+      return res.status(400).json({ error: "Dados do pedido corrompidos." });
+    }
+
+    const currentRefunded = orderData.refundedAmount || 0;
+    const proposedTotalRefunded = currentRefunded + amount;
+
+    // We allow matching full total or partial, but total cannot exceed original total
+    if (proposedTotalRefunded > orderData.total) {
+      return res.status(400).json({ 
+        error: `O valor total acumulado de estornos (R$ ${proposedTotalRefunded.toFixed(2)}) não pode exceder o total geral pago pelo cliente (R$ ${orderData.total.toFixed(2)}).` 
+      });
+    }
+
+    const mpToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+    const paymentId = orderData.paymentId;
+    let gatewayRefunded = false;
+
+    // If we have a real Mercado Pago Access Token configured and a real paymentId (not starting with our mock prefix PAY-SIM-), we perform the HTTP call
+    if (mpToken && paymentId && !paymentId.startsWith("PAY-SIM-")) {
+      console.log(`[Mercado Pago Refund] Efetuando estorno real no gateway Mercado Pago para o pagamento id: ${paymentId}, valor: R$ ${amount}`);
+      try {
+        const mpRefundUrl = `https://api.mercadopago.com/v1/payments/${paymentId}/refunds`;
+        const mpResponse = await fetch(mpRefundUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${mpToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            amount: Number(amount.toFixed(2))
+          })
+        });
+
+        if (mpResponse.ok) {
+          const resData: any = await mpResponse.json();
+          console.log(`[Mercado Pago Refund] Estorno aprovado pelo Mercado Pago para pagamento ${paymentId}. ID Reembolso: ${resData.id}`);
+          gatewayRefunded = true;
+        } else {
+          const errText = await mpResponse.text().catch(() => "");
+          console.error(`[Mercado Pago Refund Error] Erro ${mpResponse.status} retornado pelo gateway: ${errText}`);
+          let parsedMsg = "Falha no gateway.";
+          try {
+            const parsed = JSON.parse(errText);
+            parsedMsg = parsed.message || parsedMsg;
+          } catch (e) {}
+          throw new Error(`O Mercado Pago recusou a transação de estorno: ${parsedMsg}`);
+        }
+      } catch (mpErr: any) {
+        console.error("[Mercado Pago Refund Exception]", mpErr);
+        return res.status(500).json({ 
+          error: `O estorno financeiro real no Mercado Pago falhou. Nenhuma alteração foi efetuada na sua conta ou no banco de dados. Motivo: ${mpErr.message || mpErr}` 
+        });
+      }
+    } else {
+      console.log(`[E-Commerce Refund] Estorno simulado local ativado (Ambiente de testes: sem token real de produção ou id de pagamento fictício).`);
+    }
+
+    // Update database values
+    const refundStatus = proposedTotalRefunded >= orderData.total ? "total" : "partial";
+    const updates: any = {
+      refundedAmount: proposedTotalRefunded,
+      refundStatus: refundStatus,
+      refundNotes: (notes || "").trim(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    // If it is a full refund, transition the status to Canceled
+    if (refundStatus === "total") {
+      updates.status = "Cancelado";
+    }
+
+    await orderRef.update(updates);
+
+    // Fetch the updated document after writing
+    const finalSnap = await orderRef.get();
+    const finalOrder = { id: orderId, ...finalSnap.data() };
+
+    return res.json({
+      success: true,
+      message: gatewayRefunded 
+        ? "Estorno financeiro realizado e creditado com sucesso no Mercado Pago!" 
+        : "Estorno simulado local gravado com sucesso no banco de dados!",
+      order: finalOrder,
+      gatewayRefunded
+    });
+
+  } catch (err: any) {
+    console.error("Failed executing refund endpoint:", err);
+    res.status(500).json({ error: "Erro interno do servidor ao registrar estorno: " + err.message });
+  }
+});
+
 // 3. Mock Printable Layout Viewer
 app.get("/api/vendas/shipment/print-mock", async (req, res) => {
   const { id } = req.query;
