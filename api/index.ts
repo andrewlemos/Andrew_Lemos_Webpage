@@ -584,9 +584,16 @@ app.post("/api/vendas/shipping/calculate", async (req, res) => {
     if (meResponse.ok) {
       const results = await meResponse.json();
       if (Array.isArray(results)) {
-        // Filter out services with errors and format cleanly
+        // Filter out services with errors, keeping exclusively Correios options (PAC or SEDEX) as requested by user
         const parsedServices = results
-          .filter((srv: any) => srv.price && !srv.error)
+          .filter((srv: any) => {
+            if (!srv.price || srv.error) return false;
+            const companyName = (srv.company?.name || "").toLowerCase();
+            const serviceName = (srv.name || "").toLowerCase();
+            const isCorreios = companyName.includes("correios");
+            const isPacOrSedex = serviceName.includes("pac") || serviceName.includes("sedex");
+            return isCorreios && isPacOrSedex;
+          })
           .map((srv: any) => ({
             id: String(srv.id),
             name: srv.name,
