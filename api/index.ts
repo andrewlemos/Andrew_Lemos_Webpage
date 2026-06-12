@@ -549,9 +549,9 @@ app.post("/api/vendas/shipping/calculate", async (req, res) => {
     quantity: Number(itm.quantity || 1)
   }));
 
-  // Get origin CEP from environment variable or default to "13630000" (Pirassununga). 
+  // Get origin CEP from environment variable or default to "13636166" (Pirassununga). 
   // Strip any non-digits before sending to the API.
-  const fromCep = (process.env.MELHORENVIO_FROM_CEP || "13630000").replace(/\D/g, "");
+  const fromCep = (process.env.MELHORENVIO_FROM_CEP || "13636166").replace(/\D/g, "");
 
   const payload = {
     from: {
@@ -1784,7 +1784,7 @@ function validateShipmentData(orderData: any): string[] {
   }
 
   // Source validations
-  const fromCep = (process.env.MELHORENVIO_FROM_CEP || "13630000").replace(/\D/g, "");
+  const fromCep = (process.env.MELHORENVIO_FROM_CEP || "13636166").replace(/\D/g, "");
   if (fromCep.length !== 8) {
     errors.push(`CEP de origem do ateliê (${fromCep}) é inválido. Deve possuir 8 dígitos.`);
   }
@@ -1871,7 +1871,7 @@ async function processMelhorEnvioShipmentForPaidOrder(orderId: string, orderData
       ? "https://sandbox.melhorenvio.com.br"
       : "https://www.melhorenvio.com.br";
 
-    const fromCep = (process.env.MELHORENVIO_FROM_CEP || "13630000").replace(/\D/g, "");
+    const fromCep = (process.env.MELHORENVIO_FROM_CEP || "13636166").replace(/\D/g, "");
     const toCep = (orderData.customerInfo.cep || "").replace(/\D/g, "");
 
     // Resolve service id.
@@ -1893,13 +1893,13 @@ async function processMelhorEnvioShipmentForPaidOrder(orderId: string, orderData
     // Build sender
     const senderFrom = {
       name: process.env.MELHORENVIO_FROM_NAME || "Ateliê Andrew Lemos",
-      phone: (process.env.MELHORENVIO_FROM_PHONE || "19999999999").replace(/\D/g, ""),
+      phone: (process.env.MELHORENVIO_FROM_PHONE || "19998107110").replace(/\D/g, ""),
       email: process.env.MELHORENVIO_FROM_EMAIL || "andrewfmlemos@gmail.com",
-      document: (process.env.MELHORENVIO_FROM_DOCUMENT || "12345678909").replace(/\D/g, ""),
-      address: process.env.MELHORENVIO_FROM_ADDRESS || "Avenida Juca de Souza",
-      number: process.env.MELHORENVIO_FROM_NUMBER || "123",
-      complement: process.env.MELHORENVIO_FROM_COMPLEMENT || "",
-      district: process.env.MELHORENVIO_FROM_DISTRICT || "Centro",
+      document: (process.env.MELHORENVIO_FROM_DOCUMENT || "35189261875").replace(/\D/g, ""),
+      address: process.env.MELHORENVIO_FROM_ADDRESS || "Rua Lisette Wegmuller",
+      number: process.env.MELHORENVIO_FROM_NUMBER || "1325",
+      complement: process.env.MELHORENVIO_FROM_COMPLEMENT || "Casa",
+      district: process.env.MELHORENVIO_FROM_DISTRICT || "Jardim Ferrarezzi",
       city: process.env.MELHORENVIO_FROM_CITY || "Pirassununga",
       state_abbr: process.env.MELHORENVIO_FROM_STATE_ABBR || "SP",
       postal_code: fromCep
@@ -2452,6 +2452,19 @@ app.get("/api/vendas/shipment/print-mock", async (req, res) => {
 
     const tracking = order.melhorEnvioTrackingCode || "BR-RE-SIM-9204A";
     
+    // Dynamic sender details
+    const senderName = process.env.MELHORENVIO_FROM_NAME || "Ateliê Andrew Lemos";
+    const senderAddress = process.env.MELHORENVIO_FROM_ADDRESS || "Rua Lisette Wegmuller";
+    const senderNumber = process.env.MELHORENVIO_FROM_NUMBER || "1325";
+    const senderComplement = process.env.MELHORENVIO_FROM_COMPLEMENT || "Casa";
+    const senderDistrict = process.env.MELHORENVIO_FROM_DISTRICT || "Jardim Ferrarezzi";
+    const senderCity = process.env.MELHORENVIO_FROM_CITY || "Pirassununga";
+    const senderState = process.env.MELHORENVIO_FROM_STATE_ABBR || "SP";
+    const rawMeCep = (process.env.MELHORENVIO_FROM_CEP || "13636166").replace(/\D/g, "");
+    const formattedSenderCep = rawMeCep.length === 8 
+      ? `${rawMeCep.substring(0, 5)}-${rawMeCep.substring(5)}` 
+      : "13636-166";
+    
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(`
       <!DOCTYPE html>
@@ -2500,10 +2513,10 @@ app.get("/api/vendas/shipment/print-mock", async (req, res) => {
           
           <div class="address-section" style="border: none; padding-bottom: 0;">
             <div class="section-title">Remetente</div>
-            <div class="name">Ateliê Andrew Lemos</div>
-            <div>Avenida Juca de Souza, 123</div>
-            <div>CEP: <b>13630-000</b></div>
-            <div>Pirassununga — SP</div>
+            <div class="name">${senderName}</div>
+            <div>${senderAddress}, ${senderNumber}${senderComplement ? ` - ${senderComplement}` : ''} - ${senderDistrict}</div>
+            <div>CEP: <b>${formattedSenderCep}</b></div>
+            <div>${senderCity} — ${senderState}</div>
           </div>
 
           <div class="footer">
