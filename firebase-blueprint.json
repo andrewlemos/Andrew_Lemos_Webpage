@@ -131,6 +131,38 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "email", "phone", "cpf", "cep", "street", "number", "neighborhood", "city", "state"]
+    },
+    "EcomReview": {
+      "title": "EcomReview",
+      "description": "Customer product or store reviews",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerEmail": { "type": "string", "format": "email" },
+        "comment": { "type": "string" },
+        "rating": { "type": "integer" },
+        "status": { "type": "string", "enum": ["Pendente", "Aprovada", "Rejeitada"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "photoUrl": { "type": "string" },
+        "isFeatured": { "type": "boolean" },
+        "displayOrder": { "type": "integer" },
+        "origem": { "type": "string", "enum": ["Pedido", "Manual"] },
+        "invitationId": { "type": "string" }
+      },
+      "required": ["orderId", "customerName", "customerEmail", "comment", "rating", "status"]
+    },
+    "EcomReviewInvitation": {
+      "title": "EcomReviewInvitation",
+      "description": "Customer manual review invitation details",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string" },
+        "customerEmail": { "type": "string", "format": "email" },
+        "status": { "type": "string", "enum": ["Pendente", "Respondida"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerName", "customerEmail", "status"]
     }
   },
   "firestore": {
@@ -157,6 +189,14 @@
     "/ecom_customers/{userId}": {
       "schema": "EcomCustomer",
       "description": "Collection of customer account profiles and shipping parameters"
+    },
+    "/ecom_reviews/{reviewId}": {
+      "schema": "EcomReview",
+      "description": "Collection of customer reviews and ratings"
+    },
+    "/ecom_review_invitations/{invitationId}": {
+      "schema": "EcomReviewInvitation",
+      "description": "Collection of manual review invitations"
     }
   }
 }

@@ -72,6 +72,16 @@ service cloud.firestore {
              data.state is string && data.state.size() > 0 && data.state.size() < 50;
     }
 
+    function isValidReview(data) {
+      return data.orderId is string && data.orderId.size() >= 0 && data.orderId.size() < 100 &&
+             data.customerName is string && data.customerName.size() > 0 && data.customerName.size() < 200 &&
+             data.customerEmail is string && data.customerEmail.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.comment is string && data.comment.size() > 0 && data.comment.size() < 2000 &&
+             data.rating is int && data.rating >= 1 && data.rating <= 5 &&
+             data.status is string && (data.status == "Pendente" || data.status == "Aprovada" || data.status == "Rejeitada") &&
+             (!("origem" in data) || (data.origem is string && (data.origem == "Pedido" || data.origem == "Manual")));
+    }
+
     // Default deny catch-all
     match /{document=**} {
       allow read, write: if false;
@@ -131,6 +141,22 @@ service cloud.firestore {
     match /ecom_settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    match /ecom_reviews/{reviewId} {
+      allow create: if isValidReview(request.resource.data) && request.resource.data.status == "Pendente";
+      allow get, list: if isAdmin() || resource.data.status == "Aprovada";
+      allow update, delete: if isAdmin();
+    }
+
+    match /ecom_review_invitations/{invitationId} {
+      allow read: if true;
+      allow create: if isAdmin() && 
+                    request.resource.data.customerName is string && request.resource.data.customerName.size() > 0 &&
+                    request.resource.data.customerEmail is string && request.resource.data.customerEmail.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+                    request.resource.data.status is string && (request.resource.data.status == "Pendente" || request.resource.data.status == "Respondida");
+      allow update: if (isAdmin() || (request.resource.data.status == "Respondida" && resource.data.status == "Pendente" && request.resource.data.customerName == resource.data.customerName && request.resource.data.customerEmail == resource.data.customerEmail));
+      allow delete: if isAdmin();
     }
   }
 }

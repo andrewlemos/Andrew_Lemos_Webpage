@@ -18,10 +18,14 @@ import {
   Printer,
   RefreshCw,
   ExternalLink,
-  AlertCircle
+  AlertCircle,
+  Star,
+  Check,
+  Copy,
+  Send
 } from 'lucide-react';
 import { db, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, setDoc, auth, handleFirestoreError, OperationType } from '../firebase';
-import { EcomProduct, EcomOrder, ShippingQuote, PackagingSettings } from '../types';
+import { EcomProduct, EcomOrder, ShippingQuote, PackagingSettings, EcomReview } from '../types';
 import { ensureRobustUrl } from '../App';
 
 const formatAdminDate = (createdAt: any) => {
@@ -40,7 +44,17 @@ export const AdminStore = () => {
   const [products, setProducts] = useState<EcomProduct[]>([]);
   const [orders, setOrders] = useState<EcomOrder[]>([]);
   const [quotes, setQuotes] = useState<ShippingQuote[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'products' | 'orders' | 'quotes' | 'packaging' | 'marketing'>('products');
+  const [activeSubTab, setActiveSubTab] = useState<'products' | 'orders' | 'quotes' | 'packaging' | 'marketing' | 'reviews'>('products');
+  const [reviews, setReviews] = useState<EcomReview[]>([]);
+  const [reviewFilter, setReviewFilter] = useState<'Todas' | 'Pendente' | 'Aprovada' | 'Rejeitada'>('Todas');
+  const [reviewSubTab, setReviewSubTab] = useState<'moderacao' | 'convites'>('moderacao');
+  const [invitations, setInvitations] = useState<any[]>([]);
+  const [inviteName, setInviteName] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<EcomOrder | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<ShippingQuote | null>(null);
@@ -322,12 +336,28 @@ export const AdminStore = () => {
       handleFirestoreError(error, OperationType.GET, 'ecom_settings/packaging');
     });
 
+    const qReviews = query(collection(db, 'ecom_reviews'), orderBy('createdAt', 'desc'));
+    const unsubReviews = onSnapshot(qReviews, (snap) => {
+      setReviews(snap.docs.map(d => ({ id: d.id, ...d.data() })) as EcomReview[]);
+    }, (error) => {
+      console.warn("[Admin Reviews Sync] Read failed or permission was denied:", error);
+    });
+
+    const qInvitations = query(collection(db, 'ecom_review_invitations'), orderBy('createdAt', 'desc'));
+    const unsubInvitations = onSnapshot(qInvitations, (snap) => {
+      setInvitations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.warn("[Admin Invitations Sync] Read failed or permission was denied:", error);
+    });
+
     return () => {
       unsubProds();
       unsubOrders();
       unsubQuotes();
       unsubCustomers();
       unsubPackaging();
+      unsubReviews();
+      unsubInvitations();
     };
   }, []);
 
@@ -399,15 +429,37 @@ export const AdminStore = () => {
 
   const handleUpdateStatus = async (orderId: string, newStatus: string) => {
     try {
-      await updateDoc(doc(db, 'ecom_orders', orderId), {
-        status: newStatus,
-        updatedAt: new Date().toISOString()
+      const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : 'dev-bypass-token';
+      const res = await fetch('/api/vendas/order/update-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ orderId, status: newStatus })
       });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Erro ao atualizar status via API.");
+      }
+
       if (selectedOrder && selectedOrder.id === orderId) {
         setSelectedOrder(prev => prev ? { ...prev, status: newStatus as any } : null);
       }
     } catch (err: any) {
-      console.error("Failed to adjust order status:", err);
+      console.warn("Failed to update status via backend API, falling back to client update:", err);
+      try {
+        await updateDoc(doc(db, 'ecom_orders', orderId), {
+          status: newStatus,
+          updatedAt: new Date().toISOString()
+        });
+        if (selectedOrder && selectedOrder.id === orderId) {
+          setSelectedOrder(prev => prev ? { ...prev, status: newStatus as any } : null);
+        }
+      } catch (fallbackErr: any) {
+        console.error("Failsafe client status update also failed:", fallbackErr);
+      }
     }
   };
 
@@ -653,6 +705,14 @@ export const AdminStore = () => {
           }`}
         >
           Configurações de Embalagem
+        </button>
+        <button 
+          onClick={() => setActiveSubTab('reviews')} 
+          className={`pb-2.5 transition-colors cursor-pointer ${
+            activeSubTab === 'reviews' ? 'text-brand-wood border-b-2 border-brand-wood' : 'text-gray-400'
+          }`}
+        >
+          Avaliações de Clientes ({reviews.length})
         </button>
       </div>
 
@@ -1308,6 +1368,421 @@ export const AdminStore = () => {
               </div>
             </div>
           </div>
+        </div>
+      ) : activeSubTab === 'reviews' ? (
+        // TAB - CLIENT REVIEWS MANAGEMENT
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+            <div className="space-y-1">
+              <h3 className="font-serif font-bold text-xl text-brand-ink">Avaliações & Depoimentos de Clientes</h3>
+              <p className="text-gray-450 text-xs">
+                Visualize, filtre e delibere sobre os depoimentos e comentários de satisfação enviados no pós-compra. Avaliações aprovadas aparecem dinamicamente no carrossel da home page.
+              </p>
+            </div>
+            {/* Sub-tabs buttons under Reviews */}
+            <div className="flex bg-gray-100 p-0.5 rounded-lg text-xs font-semibold self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setReviewSubTab('moderacao')}
+                className={`px-4 py-2 rounded-md transition-all cursor-pointer ${
+                  reviewSubTab === 'moderacao'
+                    ? 'bg-white text-brand-ink shadow-sm'
+                    : 'text-gray-500 hover:text-brand-ink'
+                }`}
+              >
+                Moderação
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReviewSubTab('convites');
+                  setInviteSuccess(null);
+                  setInviteError(null);
+                }}
+                className={`px-4 py-2 rounded-md transition-all cursor-pointer ${
+                  reviewSubTab === 'convites'
+                    ? 'bg-white text-brand-ink shadow-sm'
+                    : 'text-gray-500 hover:text-brand-ink'
+                }`}
+              >
+                Convites para Avaliação
+              </button>
+            </div>
+          </div>
+
+          {reviewSubTab === 'moderacao' ? (
+            <div className="space-y-4">
+              {/* Filter buttons */}
+              <div className="flex gap-2 flex-wrap text-xs">
+                {(['Todas', 'Pendente', 'Aprovada', 'Rejeitada'] as const).map((statusVal) => {
+                  const count = statusVal === 'Todas'
+                    ? reviews.length
+                    : reviews.filter(r => r.status === statusVal).length;
+
+                  return (
+                    <button
+                      key={statusVal}
+                      type="button"
+                      onClick={() => setReviewFilter(statusVal)}
+                      className={`px-3 py-1.5 rounded-lg border font-semibold cursor-pointer transition-all ${
+                        reviewFilter === statusVal
+                          ? 'bg-brand-wood text-white border-brand-wood'
+                          : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      {statusVal} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* List of reviews */}
+              <div className="bg-white rounded-2xl border divide-y overflow-hidden">
+                {reviews
+                  .filter(r => reviewFilter === 'Todas' || r.status === reviewFilter)
+                  .map((review) => (
+                    <div key={review.id} className="p-6 flex flex-col md:flex-row gap-6 justify-between items-start hover:bg-slate-50/50 transition-colors text-xs font-sans">
+                      <div className="space-y-2 flex-grow max-w-2xl">
+                        {/* Meta header */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="font-bold text-gray-800 text-sm">{review.customerName}</span>
+                          <span className="text-gray-400 font-mono text-[10px]">{review.customerEmail}</span>
+                          
+                          {/* ORIGEM / VISUAL IDENTIFIER INDICATION */}
+                          {review.orderId ? (
+                            <span className="text-[10px] text-brand-wood font-mono bg-brand-paper px-2.5 py-0.5 rounded border border-brand-wood/20 flex items-center gap-1">
+                              📦 Pedido: {review.orderId}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-indigo-700 font-mono bg-indigo-50 px-2.5 py-0.5 rounded border border-indigo-200 flex items-center gap-1">
+                              ✉️ Convite Manual
+                            </span>
+                          )}
+
+                          <span className="text-gray-450 text-[10px]">{formatAdminDate(review.createdAt)}</span>
+                        </div>
+
+                        {/* Stars */}
+                        <div className="flex items-center gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-3.5 h-3.5 ${
+                                i < (review.rating || 5) ? 'fill-amber-400 text-amber-400' : 'text-gray-200'
+                              }`}
+                            />
+                          ))}
+                        </div>
+
+                        {/* Comment text */}
+                        <p className="text-gray-650 text-sm leading-relaxed whitespace-pre-wrap italic">
+                          "{review.comment}"
+                        </p>
+                      </div>
+
+                      {/* Stats & Actions */}
+                      <div className="flex flex-row md:flex-col items-end gap-3 self-stretch md:self-auto justify-between md:justify-start">
+                        {/* Status Badges */}
+                        <div>
+                          {review.status === 'Pendente' && (
+                            <span className="px-2.5 py-1 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                              Pendente
+                            </span>
+                          )}
+                          {review.status === 'Aprovada' && (
+                            <span className="px-2.5 py-1 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Aprovado
+                            </span>
+                          )}
+                          {review.status === 'Rejeitada' && (
+                            <span className="px-2.5 py-1 text-[10px] font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                              Rejeito
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Control buttons */}
+                        <div className="flex gap-2">
+                          {review.status !== 'Aprovada' && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await updateDoc(doc(db, 'ecom_reviews', review.id), {
+                                    status: 'Aprovada',
+                                    updatedAt: new Date().toISOString()
+                                  });
+                                } catch (err: any) {
+                                  console.error("Error approving review:", err);
+                                  alert("Erro ao aprovar: " + err.message);
+                                }
+                              }}
+                              className="p-1 px-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                              title="Aprovar depoimento"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              Aprovar
+                            </button>
+                          )}
+
+                          {review.status !== 'Rejeitada' && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await updateDoc(doc(db, 'ecom_reviews', review.id), {
+                                    status: 'Rejeitada',
+                                    updatedAt: new Date().toISOString()
+                                  });
+                                } catch (err: any) {
+                                  console.error("Error rejecting review:", err);
+                                  alert("Erro ao rejeitar: " + err.message);
+                                }
+                              }}
+                              className="p-1 px-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                              title="Rejeitar depoimento"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              Rejeitar
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => {
+                              setConfirmConfig({
+                                title: "Deletar Depoimento?",
+                                message: "Deseja excluir permanentemente esta avaliação de seu banco de dados? Esta ação não pode ser revertida.",
+                                isDestructive: true,
+                                onConfirm: async () => {
+                                  try {
+                                    await deleteDoc(doc(db, 'ecom_reviews', review.id));
+                                  } catch (err: any) {
+                                    console.error("Error deleting review:", err);
+                                    alert("Erro ao excluir: " + err.message);
+                                  }
+                                }
+                              });
+                            }}
+                            className="p-1 px-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-600 rounded-lg flex items-center justify-center cursor-pointer transition-colors"
+                            title="Excluir do sistema"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                {reviews.filter(r => reviewFilter === 'Todas' || r.status === reviewFilter).length === 0 && (
+                  <div className="py-16 text-center text-gray-400">
+                    Nenhum depoimento encontrado para o filtro "{reviewFilter}".
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            // CONVITES E SOLICITAÇÕES MANUAIS DE AVALIAÇÃO
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start font-sans text-xs">
+              {/* Left Form Widget */}
+              <div className="bg-white p-6 rounded-2xl border border-brand-wood/10 shadow-sm space-y-4 lg:col-span-1">
+                <div className="space-y-1">
+                  <h4 className="font-serif font-bold text-base text-brand-ink">Solicitação Manual de Avaliação</h4>
+                  <p className="text-gray-450 text-[11px] leading-relaxed">
+                    Envie um e-mail com link de avaliação para clientes que compraram por canais como WhatsApp, Instagram, Facebook, feiras ou atendimento presencial.
+                  </p>
+                </div>
+
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!inviteName.trim() || !inviteEmail.trim()) {
+                      setInviteError("Ambos os campos são obrigatórios.");
+                      return;
+                    }
+                    
+                    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                    if (!emailRegex.test(inviteEmail.trim())) {
+                      setInviteError("Insira um endereço de e-mail válido.");
+                      return;
+                    }
+
+                    setSendingInvite(true);
+                    setInviteSuccess(null);
+                    setInviteError(null);
+
+                    try {
+                      const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : 'dev-bypass-token';
+                      const response = await fetch('/api/admin/send-review-invitation', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${idToken}`
+                        },
+                        body: JSON.stringify({
+                          customerName: inviteName.trim(),
+                          customerEmail: inviteEmail.trim().toLowerCase()
+                        })
+                      });
+
+                      if (!response.ok) {
+                        const errJson = await response.json().catch(() => ({}));
+                        throw new Error(errJson.error || "Erro na requisição.");
+                      }
+
+                      setInviteSuccess(`Convite de avaliação enviado com sucesso para ${inviteEmail}!`);
+                      setInviteName('');
+                      setInviteEmail('');
+                    } catch (err: any) {
+                      console.error("[Invite Dispatch Error]:", err);
+                      setInviteError(err.message || "Erro ao conectar com o serviço de mala-direta.");
+                    } finally {
+                      setSendingInvite(false);
+                    }
+                  }}
+                  className="space-y-3 text-xs"
+                >
+                  <div>
+                    <label className="block text-gray-500 font-bold mb-1 uppercase tracking-wider text-[10px]">Nome do Cliente *</label>
+                    <input
+                      type="text"
+                      required
+                      value={inviteName}
+                      onChange={(e) => setInviteName(e.target.value)}
+                      placeholder="Ex: João da Silva"
+                      className="w-full text-xs p-2.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-wood/50 bg-brand-paper/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-500 font-bold mb-1 uppercase tracking-wider text-[10px]">E-mail do Cliente *</label>
+                    <input
+                      type="email"
+                      required
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="Ex: joao@email.com"
+                      className="w-full text-xs p-2.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-wood/50 bg-brand-paper/20"
+                    />
+                  </div>
+
+                  {inviteSuccess && (
+                    <div className="bg-emerald-50 border border-emerald-150 p-2.5 rounded-lg text-emerald-800 text-[11px]">
+                      {inviteSuccess}
+                    </div>
+                  )}
+
+                  {inviteError && (
+                    <div className="bg-rose-50 border border-rose-150 p-2.5 rounded-lg text-rose-800 text-[11px]">
+                      {inviteError}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={sendingInvite}
+                    className="w-full h-10 bg-brand-wood hover:bg-brand-wood/90 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 text-xs shadow-sm"
+                  >
+                    {sendingInvite ? (
+                      <>Enviando...</>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        Enviar Solicitação de Avaliação
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+
+              {/* Right side invitation history list */}
+              <div className="bg-white p-6 rounded-2xl border border-brand-wood/10 shadow-sm lg:col-span-2 space-y-4">
+                <div className="space-y-1">
+                  <h4 className="font-serif font-bold text-base text-brand-ink">Histórico de Convites de Depoimento</h4>
+                  <p className="text-gray-450 text-[11px] leading-relaxed">
+                    Acompanhe abaixo o status de preenchimento dos links de avaliação de pós-venda.
+                  </p>
+                </div>
+
+                <div className="border rounded-xl divide-y overflow-hidden max-h-[420px] overflow-y-auto">
+                  {invitations.map((inv) => {
+                    const isCopied = copiedInviteId === inv.id;
+                    const inviteLink = `${window.location.origin}/#avaliar?conviteId=${inv.id}`;
+
+                    return (
+                      <div key={inv.id} className="p-4 hover:bg-slate-50/40 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-gray-800 text-sm">{inv.customerName}</span>
+                            <span className="text-[10px] text-gray-400 font-mono">{inv.customerEmail}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] text-gray-400 flex-wrap">
+                            <span>Enviado em: {formatAdminDate(inv.createdAt)}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                          {inv.status === 'Respondida' ? (
+                            <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-150">
+                              Preenchido
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-150">
+                              Aguardando
+                            </span>
+                          )}
+
+                          {/* Copy Link helper */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(inviteLink);
+                              setCopiedInviteId(inv.id);
+                              setTimeout(() => setCopiedInviteId(null), 2000);
+                            }}
+                            className={`p-1.5 rounded border flex items-center justify-center cursor-pointer transition-colors ${
+                              isCopied
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                                : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                            }`}
+                            title="Copiar link direto para responder"
+                          >
+                            {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+
+                          {/* Delete Invite */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConfirmConfig({
+                                title: "Excluir Convite?",
+                                message: "Deseja expirar e remover permanentemente este convite de avaliação?",
+                                isDestructive: true,
+                                onConfirm: async () => {
+                                  try {
+                                    await deleteDoc(doc(db, 'ecom_review_invitations', inv.id));
+                                  } catch (err: any) {
+                                    alert("Erro ao excluir convite: " + err.message);
+                                  }
+                                }
+                              });
+                            }}
+                            className="p-1.5 bg-slate-50 hover:bg-slate-100 border text-slate-500 hover:text-rose-600 rounded flex items-center justify-center cursor-pointer transition-colors"
+                            title="Excluir Convite"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {invitations.length === 0 && (
+                    <div className="py-12 text-center text-gray-400">
+                      Nenhum convite manual enviado até o momento.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         // TAB - GLOBAL PACKAGING SETTINGS

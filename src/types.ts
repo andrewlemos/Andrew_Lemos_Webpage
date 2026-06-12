@@ -144,3 +144,29 @@ export interface PackagingSettings {
   extraLength: number;
   extraWeight: number;
 }
+
+export interface EcomReview {
+  id?: string;
+  orderId: string;
+  customerName: string;
+  customerEmail: string;
+  comment: string;
+  rating: number; // 1 to 5
+  status: 'Pendente' | 'Aprovada' | 'Rejeitada';
+  photoUrl?: string; // for future extension
+  isFeatured?: boolean; // for future extension
+  displayOrder?: number; // for future extension
+  origem?: 'Pedido' | 'Manual';
+  invitationId?: string;
+  createdAt: any;
+  updatedAt?: any;
+}
+
+export interface EcomReviewInvitation {
+  id?: string;
+  customerName: string;
+  customerEmail: string;
+  status: 'Pendente' | 'Respondida';
+  createdAt: any;
+}
+

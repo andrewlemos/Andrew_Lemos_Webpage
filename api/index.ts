@@ -766,6 +766,83 @@ async function sendOrderPaymentConfirmationEmail(orderId: string, orderData: any
   }
 }
 
+// Helper to send Delivered thank you and review request email
+async function sendDeliveredReviewRequestEmail(orderId: string, orderData: any, baseUrl: string) {
+  try {
+    const customerInfo = orderData.customerInfo;
+    if (!customerInfo || !customerInfo.email) {
+      console.warn(`[E-mail Avaliação] Cancelando envio: e-mail do destinatário ausente para o pedido ${orderId}`);
+      return;
+    }
+
+    // Capture base application url without hash
+    const cleanedBaseUrl = baseUrl ? baseUrl.split('#')[0] : "http://localhost:3000";
+    const reviewLink = `${cleanedBaseUrl}#avaliar?pedido=${orderId}`;
+
+    const transporter = getSmtpTransporter();
+    const artistName = process.env.MELHORENVIO_FROM_NAME || "Ateliê Andrew Lemos";
+    const fromEmail = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
+
+    // Build items representation in html list
+    const itemsList = (orderData.items || []).map((item: any) => 
+      `<li><b>${item.name}</b> (Qtd: ${item.quantity})</li>`
+    ).join("");
+
+    const emailHtml = `
+      <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e0dfdb; background-color: #FAF9F5; color: #2C2C2A; border-radius: 8px;">
+        <div style="text-align: center; border-bottom: 2px solid #8d6e63; padding-bottom: 16px; margin-bottom: 24px;">
+          <h1 style="color: #4e342e; margin: 0; font-size: 26px; font-weight: normal; font-family: Georgia, serif;">${artistName}</h1>
+          <p style="margin: 4px 0 0 0; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #8d6e63;">Desejamos que tenha gostado!</p>
+        </div>
+        
+        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px;">Olá, <b>${customerInfo.name}</b>!</p>
+        
+        <p style="font-size: 15px; line-height: 1.6; margin-bottom: 20px;">
+          Seu pedido de código <b>${orderId}</b> foi marcado como <b>Entregue</b>! Esperamos sinceramente que as obras criadas superem suas expectativas e deem um toque especial ao seu espaço. Cada detalhe foi trabalhado de forma única e dedicada pelo artista.
+        </p>
+
+        <div style="background-color: #f0eee9; padding: 16px; border-radius: 6px; margin: 24px 0;">
+          <h3 style="margin-top: 0; color: #4e342e; font-size: 15px;">Itens recebidos:</h3>
+          <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6;">
+            ${itemsList}
+          </ul>
+        </div>
+
+        <p style="font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
+          Como somos um ateliê independente, sua opinião e depoimento são fundamentais para o nosso crescimento. Um comentário sincero ajuda a valorizar o trabalho artesanal e auxilia outros colecionadores a confiarem em nossa arte.
+        </p>
+        
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${reviewLink}" style="background-color: #8d6e63; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; border-radius: 6px; font-size: 15px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            Escrever Depoimento & Avaliar
+          </a>
+        </div>
+
+        <p style="font-size: 13px; color: #666; line-height: 1.5; margin-top: 30px; border-top: 1px solid #e0dfdb; padding-top: 15px; text-align: center;">
+          Se o botão acima não funcionar, você pode acessar diretamente o link abaixo:<br/>
+          <a href="${reviewLink}" style="color: #8d6e63; word-break: break-all;">${reviewLink}</a>
+        </p>
+        
+        <div style="margin-top: 40px; border-top: 1px solid #e0dfdb; padding-top: 20px; text-align: center; font-size: 12px; color: #8e8d89;">
+          <p style="margin: 0 0 4px 0;">Ateliê Andrew Lemos — Pirassununga, SP</p>
+          <p style="margin: 0;">Esta é uma mensagem automática de pós-venda.</p>
+        </div>
+      </div>
+    `;
+
+    await transporter.sendMail({
+      from: `"${artistName}" <${fromEmail}>`,
+      to: customerInfo.email,
+      subject: `Sua obra de arte chegou! Escreva seu depoimento - Pedido ${orderId}`,
+      html: emailHtml
+    });
+
+    console.log(`[E-mail Avaliação] E-mail de solicitação de feedback enviado com sucesso para ${customerInfo.email}`);
+  } catch (error) {
+    console.error(`[E-mail Avaliação] Falha ao enviar e-mail de avaliação para o pedido ${orderId}:`, error);
+  }
+}
+
 // 2. Checkout Creation Endpoint (PagSeguro integration or virtual sandbox)
 app.post("/api/vendas/checkout", async (req, res) => {
   const { userId, customerInfo, items, shippingMethod, shippingCost } = req.body;
@@ -1263,22 +1340,47 @@ async function updateOrderStatusInDatabase(orderId: string, status: string, paym
   }
 
   const orderRef = adminDb.collection("ecom_orders").doc(orderId);
-  const orderSnap = await orderRef.get();
+  let orderData: any = null;
+  let items: any[] = [];
+  let transitionToPaid = false;
 
-  if (!orderSnap.exists) {
-    console.warn(`[Webhook MercadoPago] Pedido ${orderId} não encontrado no Firestore.`);
-    throw new Error(`Pedido ${orderId} não localizado.`);
-  }
+  await adminDb.runTransaction(async (transaction: any) => {
+    const orderSnap = await transaction.get(orderRef);
 
-  const orderData = orderSnap.data();
-  const currentStatus = orderData?.status || "Aguardando pagamento";
-  const items = orderData?.items || [];
+    if (!orderSnap.exists) {
+      console.warn(`[Webhook MercadoPago] Pedido ${orderId} não encontrado no Firestore.`);
+      throw new Error(`Pedido ${orderId} não localizado.`);
+    }
 
-  console.log(`[Webhook MercadoPago] Status atual do pedido: '${currentStatus}', Novo status pretendido: '${status}'`);
+    orderData = orderSnap.data();
+    const currentStatus = orderData?.status || "Aguardando pagamento";
+    items = orderData?.items || [];
 
-  // Decrease stock if order transitions from "Aguardando pagamento" to "Pago"
-  if (currentStatus === "Aguardando pagamento" && status === "Pago") {
-    console.log(`[Webhook MercadoPago] Diminuindo estoque de produtos para o pedido ${orderId}...`);
+    console.log(`[Transaction - Webhook MercadoPago] Pedido ${orderId}: status atual é '${currentStatus}', novo status recebido é '${status}'`);
+
+    // Lock and update the order status
+    if (currentStatus === "Aguardando pagamento" && status === "Pago") {
+      transitionToPaid = true;
+      transaction.update(orderRef, {
+        status: status,
+        paymentId: paymentId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    } else {
+      // If payment status update or any other status update, apply standard update if different
+      if (currentStatus !== status) {
+        transaction.update(orderRef, {
+          status: status,
+          paymentId: paymentId,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+    }
+  });
+
+  // Decrease stock, send confirmation email, and trigger Melhor Envio ONLY if the state transitioned to Paid in this call
+  if (transitionToPaid) {
+    console.log(`[Webhook MercadoPago] Transição legítima para 'Pago' efetuada para o pedido ${orderId}. Iniciando estoque e processamento de envio.`);
     for (const item of items) {
       const productRef = adminDb.collection("ecom_products").doc(item.productId);
       try {
@@ -1302,14 +1404,9 @@ async function updateOrderStatusInDatabase(orderId: string, status: string, paym
 
     // Automatized automatic shipping label generation on Melhor Envio
     processMelhorEnvioShipmentForPaidOrder(orderId, orderData).catch(e => console.error("[Melhor Envio] Auto-processing failure:", e));
+  } else {
+    console.log(`[Webhook MercadoPago] Pedido ${orderId} já transicionado ou sem mudança requerida. Pulando redução de estoque e envio em dobro.`);
   }
-
-  // Update Order Status in database
-  await orderRef.update({
-    status: status,
-    paymentId: paymentId,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-  });
 
   console.log(`[Webhook MercadoPago] Pedido ${orderId} atualizado de forma bem-sucedida para: ${status}`);
 }
@@ -1555,6 +1652,88 @@ async function checkAdminAuth(req: any, res: any, next: any) {
     return res.status(401).json({ error: "Sessão expirada ou token inválido. Por favor, reinicie sua sessão no painel do administrador." });
   }
 }
+
+// 3.5 Manual Review Invitation Routing
+app.post("/api/admin/send-review-invitation", checkAdminAuth, async (req, res) => {
+  const { customerName, customerEmail } = req.body;
+
+  if (!customerName || !customerEmail) {
+    return res.status(400).json({ error: "Nome e e-mail do cliente são obrigatórios." });
+  }
+
+  if (!adminDb) {
+    return res.status(500).json({ error: "Banco de dados indisponível no backend." });
+  }
+
+  try {
+    // Generate a new review invitation document in Firestore
+    const inviteRef = adminDb.collection("ecom_review_invitations").doc();
+    const invitationId = inviteRef.id;
+    const invitationDoc = {
+      customerName: customerName.trim(),
+      customerEmail: customerEmail.trim().toLowerCase(),
+      status: "Pendente",
+      createdAt: new Date().toISOString()
+    };
+    await inviteRef.set(invitationDoc);
+
+    // Get base URL for construction of the unique feedback invitation link
+    const referer = req.headers.referer || "";
+    let baseUrl = referer ? referer.split('#')[0] : "http://localhost:3000";
+    if (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+    }
+    const reviewLink = `${baseUrl}/#avaliar?conviteId=${invitationId}`;
+
+    // Get SMTP transporter to send email
+    const transporter = getSmtpTransporter();
+    const artistName = process.env.MELHORENVIO_FROM_NAME || "Ateliê Andrew Lemos";
+    const fromEmail = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
+
+    const emailHtml = `
+      <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e0dfdb; background-color: #FAF9F5; color: #2C2C2A; border-radius: 8px;">
+        <div style="text-align: center; border-bottom: 2px solid #8d6e63; padding-bottom: 16px; margin-bottom: 24px;">
+          <h1 style="color: #4e342e; margin: 0; font-size: 26px; font-weight: normal; font-family: Georgia, serif;">${artistName}</h1>
+          <p style="margin: 4px 0 0 0; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #8d6e63;">Convite Especial</p>
+        </div>
+        
+        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px;">Olá, <b>${customerName}</b>!</p>
+        
+        <p style="font-size: 15px; line-height: 1.6; margin-bottom: 20px;">
+          Agradecemos sinceramente pela sua confiança em nosso trabalho artístico. É uma enorme satisfação e honra saber de seu apreço e de nosso relacionamento em sua aquisição.
+        </p>
+
+        <p style="font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
+          Como somos um ateliê independente focado em peças únicas de alta dedicação, sua opinião e depoimento são muito importantes para o nosso crescimento. Convidamos você a compartilhar sua valiosa experiência de pós-venda em nosso site através do botão abaixo.
+        </p>
+        
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${reviewLink}" style="background-color: #8d6e63; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; border-radius: 6px; font-size: 15px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            Escrever Depoimento & Avaliar
+          </a>
+        </div>
+
+        <p style="font-size: 13px; color: #555; line-height: 1.6; margin-top: 24px; text-align: center;">
+          Cada avaliação recebida nos ajuda a expandir o alcance da arte de forma genuína. Se desejar saber mais ou solicitar novas peças, basta responder a este e-mail.
+        </p>
+      </div>
+    `;
+
+    await transporter.sendMail({
+      from: `"${artistName}" <${fromEmail}>`,
+      to: customerEmail.trim().toLowerCase(),
+      replyTo: fromEmail,
+      subject: `🎨 Convite especial do Ateliê Andrew Lemos: Avalie sua nova obra de arte`,
+      html: emailHtml
+    });
+
+    console.log(`[Convite Avaliação] Convite enviado com sucesso para ${customerEmail}`);
+    res.json({ success: true, invitationId, message: "Solicitação de avaliação enviada com sucesso ao cliente." });
+  } catch (err: any) {
+    console.error("[Convite Avaliação] Erro ao processar envio:", err);
+    res.status(500).json({ error: "Erro interno no servidor ao enviar a solicitação: " + err.message });
+  }
+});
 
 // 4. Admin Response and Quote Emailing Endpoint
 app.post("/api/vendas/quotes/respond", checkAdminAuth, async (req, res) => {
@@ -1826,6 +2005,18 @@ function validateShipmentData(orderData: any): string[] {
 async function processMelhorEnvioShipmentForPaidOrder(orderId: string, orderData: any) {
   console.log(`[Melhor Envio Automatizado] Iniciando processamento de frete para o pedido ${orderId}...`);
   try {
+    // Prevent duplicate processing if a shipping label was already successfully requested
+    if (adminDb) {
+      const freshSnap = await adminDb.collection("ecom_orders").doc(orderId).get();
+      if (freshSnap.exists) {
+        const freshData = freshSnap.data() || {};
+        if (freshData.melhorEnvioShipmentId && freshData.melhorEnvioStatus !== "error") {
+          console.log(`[Melhor Envio Automatizado] O pedido ${orderId} já possui uma etiqueta registrada no Melhor Envio (ID: ${freshData.melhorEnvioShipmentId}, Status: ${freshData.melhorEnvioStatus}). Abortando geração para evitar duplicados.`);
+          return;
+        }
+      }
+    }
+
     const valErrors = validateShipmentData(orderData);
     if (valErrors.length > 0) {
       const errMessage = `Erro de Validação Logística: ${valErrors.join(" | ")}`;
@@ -2201,6 +2392,12 @@ app.post("/api/vendas/shipment/sync-tracking", checkAdminAuth, async (req, res) 
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
+      if (overallStatus === "Entregue" && orderData.status !== "Entregue") {
+        sendDeliveredReviewRequestEmail(orderId, orderData, req.headers.referer || "").catch(err =>
+          console.error("[Tracking sync mock] Review email trigger failed:", err)
+        );
+      }
+
       const finalSnap = await adminDb.collection("ecom_orders").doc(orderId).get();
       return res.json({ success: true, message: "Sincronizado via Simulador de Logística", order: finalSnap.data() });
     }
@@ -2294,12 +2491,59 @@ app.post("/api/vendas/shipment/sync-tracking", checkAdminAuth, async (req, res) 
 
     await adminDb.collection("ecom_orders").doc(orderId).update(updatePayload);
 
+    if (overallStatus === "Entregue" && orderData.status !== "Entregue") {
+      sendDeliveredReviewRequestEmail(orderId, orderData, req.headers.referer || "").catch(err =>
+        console.error("[Tracking sync real] Review email trigger failed:", err)
+      );
+    }
+
     const finalSnap = await adminDb.collection("ecom_orders").doc(orderId).get();
     res.json({ success: true, message: "Status sincronizado com sucesso diretamente no Melhor Envio", order: finalSnap.data() });
 
   } catch (err: any) {
     console.error("Falha no sincronismo de rastreio:", err);
     res.status(500).json({ error: err.message || "Erro interno ao consultar rastreamento." });
+  }
+});
+
+// Admin change status route with email dispatch on transition to Entregue
+app.post("/api/vendas/order/update-status", checkAdminAuth, async (req, res) => {
+  const { orderId, status } = req.body;
+
+  if (!orderId || !status) {
+    return res.status(400).json({ error: "orderId e status são obrigatórios." });
+  }
+
+  if (!adminDb) {
+    return res.status(500).json({ error: "Banco de dados Firestore não inicializado." });
+  }
+
+  try {
+    const orderRef = adminDb.collection("ecom_orders").doc(orderId);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) {
+      return res.status(404).json({ error: "Pedido não localizado." });
+    }
+
+    const orderData = orderSnap.data() || {};
+    const previousStatus = orderData.status;
+
+    await orderRef.update({
+      status: status,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    if (status === "Entregue" && previousStatus !== "Entregue") {
+      const referer = req.headers.referer || "";
+      sendDeliveredReviewRequestEmail(orderId, orderData, referer).catch(err => 
+        console.error("[Manual status change] Async feedback email trigger failed:", err)
+      );
+    }
+
+    res.json({ success: true, message: "Status alterado com sucesso." });
+  } catch (err: any) {
+    console.error("Falha ao ajustar status do pedido manualmente:", err);
+    res.status(500).json({ error: err.message || "Erro interno ao atualizar status." });
   }
 });
 

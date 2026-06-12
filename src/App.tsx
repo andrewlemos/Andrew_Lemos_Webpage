@@ -48,6 +48,8 @@ import { Storefront } from './components/Storefront';
 import { CheckoutPay } from './components/CheckoutPay';
 import { CheckoutConfirm } from './components/CheckoutConfirm';
 import { CustomerArea } from './components/CustomerArea';
+import { CustomerReviewForm } from './components/CustomerReviewForm';
+import { ReviewCarousel } from './components/ReviewCarousel';
 import { AdminStore } from './components/AdminStore';
 import { Product, Arquivo, EcomProduct, EcomOrder } from './types';
 
@@ -2106,8 +2108,9 @@ const Chatbot = () => {
 };
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar'>('landing');
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
+  const [currentConviteId, setCurrentConviteId] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<any | null>(null);
 
   useEffect(() => {
@@ -2132,6 +2135,13 @@ export default function App() {
         setCurrentOrderId(id);
       } else if (hash.startsWith('#customer-area')) {
         setCurrentView('customer-area');
+      } else if (hash.startsWith('#avaliar')) {
+        const urlParams = new URLSearchParams(hash.replace(/#avaliar\??/, ''));
+        const pedidoId = urlParams.get('pedido') || '';
+        const conviteId = urlParams.get('conviteId') || '';
+        setCurrentView('avaliar');
+        setCurrentOrderId(pedidoId);
+        setCurrentConviteId(conviteId);
       } else {
         setCurrentView('landing');
         if (hash === '#vendas') {
@@ -2150,13 +2160,15 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area', id?: string) => {
+  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar', id?: string) => {
     if (view === 'checkout-pay' && id) {
       window.location.hash = `#vendas/pay?id=${id}`;
     } else if (view === 'checkout-confirm' && id) {
       window.location.hash = `#vendas/confirm?id=${id}`;
     } else if (view === 'customer-area') {
       window.location.hash = '#customer-area';
+    } else if (view === 'avaliar' && id) {
+      window.location.hash = `#avaliar?pedido=${id}`;
     } else if (view === 'vendas') {
       window.location.hash = '#vendas';
       setTimeout(() => {
@@ -2202,6 +2214,8 @@ export default function App() {
           userId={currentUser?.uid}
         />
       </section>
+
+      <ReviewCarousel />
 
       <Contact />
       <Footer />
@@ -2257,6 +2271,22 @@ export default function App() {
             </div>
             <CustomerArea 
               onNavigateToView={navigateToView} 
+            />
+          </motion.div>
+        )}
+
+        {currentView === 'avaliar' && (
+          <motion.div 
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed inset-0 z-[120] bg-[#FAF9F5] overflow-y-auto"
+          >
+            <CustomerReviewForm 
+              orderId={currentOrderId}
+              conviteId={currentConviteId}
+              onNavigateToView={navigateToView}
             />
           </motion.div>
         )}
