@@ -450,19 +450,25 @@ const Gallery = () => {
     const q = query(collection(db, 'arquivos'), orderBy('order', 'asc'));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       if (snapshot.empty) {
-        console.log("Banco de dados Firestore 'arquivos' está vazio. Seeding inicial de galeria...");
-        for (const dw of defaultWorks) {
-          try {
-            await addDoc(collection(db, 'arquivos'), {
-              title: dw.title,
-              category: dw.category,
-              img: dw.img,
-              order: dw.order,
-              createdAt: serverTimestamp()
-            });
-          } catch (err) {
-            console.error("Erro seeding de obra:", err);
+        console.log("Banco de dados Firestore 'arquivos' está vazio.");
+        // Apenas o administrador autenticado pode realizar o seeding de coleção 'arquivos' nula/vazia
+        if (auth.currentUser && auth.currentUser.email === 'andrewfmlemos@gmail.com') {
+          console.log("Usuário administrador detectado. Iniciando seeding inicial de galeria...");
+          for (const dw of defaultWorks) {
+            try {
+              await addDoc(collection(db, 'arquivos'), {
+                title: dw.title,
+                category: dw.category,
+                img: dw.img,
+                order: dw.order,
+                createdAt: serverTimestamp()
+              });
+            } catch (err) {
+              console.error("Erro seeding de obra:", err);
+            }
           }
+        } else {
+          console.log("Seeding ignorado. Aguardando login de administrador para seeding dos dados iniciais.");
         }
       } else {
         const worksData = snapshot.docs.map(doc => ({
@@ -755,7 +761,7 @@ const ClassesSection = () => {
                 'Aulas Individuais ou em Dupla',
                 'Arte 2D: Desenho Realista e Pirografia',
                 'Arte 3D: Modelagem e Entalhe em Madeira',
-                'Agendamento mensal - days e horários flexíveis'
+                'Agendamento mensal - dias e horários flexíveis'
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-4">
                   <div className="mt-1.5 w-5 h-5 rounded-full bg-brand-wood/10 flex items-center justify-center flex-shrink-0">
