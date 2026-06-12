@@ -24,25 +24,33 @@ export function CustomerReviewForm({ orderId, conviteId, onNavigateToView }: Cus
   useEffect(() => {
     async function fetchDetails() {
       setError(null);
+      console.log("[CustomerReviewForm] Fetching details. orderId:", orderId, "conviteId:", conviteId);
       if (!orderId && !conviteId) {
+        console.warn("[CustomerReviewForm] No orderId and no conviteId provided.");
         setLoading(false);
         return;
       }
       try {
         if (orderId) {
+          console.log("[CustomerReviewForm] Attempting to fetch order:", orderId);
           const orderRef = doc(db, 'ecom_orders', orderId);
           const snap = await getDoc(orderRef);
           if (snap.exists()) {
+            console.log("[CustomerReviewForm] Order fetched successfully:", snap.data());
             setOrder(snap.data());
           } else {
+            console.warn("[CustomerReviewForm] Order snapshot does not exist:", orderId);
             setError('Pedido não encontrado no ateliê. Verifique o código em seu e-mail.');
           }
         } else if (conviteId) {
+          console.log("[CustomerReviewForm] Attempting to fetch review invitation:", conviteId);
           const inviteRef = doc(db, 'ecom_review_invitations', conviteId);
           const snap = await getDoc(inviteRef);
           if (snap.exists()) {
+            console.log("[CustomerReviewForm] Review invitation fetched successfully:", snap.data());
             setInvite(snap.data());
           } else {
+            console.warn("[CustomerReviewForm] Review invitation snapshot does not exist:", conviteId);
             setError('Convite de avaliação não localizado ou expirado.');
           }
         }
