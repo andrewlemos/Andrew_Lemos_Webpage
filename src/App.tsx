@@ -925,17 +925,21 @@ const RecommendedProductsSection = () => {
   const categories = [
     'Todos',
     'Entalhe/Escultura em Madeira',
-    'Pintura',
+    'Pintura/Acabamento',
     'Desenho',
     'Pirografia',
     'Modelagem'
   ];
 
-  const processedProducts = products.map(p => ({
-    ...p,
-    category: p.category || 'Entalhe/Escultura em Madeira',
-    order: typeof p.order === 'number' && !isNaN(p.order) ? p.order : 9999
-  }));
+  const processedProducts = products.map(p => {
+    let cat = p.category || 'Entalhe/Escultura em Madeira';
+    if (cat === 'Pintura') cat = 'Pintura/Acabamento';
+    return {
+      ...p,
+      category: cat,
+      order: typeof p.order === 'number' && !isNaN(p.order) ? p.order : 9999
+    };
+  });
 
   const filteredProducts = processedProducts
     .filter(p => selectedCategory === 'Todos' || p.category === selectedCategory)
@@ -1411,7 +1415,7 @@ const AdminDashboard = () => {
                           required
                         >
                           <option value="Entalhe/Escultura em Madeira">Entalhe/Escultura em Madeira</option>
-                          <option value="Pintura">Pintura</option>
+                          <option value="Pintura/Acabamento">Pintura/Acabamento</option>
                           <option value="Desenho">Desenho</option>
                           <option value="Pirografia">Pirografia</option>
                           <option value="Modelagem">Modelagem</option>
@@ -1473,7 +1477,7 @@ const AdminDashboard = () => {
                             className="w-full p-2 border rounded-lg bg-gray-50 text-gray-700"
                           >
                             <option value="Entalhe/Escultura em Madeira">Entalhe/Escultura em Madeira</option>
-                            <option value="Pintura">Pintura</option>
+                            <option value="Pintura/Acabamento">Pintura/Acabamento</option>
                             <option value="Desenho">Desenho</option>
                             <option value="Pirografia">Pirografia</option>
                             <option value="Modelagem">Modelagem</option>
