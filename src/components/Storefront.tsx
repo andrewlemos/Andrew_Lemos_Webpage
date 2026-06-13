@@ -805,15 +805,11 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                           <span className="bg-brand-wood text-white text-[9px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
                             {p.category}
                           </span>
-                          {isOutOfStock ? (
+                          {isOutOfStock && (
                             <span className="bg-rose-500 text-white text-[9px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm">
                               Esgotado
                             </span>
-                          ) : p.stock <= 2 ? (
-                            <span className="bg-amber-500 text-white text-[9px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm animate-pulse">
-                              Apenas {p.stock} resta
-                            </span>
-                          ) : null}
+                          )}
                         </div>
                         
                         {/* Interactive quick view eye button on hover */}
