@@ -58,6 +58,34 @@ export const AdminStore = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<EcomOrder | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<ShippingQuote | null>(null);
+  const [editingProduct, setEditingProduct] = useState<EcomProduct | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editImagesText, setEditImagesText] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [editWeight, setEditWeight] = useState('');
+  const [editHeight, setEditHeight] = useState('');
+  const [editWidth, setEditWidth] = useState('');
+  const [editLength, setEditLength] = useState('');
+  const [editStock, setEditStock] = useState('');
+  const [editShippingType, setEditShippingType] = useState<'automatic' | 'quote'>('automatic');
+
+  useEffect(() => {
+    if (editingProduct) {
+      setEditName(editingProduct.name || '');
+      setEditDescription(editingProduct.description || '');
+      setEditCategory(editingProduct.category || 'Entalhe/Escultura em Madeira');
+      setEditImagesText(editingProduct.images ? editingProduct.images.join('\n') : '');
+      setEditPrice(editingProduct.price !== undefined ? String(editingProduct.price) : '');
+      setEditWeight(editingProduct.weight !== undefined ? String(editingProduct.weight) : '');
+      setEditHeight(editingProduct.height !== undefined ? String(editingProduct.height) : '');
+      setEditWidth(editingProduct.width !== undefined ? String(editingProduct.width) : '');
+      setEditLength(editingProduct.length !== undefined ? String(editingProduct.length) : '');
+      setEditStock(editingProduct.stock !== undefined ? String(editingProduct.stock) : '');
+      setEditShippingType(editingProduct.shippingType || 'automatic');
+    }
+  }, [editingProduct]);
   
   // Custom in-app Confirmation popup state (bypasses iframe parent confirm blocks)
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -271,7 +299,7 @@ export const AdminStore = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    category: 'Escultura em Madeira',
+    category: 'Entalhe/Escultura em Madeira',
     imagesText: '', // multiple image lines
     price: '',
     weight: '',
@@ -395,7 +423,7 @@ export const AdminStore = () => {
       setFormData({
         name: '',
         description: '',
-        category: 'Escultura em Madeira',
+        category: 'Entalhe/Escultura em Madeira',
         imagesText: '',
         price: '',
         weight: '',
@@ -407,6 +435,43 @@ export const AdminStore = () => {
       });
     } catch (err: any) {
       console.error("Failed to add ecom product:", err);
+      alert(`Erro: ${err.message}`);
+    }
+  };
+
+  const handleUpdateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct || !editingProduct.id) return;
+    if (!editName || !editPrice || !editStock) {
+      alert("Por favor, preencha os campos obrigatórios (nome, preço e estoque).");
+      return;
+    }
+
+    try {
+      const cleanedImages = editImagesText
+        .split('\n')
+        .map(url => url.trim())
+        .filter(url => url.length > 0);
+
+      const productPayload = {
+        name: editName.trim(),
+        description: editDescription.trim(),
+        category: editCategory.trim(),
+        images: cleanedImages.length > 0 ? cleanedImages : ['https://images.unsplash.com/photo-1549490349-8643362247b5?q=80&w=687'],
+        price: parseFloat(editPrice) || 0,
+        weight: parseFloat(editWeight) || 0.3,
+        height: parseFloat(editHeight) || 12,
+        width: parseFloat(editWidth) || 12,
+        length: parseFloat(editLength) || 18,
+        stock: parseInt(editStock, 10) || 0,
+        shippingType: editShippingType || 'automatic'
+      };
+
+      await updateDoc(doc(db, 'ecom_products', editingProduct.id), productPayload);
+      setEditingProduct(null);
+      alert("Produto atualizado com sucesso!");
+    } catch (err: any) {
+      console.error("Failed to update ecom product:", err);
       alert(`Erro: ${err.message}`);
     }
   };
@@ -796,11 +861,11 @@ export const AdminStore = () => {
                       onChange={e => setFormData({...formData, category: e.target.value})}
                       className="w-full bg-white border rounded-xl px-4 py-2.5 text-xs focus:ring-1 focus:ring-brand-wood outline-none font-bold"
                     >
-                      <option value="Escultura em Madeira">Escultura em Madeira</option>
-                      <option value="Entalhe">Entalhe</option>
-                      <option value="Pintura">Pintura</option>
+                      <option value="Entalhe/Escultura em Madeira">Entalhe/Escultura em Madeira</option>
+                      <option value="Pintura/Acabamento">Pintura/Acabamento</option>
                       <option value="Desenho">Desenho</option>
                       <option value="Pirografia">Pirografia</option>
+                      <option value="Modelagem">Modelagem</option>
                       <option value="Ferramentas">Ferramentas</option>
                     </select>
                   </div>
@@ -881,12 +946,24 @@ export const AdminStore = () => {
                     <div>
                       <div className="flex items-start justify-between gap-2">
                         <h4 className="font-bold text-sm text-brand-ink truncate leading-tight">{p.name}</h4>
-                        <button 
-                          onClick={() => handleDeleteProduct(p.id!)}
-                          className="text-gray-400 hover:text-red-500 p-1 rounded-full transition-colors ease-in-out"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex gap-1 shrink-0">
+                          <button 
+                            type="button"
+                            onClick={() => setEditingProduct(p)}
+                            title="Editar Produto"
+                            className="text-gray-400 hover:text-brand-wood p-1 rounded-full transition-colors ease-in-out cursor-pointer text-xs"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => handleDeleteProduct(p.id!)}
+                            title="Excluir Produto"
+                            className="text-gray-400 hover:text-red-500 p-1 rounded-full transition-colors ease-in-out cursor-pointer text-xs"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                       <p className="text-gray-450 text-[10px] uppercase font-bold mt-0.5 tracking-wider flex items-center gap-1.5 flex-wrap">
                         <span>{p.category}</span>
@@ -2156,6 +2233,158 @@ export const AdminStore = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edição Completa de Produto Modal Overlay */}
+      <AnimatePresence>
+        {editingProduct && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setEditingProduct(null)} />
+            
+            <div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[85vh] overflow-y-auto z-10 p-6 md:p-8 relative shadow-2xl text-xs font-sans text-left">
+              <button 
+                onClick={() => setEditingProduct(null)}
+                className="absolute top-6 right-6 p-2 rounded-full hover:bg-gray-150 text-gray-500 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <form onSubmit={handleUpdateProduct} className="space-y-5 font-medium text-left">
+                <div>
+                  <h3 className="font-serif font-bold text-lg text-brand-ink leading-tight text-left">Editar Detalhes do Produto</h3>
+                  <p className="text-gray-400 text-[11px] mt-0.5 text-left">Altere quaisquer informações do produto. Os dados serão salvos de forma segura no catálogo.</p>
+                </div>
+
+                <div className="space-y-3.5 text-left">
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[10px]">Nome do Produto *</label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      className="w-full bg-slate-50 border border-gray-200/80 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood font-medium text-brand-ink"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[10px]">Descrição Detalhada</label>
+                    <textarea 
+                      rows={4}
+                      value={editDescription}
+                      onChange={e => setEditDescription(e.target.value)}
+                      className="w-full bg-slate-50 border border-gray-200/80 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood font-medium resize-none text-brand-ink"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-left">
+                    <div>
+                      <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[10px]">Preço Comercial (R$) *</label>
+                      <input 
+                        type="number" 
+                        step="0.01" 
+                        required 
+                        value={editPrice}
+                        onChange={e => setEditPrice(e.target.value)}
+                        className="w-full bg-slate-50 border border-gray-200/80 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood font-semibold text-brand-ink font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[10px]">Qtd. Estoque *</label>
+                      <input 
+                        type="number" 
+                        required 
+                        value={editStock}
+                        onChange={e => setEditStock(e.target.value)}
+                        className="w-full bg-slate-50 border border-gray-200/80 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood font-semibold text-brand-ink font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-left">
+                    <div>
+                      <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[10px]">Categoria do Catálogo</label>
+                      <select 
+                        value={editCategory}
+                        onChange={e => setEditCategory(e.target.value)}
+                        className="w-full bg-slate-50 border border-gray-200/80 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood font-bold text-gray-700"
+                      >
+                        <option value="Entalhe/Escultura em Madeira">Entalhe/Escultura em Madeira</option>
+                        <option value="Pintura/Acabamento">Pintura/Acabamento</option>
+                        <option value="Desenho">Desenho</option>
+                        <option value="Pirografia">Pirografia</option>
+                        <option value="Modelagem">Modelagem</option>
+                        <option value="Ferramentas">Ferramentas</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[10px]">Tipo de Frete</label>
+                      <select 
+                        value={editShippingType}
+                        onChange={e => setEditShippingType(e.target.value as 'automatic' | 'quote')}
+                        className="w-full bg-slate-50 border border-gray-200/80 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood font-bold text-gray-700"
+                      >
+                        <option value="automatic">Frete Automático</option>
+                        <option value="quote">Solicitar Cotação de Frete</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[10px]">Imagens Múltiplas (Uma URL por linha)</label>
+                    <textarea 
+                      rows={3}
+                      value={editImagesText}
+                      onChange={e => setEditImagesText(e.target.value)}
+                      placeholder="Coloque links/URLs de imagens para carrossel..."
+                      className="w-full bg-slate-50 border border-gray-200/80 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood font-mono text-[11px] text-gray-700"
+                    />
+                  </div>
+
+                  {/* Shipment specs elements */}
+                  <div className="bg-slate-50 p-4 rounded-xl border border-gray-200/70 space-y-2 text-left">
+                    <span className="font-bold text-[9.5px] text-brand-wood uppercase tracking-wider block">Dados Dimensionais (Cálculo de Envio / MelhorEnvio)</span>
+                    <div className="grid grid-cols-4 gap-2">
+                      <div>
+                        <label className="text-[9px] text-gray-400 block mb-0.5">Peso (kg)</label>
+                        <input type="number" step="0.01" value={editWeight} onChange={e=>setEditWeight(e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg text-center font-semibold text-brand-ink" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-gray-400 block mb-0.5">Alt. (cm)</label>
+                        <input type="number" step="1" value={editHeight} onChange={e=>setEditHeight(e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg text-center font-semibold text-brand-ink" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-gray-400 block mb-0.5">Larg. (cm)</label>
+                        <input type="number" step="1" value={editWidth} onChange={e=>setEditWidth(e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg text-center font-semibold text-brand-ink" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-gray-400 block mb-0.5">Comp. (cm)</label>
+                        <input type="number" step="1" value={editLength} onChange={e=>setEditLength(e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg text-center font-semibold text-brand-ink" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProduct(null)}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-5 py-2.5 rounded-xl cursor-pointer transition-all"
+                  >
+                    Descartar Alterações
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-brand-wood hover:bg-brand-clay text-white font-bold px-5 py-2.5 rounded-xl cursor-pointer transition-all uppercase tracking-wider text-[10px]"
+                  >
+                    Salvar Alterações Gerais
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
