@@ -87,8 +87,9 @@ service cloud.firestore {
              data.summary is string && data.summary.size() > 0 && data.summary.size() < 2000 &&
              data.imageUrl is string && data.imageUrl.size() < 1000 &&
              data.published is bool &&
-             data.createdAt is timestamp &&
-             (!("publishedAt" in data) || data.publishedAt == null || data.publishedAt is timestamp);
+             (!("createdAt" in data) || data.createdAt == null || data.createdAt is timestamp) &&
+             (!("publishedAt" in data) || data.publishedAt == null || data.publishedAt is timestamp) &&
+             (!("updatedAt" in data) || data.updatedAt == null || data.updatedAt is timestamp);
     }
 
     // Default deny catch-all

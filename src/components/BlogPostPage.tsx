@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { db, collection, onSnapshot, query } from '../firebase';
+import { db, collection, onSnapshot, query, auth } from '../firebase';
 import { where, limit } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import { BlogPost } from '../types';
 import { Calendar, ArrowLeft, ArrowRight, Share2, Clock, BookOpen, ChevronRight, Home } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -16,17 +17,32 @@ export const BlogPostPage: React.FC<BlogPostPageProps> = ({ slug, onNavigateToVi
   const [loading, setLoading] = useState(true);
   const [relatedPosts, setRelatedPosts] = useState<BlogPost[]>([]);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      setIsAdmin(user?.email === 'andrewfmlemos@gmail.com');
+    });
+    return () => unsubscribeAuth();
+  }, []);
 
   useEffect(() => {
     if (!slug) return;
     setLoading(true);
 
-    // Query for the specific slug
-    const q = query(
-      collection(db, 'ecom_blog_posts'),
-      where('slug', '==', slug),
-      limit(1)
-    );
+    // Query for the specific slug: if the logged user is not the admin, must be published
+    const q = isAdmin
+      ? query(
+          collection(db, 'ecom_blog_posts'),
+          where('slug', '==', slug),
+          limit(1)
+        )
+      : query(
+          collection(db, 'ecom_blog_posts'),
+          where('slug', '==', slug),
+          where('published', '==', true),
+          limit(1)
+        );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (!snapshot.empty) {

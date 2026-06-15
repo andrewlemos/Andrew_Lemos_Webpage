@@ -8,7 +8,9 @@ import {
   orderBy, 
   deleteDoc, 
   doc, 
-  updateDoc 
+  updateDoc,
+  handleFirestoreError,
+  OperationType
 } from '../firebase';
 import { BlogPost, Arquivo } from '../types';
 import { serverTimestamp } from 'firebase/firestore';
@@ -48,6 +50,7 @@ export const AdminBlogTab = () => {
   
   // UI helpers
   const [showImageSelector, setShowImageSelector] = useState(false);
+  const [showInlineImageSelector, setShowInlineImageSelector] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Helper to slugify title
@@ -82,6 +85,7 @@ export const AdminBlogTab = () => {
     }, (error) => {
       console.error("Erro ao escutar artigos:", error);
       setLoading(false);
+      handleFirestoreError(error, OperationType.LIST, 'ecom_blog_posts');
     });
 
     const qArquivos = query(collection(db, 'arquivos'), orderBy('order', 'asc'));
@@ -91,6 +95,9 @@ export const AdminBlogTab = () => {
         arquivosData.push({ id: doc.id, ...doc.data() } as Arquivo);
       });
       setArquivos(arquivosData);
+    }, (error) => {
+      console.error("Erro ao escutar arquivos:", error);
+      handleFirestoreError(error, OperationType.LIST, 'arquivos');
     });
 
     return () => {
@@ -193,6 +200,7 @@ export const AdminBlogTab = () => {
     } catch (error) {
       console.error("Erro ao salvar artigo:", error);
       alert("Ocorreu um erro ao salvar o artigo. Verifique as permissões.");
+      handleFirestoreError(error, OperationType.WRITE, `ecom_blog_posts/${editingId || 'new'}`);
     }
   };
 
@@ -204,6 +212,7 @@ export const AdminBlogTab = () => {
       } catch (error) {
         console.error("Erro ao excluir artigo:", error);
         alert("Falha ao excluir artigo.");
+        handleFirestoreError(error, OperationType.DELETE, `ecom_blog_posts/${id}`);
       }
     }
   };
@@ -222,6 +231,7 @@ export const AdminBlogTab = () => {
       triggerSuccess(`Artigo ${isNowNewPublished ? 'publicado' : 'despublicado'} com sucesso!`);
     } catch (error) {
       console.error("Erro ao alternar status do artigo:", error);
+      handleFirestoreError(error, OperationType.WRITE, `ecom_blog_posts/${post.id}`);
     }
   };
 
@@ -451,13 +461,85 @@ export const AdminBlogTab = () => {
               </button>
               <button
                 type="button"
-                onClick={() => insertFormatting('![Descrição da Imagem](', ')')}
-                className="p-2 hover:bg-white rounded-lg text-gray-600 hover:text-brand-ink transition-colors cursor-pointer text-xs flex items-center gap-1"
+                onClick={() => setShowInlineImageSelector(!showInlineImageSelector)}
+                className={`p-2 rounded-lg transition-colors cursor-pointer text-xs flex items-center gap-1 ${showInlineImageSelector ? 'bg-brand-wood text-white hover:bg-brand-wood/90' : 'hover:bg-white text-gray-600 hover:text-brand-ink'}`}
                 title="Inserir Imagem"
               >
                 <ImageIcon className="w-4 h-4" /> <span className="hidden sm:inline">Imagem</span>
               </button>
             </div>
+
+            {/* Selector de Imagens em Linha da Galeria */}
+            {showInlineImageSelector && (
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-2 max-h-48 overflow-y-auto">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Selecione uma Imagem da Galeria para o Texto:</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowInlineImageSelector(false)}
+                    className="text-xs text-brand-wood hover:underline cursor-pointer"
+                  >
+                    Fechar
+                  </button>
+                </div>
+                {arquivos.length === 0 ? (
+                  <p className="text-xs text-gray-400">Nenhuma imagem na galeria ainda. Você pode inserir por URL abaixo ou criar um item na Galeria primeiro.</p>
+                ) : (
+                  <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
+                    {arquivos.map((arq) => (
+                      <button
+                        key={arq.id}
+                        type="button"
+                        onClick={() => {
+                          insertFormatting(`![${arq.title}](${arq.img})`, '');
+                          setShowInlineImageSelector(false);
+                        }}
+                        className="relative border rounded-lg overflow-hidden h-14 w-full hover:border-brand-wood transition-all cursor-pointer group"
+                        title={`Inserir: ${arq.title}`}
+                      >
+                        <img src={arq.img} alt={arq.title} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <Plus className="w-4 h-4 text-white" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="pt-2 border-t flex gap-2 items-center">
+                  <span className="text-[10px] text-gray-400">Ou use uma URL externa:</span>
+                  <input
+                    type="text"
+                    id="external-inline-img-url"
+                    placeholder="https://exemplo.com/imagem.jpg"
+                    className="flex-grow p-1.5 bg-white border rounded text-xs focus:outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const val = (e.currentTarget as HTMLInputElement).value.trim();
+                        if (val) {
+                          insertFormatting(`![Imagem](${val})`, '');
+                          setShowInlineImageSelector(false);
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById('external-inline-img-url') as HTMLInputElement;
+                      const val = input?.value.trim();
+                      if (val) {
+                        insertFormatting(`![Imagem](${val})`, '');
+                        setShowInlineImageSelector(false);
+                      }
+                    }}
+                    className="bg-brand-wood text-white px-3 py-1.5 rounded text-xs hover:bg-brand-wood-dark cursor-pointer"
+                  >
+                    Inserir
+                  </button>
+                </div>
+              </div>
+            )}
 
             <textarea
               id="blog-content-textarea"
