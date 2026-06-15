@@ -131,8 +131,17 @@ const app = express();
 
 app.use(express.json());
 
+// Dynamic base URL tracking for cart email recoveries
+let lastKnownBaseUrl = "http://localhost:3000";
+
 // Middleware to log incoming requests and responses to server.log for inspection
 app.use((req, res, next) => {
+  const host = req.get("host");
+  if (host) {
+    const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") ? "http" : "https";
+    lastKnownBaseUrl = `${protocol}://${host}`;
+  }
+
   const startTime = Date.now();
   res.on("finish", () => {
     const duration = Date.now() - startTime;
@@ -843,9 +852,436 @@ async function sendDeliveredReviewRequestEmail(orderId: string, orderData: any, 
   }
 }
 
+// ==========================================
+// OUTSTANDING ABANDONED CART RECOVERY SYSTEM
+// ==========================================
+
+async function sendRecoveryEmail(
+  customerEmail: string,
+  customerName: string,
+  items: any[],
+  total: number,
+  step: 'msg_24h' | 'msg_48h' | 'msg_72h',
+  couponCode: string | null,
+  baseUrl: string
+) {
+  const transporter = getSmtpTransporter();
+  
+  let subject = "";
+  let preheader = "";
+  let bodyHtml = "";
+
+  // Build grid of product items with thumbnails and formatting
+  let itemsHtml = items.map(item => {
+    // Escape or check images. Standard format has item.images as string array
+    const imagePath = item.images && item.images[0] ? item.images[0] : '';
+    const imageUrl = imagePath
+      ? (imagePath.startsWith('http') ? imagePath : `${baseUrl}${imagePath}`)
+      : `${baseUrl}/img/placeholder.png`;
+    
+    return `
+      <div style="display: flex; align-items: center; padding: 15px 0; border-bottom: 1px solid #ECEBE6; gap: 15px;">
+        <img src="${imageUrl}" referrerPolicy="no-referrer" alt="${item.name || 'Obra'}" style="width: 70px; height: 70px; object-fit: cover; border-radius: 8px; border: 1px solid #E5E4DE; margin-right: 15px;" />
+        <div style="flex-grow: 1; text-align: left;">
+          <h4 style="margin: 0; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 14px; color: #1E1E1C; margin-bottom: 4px;">${item.name || 'Obra de Arte'}</h4>
+          <p style="margin: 0; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 11px; color: #7B7974;">Qtd: ${item.quantity || 1} • R$ ${Number(item.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} un</p>
+        </div>
+        <div style="font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #8F5535; white-space: nowrap; margin-left: 15px;">
+          R$ ${(Number(item.price || 0) * Number(item.quantity || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const cartRecoveryId = items[0]?.cartId || '';
+  const recoveryUrl = couponCode 
+    ? `${baseUrl}/?recoverCartId=${cartRecoveryId}&appliedCoupon=${couponCode}`
+    : `${baseUrl}/?recoverCartId=${cartRecoveryId}`;
+
+  if (step === 'msg_24h') {
+    subject = "Espera aí! Obras de arte esculpidas em madeira esperam por você... 🪵✨";
+    preheader = "Vimos que você deixou itens no carrinho. Que tal concluir seu pedido do Ateliê?";
+    bodyHtml = `
+      <p style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 15px; color: #4A4944; line-height: 1.6; margin-bottom: 25px;">
+        Olá, <strong>${customerName}</strong>! Tudo bem?
+      </p>
+      <p style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 14px; color: #4A4944; line-height: 1.6; margin-bottom: 20px;">
+        Notamos que você selecionou algumas de nossas obras exclusivas esculpidas à mão, mas não concluiu seu pedido. Cada entalhe e escultura carrega a essência da madeira nobre e dedicação total do artista.
+      </p>
+      <p style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 14px; color: #4A4944; line-height: 1.6; margin-bottom: 25px; font-weight: 500;">
+        Separamos suas obras selecionadas com muito carinho para que não se percam:
+      </p>
+      
+      <div style="background-color: #FAF9F6; border: 1px solid #E5E4DE; border-radius: 12px; padding: 15px; margin-bottom: 30px;">
+        ${itemsHtml}
+        <div style="text-align: right; padding-top: 15px; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 15px; font-weight: bold; color: #1E1E1C;">
+          Total das Obras: <span style="font-family: inherit; font-size: 18px; color: #8F5535;">R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin: 35px 0;">
+        <a href="${recoveryUrl}" target="_blank" style="background-color: #8F5535; color: #FFFFFF; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: bold; text-decoration: none; padding: 14px 28px; border-radius: 8px; box-shadow: 0 4px 6px rgba(143, 85, 53, 0.15); display: inline-block;">
+          Retomar Meu Pedido 🪵
+        </a>
+      </div>
+
+      <p style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 13px; color: #7B7974; line-height: 1.6; text-align: center;">
+        Se você tiver alguma dúvida sobre o frete, formas de pagamento transparentes ou queira solicitar um entalhe sob medida, simplesmente responda a este e-mail ou fale diretamente conosco.
+      </p>
+    `;
+  } else if (step === 'msg_48h') {
+    subject = "Seu carrinho com 5% de DESCONTO exclusivo no Ateliê! 🎁 de @AndrewLemos";
+    preheader = "Geramos um cupom individual de desconto especial para suas esculturas!";
+    bodyHtml = `
+      <p style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 15px; color: #4A4944; line-height: 1.6; margin-bottom: 25px;">
+        Olá, <strong>${customerName}</strong>!
+      </p>
+      <p style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 14px; color: #4A4944; line-height: 1.6; margin-bottom: 20px;">
+        Queremos muito que você leve essas obras de arte extraordinárias para decorar seu ambiente. Para dar aquele empurrãozinho especial, o mestre Andrew Lemos autorizou um <strong>cupom exclusivo de 5% de desconto</strong> para você concluir seu pedido hoje!
+      </p>
+      
+      <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #FFFDEB; border: 2px dashed #E6C844; border-radius: 12px;">
+        <span style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 12px; color: #856404; text-transform: uppercase; font-weight: bold; letter-spacing: 1px; display: block; margin-bottom: 8px;">CUPOM INDIVIDUAL DE 5% DE DESCONTO</span>
+        <div style="font-family: monospace; font-size: 28px; font-weight: bold; color: #1E1E1C; letter-spacing: 2px; padding: 8px 20px; background: #FFFFFF; display: inline-block; border-radius: 6px; border: 1px solid #E5E4DE;">
+          ${couponCode}
+        </div>
+        <span style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 11px; color: #721C24; font-weight: 500; display: block; margin-top: 10px;">Válido por apenas 7 dias • Uso único vinculado ao seu e-mail</span>
+      </div>
+
+      <p style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 14px; color: #4A4944; line-height: 1.6; margin-bottom: 20px;">
+        O cupom aplica um desconto automático de 5% sobre o valor das obras no carrinho. Veja seus itens guardados:
+      </p>
+
+      <div style="background-color: #FAF9F6; border: 1px solid #E5E4DE; border-radius: 12px; padding: 15px; margin-bottom: 30px;">
+        ${itemsHtml}
+        <div style="text-align: right; padding-top: 15px; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 15px; font-weight: bold; color: #1E1E1C;">
+          Subtotal: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} <br/>
+          <span style="color: #28A745;">Com 5% OFF: R$ ${(total * 0.95).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin: 35px 0;">
+        <a href="${recoveryUrl}" target="_blank" style="background-color: #28a745; color: #FFFFFF; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: bold; text-decoration: none; padding: 14px 28px; border-radius: 8px; box-shadow: 0 4px 6px rgba(40, 167, 69, 0.15); display: inline-block;">
+          Aplicar 5% OFF e Retomar Pedido 🏷️
+        </a>
+      </div>
+    `;
+  } else if (step === 'msg_72h') {
+    subject = "Último aviso: Suas esculturas em madeira e cupom de 5% vão expirar! ⏳🪵";
+    preheader = "Este é o último aviso antes do vencimento do seu carrinho reservado.";
+    bodyHtml = `
+      <p style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 15px; color: #4A4944; line-height: 1.6; margin-bottom: 25px;">
+        Olá, <strong>${customerName}</strong>,
+      </p>
+      <p style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 14px; color: #4A4944; line-height: 1.6; margin-bottom: 20px;">
+        Esta é a última oportunidade de garantir suas peças exclusivas com o desconto que liberamos. Nossos produtos são totalmente artesanais e entalhados peça por peça, o que significa que o estoque é extremamente limitado.
+      </p>
+      <p style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 14px; color: #4A4944; line-height: 1.6; margin-bottom: 20px;">
+        Se você não concluir o pedido hoje, seu carrinho reservado será liberado e o cupom de 5% de desconto <strong>${couponCode || ''}</strong> será cancelado definitivamente.
+      </p>
+
+      <div style="background-color: #FAF9F6; border: 1px solid #E5E4DE; border-radius: 12px; padding: 15px; margin-bottom: 30px;">
+        ${itemsHtml}
+        <div style="text-align: right; padding-top: 15px; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 15px; font-weight: bold; color: #1E1E1C;">
+          Subtotal com 5% OFF ativo: <span style="font-family: inherit; font-size: 16px; color: #28A745;">R$ ${(total * 0.95).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin: 35px 0;">
+        <a href="${recoveryUrl}" target="_blank" style="background-color: #CC4B37; color: #FFFFFF; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: bold; text-decoration: none; padding: 14px 28px; border-radius: 8px; box-shadow: 0 4px 6px rgba(204, 75, 55, 0.15); display: inline-block;">
+          Concluir Minha Compra Antes de Expirar ⚡
+        </a>
+      </div>
+    `;
+  }
+
+  // Combine into fully styled parent HTML container
+  const fullHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>${subject}</title>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #F5F4EE; -webkit-text-size-adjust: none; text-size-adjust: none;">
+      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F5F4EE; padding: 20px 0;">
+        <tr>
+          <td align="center">
+            <!-- Hidden Preheader -->
+            <div style="display: none; max-height: 0px; overflow: hidden; font-size: 0px; color: transparent; line-height: 0px;">
+              ${preheader}
+            </div>
+            
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #FFFFFF; border: 1px solid #E5E4DE; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+              <!-- Header Brand Banner -->
+              <tr>
+                <td style="background-color: #1E1E1C; padding: 30px; text-align: center;">
+                  <h1 style="margin: 0; font-family: Georgia, serif; font-size: 24px; color: #F5F4EE; letter-spacing: 1px; font-weight: normal;">ATELIÊ RECOMECE</h1>
+                  <span style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 11px; color: #8F5535; text-transform: uppercase; font-weight: bold; letter-spacing: 2px;">Esculturas & Entalhes em Madeira</span>
+                </td>
+              </tr>
+              
+              <!-- Core Content -->
+              <tr>
+                <td style="padding: 40px; text-align: left;">
+                  ${bodyHtml}
+                </td>
+              </tr>
+              
+              <!-- Footer Section -->
+              <tr>
+                <td style="background-color: #FAF9F6; border-top: 1px solid #ECEBE6; padding: 30px; text-align: center;">
+                  <p style="margin: 0; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 12px; color: #7B7974; margin-bottom: 6px;">Ateliê Recomece • Obras de Arte por Andrew Lemos</p>
+                  <p style="margin: 0; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 11px; color: #A4A29C;">E-mail: andrewfmlemos@gmail.com • WhatsApp: (21) 98048-4334</p>
+                  <div style="margin-top: 15px; border-top: 1px solid #ECEBE6; padding-top: 15px;">
+                    <span style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 10px; color: #A4A29C;">Você recebeu esta mensagem porque iniciou o processo de compra no Ateliê Recomece.</span>
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+
+  await transporter.sendMail({
+    from: `"Ateliê Andrew Lemos" <${(transporter.options as any).auth?.user || 'andrewfmlemos@gmail.com'}>`,
+    to: customerEmail,
+    subject: subject,
+    html: fullHtml
+  });
+}
+
+async function executeCartsRecoverySweep(baseUrl: string) {
+  try {
+    if (!adminDb) return 0;
+    
+    console.log("[Recuperação de Carrinho] Iniciando varredura eletrônica de carrinhos ativos...");
+
+    const now = new Date();
+    
+    // Dates thresholds
+    const limit24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const limit48h = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+    const limit72h = new Date(now.getTime() - 72 * 60 * 60 * 1000);
+
+    // Let's query matching carts (status are case-sensitive matching firestore writes)
+    const snapshot = await adminDb.collection("ecom_abandoned_carts")
+      .where("status", "in", ["Ativo", "Abandonado"])
+      .get();
+
+    let processedCount = 0;
+
+    for (const doc of snapshot.docs) {
+      const cartId = doc.id;
+      const cart = doc.data();
+      if (!cart) continue;
+
+      const lastActiveDate = new Date(cart.lastActive);
+      const sentMessages = cart.sentMessages || [];
+      const email = cart.customerEmail;
+      const name = cart.customerName;
+      const items = cart.items || [];
+      const total = cart.total || 0;
+
+      // Map existing sent message types for safety
+      const hasSent24h = sentMessages.some((m: any) => m.type === "msg_24h");
+      const hasSent48h = sentMessages.some((m: any) => m.type === "msg_48h");
+      const hasSent72h = sentMessages.some((m: any) => m.type === "msg_72h");
+
+      // Inject cartId inside each item dictionary to help build recovery URLs
+      const formattedItems = items.map((it: any) => ({ ...it, cartId }));
+
+      // 1. Process 24-hour reminder
+      if (lastActiveDate <= limit24h && lastActiveDate > limit48h && !hasSent24h) {
+        console.log(`[Recuperação de Carrinho] Enviando lembrete de 24h para ${email}...`);
+        await sendRecoveryEmail(email, name, formattedItems, total, 'msg_24h', null, baseUrl).catch(e => console.error(e));
+        
+        sentMessages.push({
+          type: "msg_24h",
+          sentAt: now.toISOString()
+        });
+
+        await doc.ref.update({
+          status: "Abandonado", // Transition from Ativo to Abandonado
+          sentMessages,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        processedCount++;
+      }
+      
+      // 2. Process 48-hour discount coupon code
+      else if (lastActiveDate <= limit48h && lastActiveDate > limit72h && !hasSent48h) {
+        console.log(`[Recuperação de Carrinho] Gerando cupom e enviando e-mail de 48h para ${email}...`);
+        
+        const couponCode = 'REC5-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+        const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days valid
+
+        // Save Coupon in DB
+        await adminDb.collection("ecom_coupons").doc(couponCode).set({
+          code: couponCode,
+          discountPercent: 5,
+          customerEmail: email,
+          expiresAt: expiresAt.toISOString(),
+          used: false,
+          cartId: cartId,
+          createdAt: now.toISOString()
+        });
+
+        await sendRecoveryEmail(email, name, formattedItems, total, 'msg_48h', couponCode, baseUrl).catch(e => console.error(e));
+
+        sentMessages.push({
+          type: "msg_48h",
+          sentAt: now.toISOString(),
+          couponCode: couponCode
+        });
+
+        await doc.ref.update({
+          couponCode: couponCode,
+          sentMessages,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        processedCount++;
+      }
+
+      // 3. Process 72-hour final warning
+      else if (lastActiveDate <= limit72h && !hasSent72h) {
+        console.log(`[Recuperação de Carrinho] Enviando aviso final de 72h para ${email}...`);
+        const activeCoupon = cart.couponCode || null;
+
+        await sendRecoveryEmail(email, name, formattedItems, total, 'msg_72h', activeCoupon, baseUrl).catch(e => console.error(e));
+
+        sentMessages.push({
+          type: "msg_72h",
+          sentAt: now.toISOString(),
+          couponCode: activeCoupon
+        });
+
+        await doc.ref.update({
+          status: "Expirado", // Transition to Expirado
+          sentMessages,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        processedCount++;
+      }
+    }
+
+    console.log(`[Recuperação de Carrinho] Varredura finalizada. ${processedCount} ações executadas.`);
+    return processedCount;
+  } catch (err) {
+    console.error("[Recuperação de Carrinho] Falha durante varredura de recuperação:", err);
+    throw err;
+  }
+}
+
+// REST API endpoint to manually send specific recovery steps to standard abandoned carts
+app.post("/api/vendas/abandoned-carts/manual-send", async (req, res) => {
+  const { cartId, step } = req.body;
+  if (!cartId || !step) {
+    return res.status(400).json({ error: "Faltando cartId ou step" });
+  }
+
+  try {
+    if (!adminDb) throw new Error("Banco de dados indisponível no servidor.");
+
+    const cartRef = adminDb.collection("ecom_abandoned_carts").doc(cartId);
+    const cartSnap = await cartRef.get();
+
+    if (!cartSnap.exists) {
+      return res.status(404).json({ error: "Carrinho de compras não foi localizado no Firestore." });
+    }
+
+    const cartData = cartSnap.data();
+    if (!cartData) throw new Error("Os dados do carrinho estão corrompidos ou inconsistentes.");
+
+    const email = cartData.customerEmail;
+    const name = cartData.customerName;
+    const items = cartData.items || [];
+    const total = cartData.total || 0;
+    const sentMessages = cartData.sentMessages || [];
+
+    const host = req.get("host") || "localhost:3000";
+    const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") ? "http" : "https";
+    const baseUrl = `${protocol}://${host}`;
+
+    // Format items with cartId
+    const formattedItems = items.map((it: any) => ({ ...it, cartId }));
+
+    let couponCode = cartData.couponCode || null;
+
+    if (step === 'msg_48h' && !couponCode) {
+      // Generate coupon code if not already available
+      couponCode = 'REC5-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      await adminDb.collection("ecom_coupons").doc(couponCode).set({
+        code: couponCode,
+        discountPercent: 5,
+        customerEmail: email,
+        expiresAt: expiresAt.toISOString(),
+        used: false,
+        cartId: cartId,
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    await sendRecoveryEmail(email, name, formattedItems, total, step, couponCode, baseUrl);
+
+    // Save to historical logs
+    sentMessages.push({
+      type: step,
+      sentAt: new Date().toISOString(),
+      couponCode: couponCode
+    });
+
+    const updateObj: any = {
+      sentMessages,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    if (step === 'msg_24h' && cartData.status === 'Ativo') {
+      updateObj.status = 'Abandonado';
+    }
+    if (step === 'msg_48h' && couponCode) {
+      updateObj.couponCode = couponCode;
+    }
+    if (step === 'msg_72h') {
+      updateObj.status = 'Expirado';
+    }
+
+    await cartRef.update(updateObj);
+
+    return res.json({ success: true, message: `E-mail de recuperação (${step === 'msg_24h' ? 'Lembrete' : step === 'msg_48h' ? 'Cupom OFF' : 'Última chance'}) enviado com sucesso!` });
+  } catch (err: any) {
+    console.error("Manual trigger failed:", err);
+    return res.status(500).json({ error: parseSMTPError(err) });
+  }
+});
+
+// REST API endpoint to manually trigger a sweep of all active carts (Admin Dashboard option)
+app.post("/api/vendas/abandoned-carts/cron", async (req, res) => {
+  try {
+    const host = req.get("host") || "localhost:3000";
+    const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") ? "http" : "https";
+    const baseUrl = `${protocol}://${host}`;
+
+    const processed = await executeCartsRecoverySweep(baseUrl);
+    return res.json({ success: true, processedCount: processed });
+  } catch (err: any) {
+    console.error("Cron manual task failed:", err);
+    return res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// Start auto periodic sweep every hour in backend memory
+setInterval(() => {
+  executeCartsRecoverySweep(lastKnownBaseUrl).catch(e => console.error("Hourly recovery task exception:", e));
+}, 1000 * 60 * 60);
+
 // 2. Checkout Creation Endpoint (PagSeguro integration or virtual sandbox)
 app.post("/api/vendas/checkout", async (req, res) => {
-  const { userId, customerInfo, items, shippingMethod, shippingCost } = req.body;
+  const { userId, customerInfo, items, shippingMethod, shippingCost, couponCode, cartId } = req.body;
   
   if (!customerInfo || !items || !Array.isArray(items) || items.length === 0 || !shippingMethod) {
     return res.status(400).json({ error: "Dados de checkout incompletos." });
@@ -874,7 +1310,30 @@ app.post("/api/vendas/checkout", async (req, res) => {
 
   // Calculate Subtotal and Total
   const subtotal = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
-  const total = subtotal + Number(shippingCost);
+  
+  // Apply coupon discount if applicable
+  let discountAmount = 0;
+  let appliedCouponCode = null;
+  if (couponCode) {
+    try {
+      const couponRef = adminDb.collection("ecom_coupons").doc(couponCode.toUpperCase().trim());
+      const couponSnap = await couponRef.get();
+      if (couponSnap.exists) {
+        const couponData = couponSnap.data();
+        if (couponData && !couponData.used && new Date(couponData.expiresAt) >= new Date()) {
+          if (couponData.customerEmail.toLowerCase() === customerInfo.email.toLowerCase()) {
+            discountAmount = subtotal * (Number(couponData.discountPercent) / 100);
+            appliedCouponCode = couponCode.toUpperCase().trim();
+            console.log(`[Cupom Aplicado] Cupom ${appliedCouponCode} concedeu desconto de R$ ${discountAmount}`);
+          }
+        }
+      }
+    } catch (couponErr) {
+      console.error("Failed to fetch or validate checkout coupon:", couponErr);
+    }
+  }
+
+  const total = subtotal + Number(shippingCost) - discountAmount;
 
   // Generate unique order ID
   const orderId = "ORD-" + Math.random().toString(36).substr(2, 6).toUpperCase();
@@ -891,6 +1350,9 @@ app.post("/api/vendas/checkout", async (req, res) => {
       shippingMethod,
       shippingCost: Number(shippingCost),
       subtotal: Number(subtotal),
+      discountAmount: Number(discountAmount),
+      couponCode: appliedCouponCode,
+      cartId: cartId || null,
       total: Number(total),
       status: "Aguardando pagamento",
       paymentId: "",
@@ -1401,6 +1863,24 @@ async function updateOrderStatusInDatabase(orderId: string, status: string, paym
     // Send payment email confirmation
     const finalBaseUrl = baseUrl || "http://localhost:3000";
     sendOrderPaymentConfirmationEmail(orderId, orderData, finalBaseUrl).catch(e => console.error("Async sending of payment confirmation failed:", e));
+
+    // Handle coupon and cart recovery updates upon legitimate payment receipt
+    if (orderData?.couponCode) {
+      adminDb.collection("ecom_coupons").doc(orderData.couponCode.toUpperCase().trim()).update({
+        used: true,
+        usedAt: admin.firestore.FieldValue.serverTimestamp(),
+        orderId: orderId
+      }).then(() => console.log(`[Recuperação de Carrinho] Cupom ${orderData.couponCode} invalidado com sucesso.`))
+        .catch((e: any) => console.warn("[Recuperação de Carrinho] Falha ao marcar cupom de recuperação como usado:", e));
+    }
+
+    if (orderData?.cartId) {
+      adminDb.collection("ecom_abandoned_carts").doc(orderData.cartId).update({
+        status: "Recuperado",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }).then(() => console.log(`[Recuperação de Carrinho] Carrinho ${orderData.cartId} marcado como Recuperado.`))
+        .catch((e: any) => console.warn("[Recuperação de Carrinho] Falha ao transicionar status do carrinho para Recuperado:", e));
+    }
 
     // Automatized automatic shipping label generation on Melhor Envio
     processMelhorEnvioShipmentForPaidOrder(orderId, orderData).catch(e => console.error("[Melhor Envio] Auto-processing failure:", e));

@@ -163,6 +163,39 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["customerName", "customerEmail", "status"]
+    },
+    "EcomAbandonedCart": {
+      "title": "EcomAbandonedCart",
+      "description": "Abandoned cart details for recovery systems",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string" },
+        "customerEmail": { "type": "string", "format": "email" },
+        "customerPhone": { "type": "string" },
+        "items": { "type": "array" },
+        "total": { "type": "number" },
+        "lastActive": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Ativo", "Abandonado", "Recuperado", "Expirado"] },
+        "sentMessages": { "type": "array" },
+        "couponCode": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerName", "customerEmail", "items", "total", "lastActive", "status"]
+    },
+    "EcomCoupon": {
+      "title": "EcomCoupon",
+      "description": "A single-use 5% recovery coupon validation details",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "discountPercent": { "type": "number" },
+        "customerEmail": { "type": "string", "format": "email" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "used": { "type": "boolean" },
+        "cartId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "discountPercent", "customerEmail", "expiresAt", "used"]
     }
   },
   "firestore": {
@@ -197,6 +230,14 @@
     "/ecom_review_invitations/{invitationId}": {
       "schema": "EcomReviewInvitation",
       "description": "Collection of manual review invitations"
+    },
+    "/ecom_abandoned_carts/{cartId}": {
+      "schema": "EcomAbandonedCart",
+      "description": "Collection of captured active and abandoned shopping carts"
+    },
+    "/ecom_coupons/{couponId}": {
+      "schema": "EcomCoupon",
+      "description": "Collection of single-use recovery coupons"
     }
   }
 }

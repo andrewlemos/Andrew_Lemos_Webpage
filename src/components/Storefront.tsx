@@ -142,6 +142,12 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
   const [checkoutPassword, setCheckoutPassword] = useState('');
   const [checkoutConfirmPassword, setCheckoutConfirmPassword] = useState('');
 
+  // Recovery Coupon System States
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<any | null>(null);
+  const [couponError, setCouponError] = useState('');
+  const [couponSuccess, setCouponSuccess] = useState('');
+
   // Load customer profile if logged in
   useEffect(() => {
     if (!userId) {
@@ -176,6 +182,156 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
 
     fetchProfile();
   }, [userId]);
+
+  // Validate coupon inside checkout front-end side
+  const handleApplyCoupon = async (code: string, customerEmailOverride?: string) => {
+    setCouponError('');
+    setCouponSuccess('');
+    setAppliedCoupon(null);
+    
+    const targetCode = code.trim().toUpperCase();
+    if (!targetCode) {
+      setCouponError('Por favor, digite um código de cupom.');
+      return;
+    }
+
+    try {
+      const docRef = doc(db, 'ecom_coupons', targetCode);
+      const docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) {
+        setCouponError('Cupom inválido ou inexistente.');
+        return;
+      }
+
+      const couponData = docSnap.data();
+
+      if (couponData?.used) {
+        setCouponError('Este cupom já foi utilizado.');
+        return;
+      }
+
+      const expirationDate = new Date(couponData?.expiresAt);
+      if (expirationDate < new Date()) {
+        setCouponError('Este cupom já expirou.');
+        return;
+      }
+
+      const targetEmail = customerEmailOverride || customerInfo.email;
+      if (targetEmail && targetEmail.trim() && couponData?.customerEmail.toLowerCase() !== targetEmail.trim().toLowerCase()) {
+        setCouponError('Este cupom pertence a outro cliente.');
+        return;
+      }
+
+      setAppliedCoupon(couponData);
+      setCouponSuccess(`Cupom ${targetCode} aplicado! Desconto de ${couponData?.discountPercent}% concedido.`);
+    } catch (err: any) {
+      console.error("Error applying coupon:", err);
+      setCouponError('Erro ao validar o cupom.');
+    }
+  };
+
+  // Load Recovery Cart from URL query Parameters
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const recoverCartId = params.get('recoverCartId');
+    const urlCoupon = params.get('appliedCoupon');
+
+    if (recoverCartId) {
+      console.log("[Recuperação de Carrinho] Tentando recuperar carrinho:", recoverCartId);
+      const fetchRecoveredCart = async () => {
+        try {
+          const docSnap = await getDoc(doc(db, 'ecom_abandoned_carts', recoverCartId));
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data && data.items && Array.isArray(data.items)) {
+              const restoredItems: CartItem[] = data.items.map((it: any) => ({
+                id: it.productId,
+                name: it.name,
+                price: Number(it.price),
+                quantity: Number(it.quantity),
+                images: it.images || [],
+                category: 'Madeira',
+                description: 'Obra de arte recuperada do carrinho.',
+                weight: 1,
+                height: 10,
+                width: 10,
+                length: 10,
+                stock: it.stock !== undefined ? Number(it.stock) : 10
+              }));
+              
+              setCart(restoredItems);
+              localStorage.setItem('ecom_cart', JSON.stringify(restoredItems));
+              
+              setCustomerInfo(prev => ({
+                ...prev,
+                name: data.customerName || '',
+                email: data.customerEmail || '',
+                phone: data.customerPhone || ''
+              }));
+
+              localStorage.setItem('ecom_cart_recovery_id', recoverCartId);
+              setIsCartOpen(true);
+              setCheckoutStep('details');
+
+              console.log("[Recuperação de Carrinho] Carrinho e dados restaurados com sucesso!");
+
+              if (urlCoupon) {
+                setCouponCodeInput(urlCoupon);
+                handleApplyCoupon(urlCoupon, data.customerEmail || '');
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Restoring recovered cart failed:", err);
+        }
+      };
+      
+      fetchRecoveredCart();
+    }
+  }, [products]);
+
+  // Dynamic Background capture of active/abandoned carts
+  useEffect(() => {
+    if (cart.length === 0 || !customerInfo.name.trim() || !customerInfo.email.trim()) {
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        let recoveryId = localStorage.getItem('ecom_cart_recovery_id');
+        if (!recoveryId) {
+          recoveryId = 'CRT-' + Math.random().toString(36).substring(2, 8).toUpperCase() + Date.now().toString(36).toUpperCase();
+          localStorage.setItem('ecom_cart_recovery_id', recoveryId);
+        }
+
+        const cartDoc = {
+          id: recoveryId,
+          customerName: customerInfo.name.trim(),
+          customerEmail: customerInfo.email.trim(),
+          customerPhone: customerInfo.phone.trim(),
+          items: cart.map(item => ({
+            productId: item.id,
+            name: item.name,
+            price: Number(item.price),
+            quantity: Number(item.quantity),
+            images: item.images || []
+          })),
+          total: cart.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0),
+          lastActive: new Date().toISOString(),
+          status: 'Ativo',
+          createdAt: new Date().toISOString()
+        };
+
+        await setDoc(doc(db, 'ecom_abandoned_carts', recoveryId), cartDoc, { merge: true });
+        console.log("[Recuperação de Carrinho] Carrinho sincronizado no Firestore.");
+      } catch (err) {
+        console.warn("Silent cart capture error:", err);
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [cart, customerInfo.name, customerInfo.email, customerInfo.phone]);
 
   // Shipping
   const [shippingCep, setShippingCep] = useState('');
@@ -603,7 +759,9 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
         })),
         shippingMethod: selectedShipping.name,
         shippingServiceId: selectedShipping.id,
-        shippingCost: selectedShipping.price
+        shippingCost: selectedShipping.price,
+        couponCode: appliedCoupon ? appliedCoupon.id : null,
+        cartId: localStorage.getItem('ecom_cart_recovery_id') || null
       };
 
       const response = await fetch('/api/vendas/checkout', {
@@ -618,6 +776,9 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
           // Clear shopping cart
           setCart([]);
           localStorage.removeItem('ecom_cart');
+          localStorage.removeItem('ecom_cart_recovery_id');
+          setAppliedCoupon(null);
+          setCouponCodeInput('');
           setCheckoutStep('browsing');
           setIsCartOpen(false);
 
@@ -654,7 +815,8 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
 
   // Math totals
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const grandTotal = subtotal + (selectedShipping ? selectedShipping.price : 0);
+  const discountAmount = appliedCoupon ? (subtotal * (Number(appliedCoupon.discountPercent) / 100)) : 0;
+  const grandTotal = subtotal + (selectedShipping ? selectedShipping.price : 0) - discountAmount;
 
   // Filter products by Search query, category option, and price range
   const categories = ['Todos', ...Array.from(new Set(products.map(p => p.category)))];
@@ -1284,10 +1446,40 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                           }
                         </span>
                       </div>
+                      {appliedCoupon && (
+                        <div className="flex justify-between text-emerald-600 font-semibold bg-emerald-50/50 p-1.5 rounded border border-emerald-100/55 animate-fade-in">
+                          <span>Desconto ({appliedCoupon.id} - 5% OFF)</span>
+                          <span>- R$ {discountAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                      
                       <div className="flex justify-between text-brand-ink font-bold text-base pt-2 border-t">
                         <span>Total Geral</span>
                         <span className="text-lg">R$ {grandTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       </div>
+                    </div>
+
+                    {/* Recovery Coupon application container field */}
+                    <div className="py-2.5 border-t border-b border-brand-wood/10 space-y-2">
+                      <label className="block text-[10px] font-bold text-brand-dark uppercase tracking-wider">Cupom de Recuperação</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="DIGITE SEU CUPOM"
+                          value={couponCodeInput}
+                          onChange={(e) => setCouponCodeInput(e.target.value)}
+                          className="flex-1 bg-white border border-brand-wood/10 rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-brand-clay"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleApplyCoupon(couponCodeInput)}
+                          className="bg-brand-wood hover:bg-brand-clay text-white px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                      {couponError && <p className="text-[10px] text-red-600 font-semibold">{couponError}</p>}
+                      {couponSuccess && <p className="text-[10px] text-emerald-600 font-semibold">{couponSuccess}</p>}
                     </div>
 
                     {checkoutStep === 'browsing' ? (

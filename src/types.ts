@@ -170,3 +170,39 @@ export interface EcomReviewInvitation {
   createdAt: any;
 }
 
+export interface EcomAbandonedCart {
+  id?: string; // Cart ID stored in localStorage or generated
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  items: {
+    productId: string;
+    name: string;
+    price: number;
+    quantity: number;
+    images: string[];
+  }[];
+  total: number;
+  lastActive: string; // ISO Datetime format
+  status: 'Ativo' | 'Abandonado' | 'Recuperado' | 'Expirado';
+  sentMessages?: {
+    type: 'msg_24h' | 'msg_48h' | 'msg_72h';
+    sentAt: string; // ISO format
+    couponCode?: string;
+  }[];
+  couponCode?: string | null;
+  createdAt: string; // ISO format
+  updatedAt?: any;
+}
+
+export interface EcomCoupon {
+  id?: string; // Coupon code itself, e.g. "REC5-XXXX"
+  code: string;
+  discountPercent: number; // 5
+  customerEmail: string;
+  expiresAt: string; // ISO format
+  used: boolean;
+  cartId?: string;
+  createdAt?: string;
+}
+

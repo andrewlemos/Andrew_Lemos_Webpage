@@ -27,6 +27,7 @@ import {
 import { db, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, setDoc, auth, handleFirestoreError, OperationType } from '../firebase';
 import { EcomProduct, EcomOrder, ShippingQuote, PackagingSettings, EcomReview } from '../types';
 import { ensureRobustUrl } from '../App';
+import AdminRecoveryTab from './AdminRecoveryTab';
 
 const formatAdminDate = (createdAt: any) => {
   if (!createdAt) return '---';
@@ -44,7 +45,7 @@ export const AdminStore = () => {
   const [products, setProducts] = useState<EcomProduct[]>([]);
   const [orders, setOrders] = useState<EcomOrder[]>([]);
   const [quotes, setQuotes] = useState<ShippingQuote[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'products' | 'orders' | 'quotes' | 'packaging' | 'marketing' | 'reviews'>('products');
+  const [activeSubTab, setActiveSubTab] = useState<'products' | 'orders' | 'quotes' | 'packaging' | 'marketing' | 'reviews' | 'recovery'>('products');
   const [reviews, setReviews] = useState<EcomReview[]>([]);
   const [reviewFilter, setReviewFilter] = useState<'Todas' | 'Pendente' | 'Aprovada' | 'Rejeitada'>('Todas');
   const [reviewSubTab, setReviewSubTab] = useState<'moderacao' | 'convites'>('moderacao');
@@ -778,6 +779,15 @@ export const AdminStore = () => {
           }`}
         >
           Avaliações de Clientes ({reviews.length})
+        </button>
+        <button 
+          onClick={() => setActiveSubTab('recovery')} 
+          className={`pb-2.5 transition-colors cursor-pointer ${
+            activeSubTab === 'recovery' ? 'text-brand-wood border-b-2 border-brand-wood' : 'text-gray-400'
+          }`}
+          id="tab-btn-recovery"
+        >
+          Carrinhos Abandonados
         </button>
       </div>
 
@@ -1861,6 +1871,8 @@ export const AdminStore = () => {
             </div>
           )}
         </div>
+      ) : activeSubTab === 'recovery' ? (
+        <AdminRecoveryTab />
       ) : (
         // TAB - GLOBAL PACKAGING SETTINGS
         <div className="space-y-4 max-w-xl bg-white p-6 rounded-2xl border">
