@@ -151,12 +151,12 @@ const Navbar = () => {
     { name: 'Início', href: '#home' },
     { name: 'Biografia', href: '#bio' },
     { name: 'Blog', href: '#blog' },
-    { name: 'Galeria', href: '#gallery' },
     { name: 'Mídia', href: '#publications' },
+    { name: 'Galeria', href: '#gallery' },
+    { name: 'Vendas ✨', href: '#vendas' },
+    { name: 'Produtos', href: '#products' },
     { name: 'Aulas', href: '#classes' },
     { name: 'Cursos Online', href: '#online-courses' },
-    { name: 'Produtos', href: '#products' },
-    { name: 'Vendas ✨', href: '#vendas' },
     { name: 'Contato', href: '#contact' },
     { name: 'Login', href: '#customer-area' },
   ];
@@ -2235,12 +2235,9 @@ export default function App() {
           <Hero />
           <Biography />
           <Expertise />
-          <Gallery />
           <YouTubeSection />
           <Publications />
-          <ClassesSection />
-          <OnlineCoursesSection />
-          <RecommendedProductsSection />
+          <Gallery />
           
           {/* SEÇÃO DE LOJA VENDAS ARTESANAIS */}
           <section id="vendas" className="section-padding bg-brand-paper hover:bg-brand-paper transition-all duration-300 border-t border-brand-wood/10">
@@ -2260,6 +2257,9 @@ export default function App() {
           </section>
 
           <ReviewCarousel />
+          <RecommendedProductsSection />
+          <ClassesSection />
+          <OnlineCoursesSection />
           <Contact />
         </>
       )}
