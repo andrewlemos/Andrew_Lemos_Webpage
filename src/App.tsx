@@ -51,6 +51,9 @@ import { CustomerArea } from './components/CustomerArea';
 import { CustomerReviewForm } from './components/CustomerReviewForm';
 import { ReviewCarousel } from './components/ReviewCarousel';
 import { AdminStore } from './components/AdminStore';
+import { AdminBlogTab } from './components/AdminBlogTab';
+import { BlogPage } from './components/BlogPage';
+import { BlogPostPage } from './components/BlogPostPage';
 import { Product, Arquivo, EcomProduct, EcomOrder } from './types';
 
 // --- Helpers ---
@@ -147,7 +150,7 @@ const Navbar = () => {
   const navLinks = [
     { name: 'Início', href: '#home' },
     { name: 'Biografia', href: '#bio' },
-    { name: 'Especialidades', href: '#expertise' },
+    { name: 'Blog', href: '#blog' },
     { name: 'Galeria', href: '#gallery' },
     { name: 'Mídia', href: '#publications' },
     { name: 'Aulas', href: '#classes' },
@@ -1036,7 +1039,7 @@ const AdminDashboard = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [arquivos, setArquivos] = useState<Arquivo[]>([]);
-  const [activeTab, setActiveTab] = useState<'products' | 'leads' | 'arquivos' | 'vendas'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'leads' | 'arquivos' | 'vendas' | 'blog'>('products');
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingArquivo, setIsAddingArquivo] = useState(false);
   const [formData, setFormData] = useState({ name: '', affiliateLink: '', imageUrl: '', category: 'Entalhe/Escultura em Madeira', order: '1' });
@@ -1343,6 +1346,12 @@ const AdminDashboard = () => {
               className={cn("text-2xl font-serif", activeTab === 'vendas' ? "text-brand-wood" : "text-gray-400")}
             >
               E-commerce 🛍️
+            </button>
+            <button 
+              onClick={() => setActiveTab('blog')}
+              className={cn("text-2xl font-serif", activeTab === 'blog' ? "text-brand-wood" : "text-gray-400")}
+            >
+              Blog ✍️
             </button>
           </div>
           <div className="flex gap-4">
@@ -1677,8 +1686,10 @@ const AdminDashboard = () => {
                 <p className="text-center text-gray-400 py-12">Nenhum lead capturado ainda.</p>
               )}
             </div>
-          ) : (
+          ) : activeTab === 'vendas' ? (
             <AdminStore />
+          ) : (
+            <AdminBlogTab />
           )}
         </div>
         <button 
@@ -2118,7 +2129,8 @@ const Chatbot = () => {
 };
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post'>('landing');
+  const [currentBlogSlug, setCurrentBlogSlug] = useState<string>('');
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
   const [currentConviteId, setCurrentConviteId] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<any | null>(null);
@@ -2152,11 +2164,22 @@ export default function App() {
         setCurrentView('avaliar');
         setCurrentOrderId(pedidoId);
         setCurrentConviteId(conviteId);
+      } else if (hash.startsWith('#blog')) {
+        const parts = hash.split('/');
+        if (parts.length > 1 && parts[1]) {
+          setCurrentView('blog-post');
+          setCurrentBlogSlug(parts[1]);
+        } else {
+          setCurrentView('blog');
+        }
+        window.scrollTo({ top: 0 });
       } else {
         setCurrentView('landing');
-        if (hash === '#vendas') {
+        const landingHashes = ['#home', '#bio', '#expertise', '#gallery', '#publications', '#classes', '#online-courses', '#products', '#contact'];
+        if (landingHashes.includes(hash)) {
           setTimeout(() => {
-            const elem = document.getElementById('vendas');
+            const id = hash.substring(1);
+            const elem = document.getElementById(id);
             if (elem) {
               elem.scrollIntoView({ behavior: 'smooth' });
             }
@@ -2170,7 +2193,7 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar', id?: string) => {
+  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post', id?: string) => {
     if (view === 'checkout-pay' && id) {
       window.location.hash = `#vendas/pay?id=${id}`;
     } else if (view === 'checkout-confirm' && id) {
@@ -2179,6 +2202,10 @@ export default function App() {
       window.location.hash = '#customer-area';
     } else if (view === 'avaliar' && id) {
       window.location.hash = `#avaliar?pedido=${id}`;
+    } else if (view === 'blog') {
+      window.location.hash = '#blog';
+    } else if (view === 'blog-post' && id) {
+      window.location.hash = `#blog/${id}`;
     } else if (view === 'vendas') {
       window.location.hash = '#vendas';
       setTimeout(() => {
@@ -2198,36 +2225,45 @@ export default function App() {
   return (
     <div className="min-h-screen selection:bg-brand-wood selection:text-white font-sans text-brand-ink antialiased">
       <Navbar />
-      <Hero />
-      <Biography />
-      <Expertise />
-      <Gallery />
-      <YouTubeSection />
-      <Publications />
-      <ClassesSection />
-      <OnlineCoursesSection />
-      <RecommendedProductsSection />
       
-      {/* SEÇÃO DE LOJA VENDAS ARTESANAIS */}
-      <section id="vendas" className="section-padding bg-brand-paper hover:bg-brand-paper transition-all duration-300 border-t border-brand-wood/10">
-        <div className="max-w-7xl mx-auto px-6 mb-12">
-          <div className="text-center max-w-3xl mx-auto">
-            <h2 className="text-4xl md:text-5xl font-serif mb-4 text-brand-ink">Peças & Obras à Venda</h2>
-            <p className="text-gray-500 text-sm md:text-base leading-relaxed">
-              Adquira esculturas exclusivas e ferramentas autografadas direto do ateliê do artista. Frete seguro via MelhorEnvio com acompanhamento detalhado.
-            </p>
-          </div>
-        </div>
-        <Storefront 
-          onBackToMain={() => navigateToView('landing')} 
-          onNavigateToView={navigateToView}
-          userId={currentUser?.uid}
-        />
-      </section>
+      {currentView === 'blog' ? (
+        <BlogPage onNavigateToView={navigateToView} />
+      ) : currentView === 'blog-post' ? (
+        <BlogPostPage slug={currentBlogSlug} onNavigateToView={navigateToView} />
+      ) : (
+        <>
+          <Hero />
+          <Biography />
+          <Expertise />
+          <Gallery />
+          <YouTubeSection />
+          <Publications />
+          <ClassesSection />
+          <OnlineCoursesSection />
+          <RecommendedProductsSection />
+          
+          {/* SEÇÃO DE LOJA VENDAS ARTESANAIS */}
+          <section id="vendas" className="section-padding bg-brand-paper hover:bg-brand-paper transition-all duration-300 border-t border-brand-wood/10">
+            <div className="max-w-7xl mx-auto px-6 mb-12">
+              <div className="text-center max-w-3xl mx-auto">
+                <h2 className="text-4xl md:text-5xl font-serif mb-4 text-brand-ink">Peças & Obras à Venda</h2>
+                <p className="text-gray-500 text-sm md:text-base leading-relaxed">
+                  Adquira esculturas exclusivas e ferramentas autografadas direto do ateliê do artista. Frete seguro via MelhorEnvio com acompanhamento detalhado.
+                </p>
+              </div>
+            </div>
+            <Storefront 
+              onBackToMain={() => navigateToView('landing')} 
+              onNavigateToView={navigateToView}
+              userId={currentUser?.uid}
+            />
+          </section>
 
-      <ReviewCarousel />
+          <ReviewCarousel />
+          <Contact />
+        </>
+      )}
 
-      <Contact />
       <Footer />
 
       {/* Modais de Checkout - Não alteram o corpo do site por baixo */}

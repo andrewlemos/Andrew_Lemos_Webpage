@@ -2430,20 +2430,20 @@ export const AdminStore = () => {
                       <span>Dados do Cliente</span>
                     </span>
                     <div className="space-y-1 text-[11px] text-gray-600 font-medium">
-                      <div className="font-bold text-brand-ink">{selectedQuote.customerInfo.name}</div>
-                      <div>E-mail: {selectedQuote.customerInfo.email}</div>
-                      <div>Telefone: {selectedQuote.customerInfo.phone}</div>
-                      {selectedQuote.customerInfo.cpf && <div>CPF: {selectedQuote.customerInfo.cpf}</div>}
-                      <div>CEP: {selectedQuote.customerInfo.cep}</div>
-                      {selectedQuote.customerInfo.street && (
+                      <div className="font-bold text-brand-ink">{(selectedQuote as any).customerInfo.name}</div>
+                      <div>E-mail: {(selectedQuote as any).customerInfo.email}</div>
+                      <div>Telefone: {(selectedQuote as any).customerInfo.phone}</div>
+                      {(selectedQuote as any).customerInfo.cpf && <div>CPF: {(selectedQuote as any).customerInfo.cpf}</div>}
+                      <div>CEP: {(selectedQuote as any).customerInfo.cep}</div>
+                      {(selectedQuote as any).customerInfo.street && (
                         <div>
-                          Endereço: {selectedQuote.customerInfo.street}, {selectedQuote.customerInfo.number}
-                          {selectedQuote.customerInfo.complement && ` - ${selectedQuote.customerInfo.complement}`}
+                          Endereço: {(selectedQuote as any).customerInfo.street}, {(selectedQuote as any).customerInfo.number}
+                          {(selectedQuote as any).customerInfo.complement && ` - ${(selectedQuote as any).customerInfo.complement}`}
                         </div>
                       )}
-                      {selectedQuote.customerInfo.neighborhood && <div>Bairro: {selectedQuote.customerInfo.neighborhood}</div>}
-                      <div>Cidade/Estado: {selectedQuote.customerInfo.city}, {selectedQuote.customerInfo.state}</div>
-                      <div>País: {selectedQuote.customerInfo.country || "Brasil"}</div>
+                      {(selectedQuote as any).customerInfo.neighborhood && <div>Bairro: {(selectedQuote as any).customerInfo.neighborhood}</div>}
+                      <div>Cidade/Estado: {(selectedQuote as any).customerInfo.city}, {(selectedQuote as any).customerInfo.state}</div>
+                      <div>País: {(selectedQuote as any).customerInfo.country || "Brasil"}</div>
                     </div>
                   </div>
 
@@ -2455,9 +2455,9 @@ export const AdminStore = () => {
                         <span>Produtos Solicitados (Orçamento)</span>
                       </span>
                       <div className="mt-2 text-[11px] text-gray-600 font-medium space-y-1">
-                        {selectedQuote.items && selectedQuote.items.length > 0 ? (
+                        {(selectedQuote as any).items && (selectedQuote as any).items.length > 0 ? (
                           <div className="space-y-1.5 pt-1">
-                            {selectedQuote.items.map((item: any, idx: number) => (
+                            {(selectedQuote as any).items.map((item: any, idx: number) => (
                               <div key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border text-xs">
                                 <div>
                                   <span className="font-bold text-brand-wood">{item.quantity}x</span>{' '}
@@ -2486,7 +2486,7 @@ export const AdminStore = () => {
                         )}
                       </div>
                     </div>
-                    {(!selectedQuote.items || selectedQuote.items.length === 0) && selectedQuote.productImage && (
+                    {(!(selectedQuote as any).items || (selectedQuote as any).items.length === 0) && selectedQuote.productImage && (
                       <div className="h-12 w-full mt-2 rounded border overflow-hidden bg-slate-100 flex items-center justify-center p-1 self-end">
                         <img src={ensureRobustUrl(selectedQuote.productImage)} className="max-h-full max-w-full object-contain" referrerPolicy="no-referrer" />
                       </div>

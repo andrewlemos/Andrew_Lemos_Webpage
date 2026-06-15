@@ -206,3 +206,17 @@ export interface EcomCoupon {
   createdAt?: string;
 }
 
+export interface BlogPost {
+  id?: string;
+  title: string;
+  slug: string;
+  content: string;
+  summary: string;
+  imageUrl: string;
+  published: boolean;
+  publishedAt: any;
+  createdAt: any;
+  updatedAt?: any;
+}
+
+

@@ -94,7 +94,7 @@ const ensureRobustUrl = (url: string) => {
 
 interface StorefrontProps {
   onBackToMain: () => void;
-  onNavigateToView: (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm', id?: string) => void;
+  onNavigateToView: (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'blog' | 'blog-post', id?: string) => void;
   userId?: string;
 }
 
