@@ -6,6 +6,7 @@ import { BlogPost } from '../types';
 import { Calendar, ArrowLeft, ArrowRight, Share2, Clock, BookOpen, ChevronRight, Home } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { motion } from 'motion/react';
+import { ensureRobustUrl } from '../App';
 
 interface BlogPostPageProps {
   slug: string;
@@ -165,7 +166,7 @@ export const BlogPostPage: React.FC<BlogPostPageProps> = ({ slug, onNavigateToVi
             {/* LARGE FEATURED IMAGE */}
             <div className="w-full aspect-[21/9] sm:aspect-[21/10] overflow-hidden bg-brand-paper border-b border-brand-wood/5 relative">
               {post.imageUrl ? (
-                <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover" />
+                <img src={ensureRobustUrl(post.imageUrl)} alt={post.title} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-brand-paper flex items-center justify-center">
                   <BookOpen className="w-16 h-16 text-gray-200" />
@@ -215,10 +216,16 @@ export const BlogPostPage: React.FC<BlogPostPageProps> = ({ slug, onNavigateToVi
                     li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
                     blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-brand-wood/30 italic pl-4 py-1 my-6 bg-brand-paper rounded text-gray-650" {...props} />,
                     a: ({node, ...props}) => <a className="text-brand-wood hover:underline font-semibold" {...props} />,
-                    img: ({node, ...props}) => (
+                    img: ({node, src, alt, ...props}) => (
                       <div className="my-8 flex flex-col items-center">
-                        <img className="rounded-2xl max-h-[450px] object-cover border border-brand-wood/10" {...props} />
-                        {props.alt && <span className="text-[10px] text-gray-400 mt-2 italic font-sans">{props.alt}</span>}
+                        <img 
+                          src={ensureRobustUrl(src || '')} 
+                          alt={alt} 
+                          className="rounded-2xl max-h-[450px] object-cover border border-brand-wood/10" 
+                          referrerPolicy="no-referrer"
+                          {...props} 
+                        />
+                        {alt && <span className="text-[10px] text-gray-400 mt-2 italic font-sans">{alt}</span>}
                       </div>
                     )
                   }}
@@ -243,7 +250,7 @@ export const BlogPostPage: React.FC<BlogPostPageProps> = ({ slug, onNavigateToVi
                   >
                     <div className="aspect-video w-full overflow-hidden bg-brand-paper relative">
                       {relatedPost.imageUrl && (
-                        <img src={relatedPost.imageUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <img src={ensureRobustUrl(relatedPost.imageUrl)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                       )}
                     </div>
                     <div className="p-4 flex flex-col justify-between flex-grow">

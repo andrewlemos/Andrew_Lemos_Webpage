@@ -32,6 +32,7 @@ import {
   Check, 
   AlertCircle 
 } from 'lucide-react';
+import { ensureRobustUrl } from '../App';
 
 export const AdminBlogTab = () => {
   const [posts, setPosts] = useState<BlogPost[]>([]);
@@ -367,7 +368,7 @@ export const AdminBlogTab = () => {
                 {imageUrl && (
                   <div className="mt-2 text-center bg-gray-50 rounded-xl p-2 border border-gray-200 flex items-center justify-center gap-4">
                     <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{imageUrl}</span>
-                    <img src={imageUrl} alt="preview" className="w-12 h-10 object-cover rounded-lg border border-gray-150" />
+                    <img src={ensureRobustUrl(imageUrl)} alt="preview" className="w-12 h-10 object-cover rounded-lg border border-gray-150" />
                   </div>
                 )}
               </div>
@@ -590,7 +591,7 @@ export const AdminBlogTab = () => {
                 <div className="flex gap-4 items-center min-w-0 flex-grow">
                   <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 border">
                     {post.imageUrl ? (
-                      <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
+                      <img src={ensureRobustUrl(post.imageUrl)} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-gray-50">
                         <FileText className="w-6 h-6 text-gray-300" />

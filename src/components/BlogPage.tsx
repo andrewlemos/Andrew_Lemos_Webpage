@@ -4,6 +4,7 @@ import { where } from 'firebase/firestore';
 import { BlogPost } from '../types';
 import { Calendar, ArrowRight, BookOpen, ChevronRight, Home } from 'lucide-react';
 import { motion } from 'motion/react';
+import { ensureRobustUrl } from '../App';
 
 interface BlogPageProps {
   onNavigateToView: (view: any, id?: string) => void;
@@ -106,7 +107,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onNavigateToView }) => {
                 >
                   {post.imageUrl ? (
                     <img 
-                      src={post.imageUrl} 
+                      src={ensureRobustUrl(post.imageUrl)} 
                       alt={post.title} 
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
                     />
