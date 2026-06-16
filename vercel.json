@@ -3,11 +3,11 @@
   "rewrites": [
     {
       "source": "/sitemap.xml",
-      "destination": "/api/index.ts"
+      "destination": "/api/sitemap.xml"
     },
     {
       "source": "/robots.txt",
-      "destination": "/api/index.ts"
+      "destination": "/api/robots.txt"
     },
     {
       "source": "/api/:path*",

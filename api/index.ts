@@ -3347,7 +3347,7 @@ function backendEnsureRobustUrl(url: string, baseUrl: string): string {
   return `${baseUrl}/${processedUrl}`;
 }
 
-app.get("/sitemap.xml", async (req, res) => {
+app.get(["/sitemap.xml", "/api/sitemap.xml"], async (req, res) => {
   const host = req.get("host") || "andrewlemos.com.br";
   const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
   const baseUrl = `${protocol}://${host}`;
@@ -3534,7 +3534,7 @@ app.get("/sitemap.xml", async (req, res) => {
   res.send(xml);
 });
 
-app.get("/robots.txt", (req, res) => {
+app.get(["/robots.txt", "/api/robots.txt"], (req, res) => {
   const host = req.get("host") || "andrewlemos.com.br";
   const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
   const baseUrl = `${protocol}://${host}`;
