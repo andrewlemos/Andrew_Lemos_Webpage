@@ -92,9 +92,27 @@ const ensureRobustUrl = (url: string) => {
   return processedUrl;
 };
 
+const slugifyStr = (text: string) => {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .normalize('NFD') // separate accents from characters
+    .replace(/[\u0300-\u036f]/g, '') // remove accent marks
+    .replace(/[^\w\s-]/g, '') // remove all non-word non-space symbols
+    .replace(/[\s_-]+/g, '-') // convert spaces to single dashes
+    .replace(/^-+|-+$/g, ''); // trim starting/trailing dashes
+};
+
+const getProductSlug = (p: EcomProduct): string => {
+  if (p.slug && p.slug.trim().length > 0) return p.slug.trim();
+  if (p.name && p.name.trim().length > 0) return slugifyStr(p.name);
+  return p.id || "";
+};
+
 interface StorefrontProps {
   onBackToMain: () => void;
-  onNavigateToView: (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'blog' | 'blog-post', id?: string) => void;
+  onNavigateToView: (view: any, id?: string) => void;
   userId?: string;
 }
 
@@ -424,6 +442,7 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
   // Save cart to local storage whenever it changes
   useEffect(() => {
     localStorage.setItem('ecom_cart', JSON.stringify(cart));
+    window.dispatchEvent(new Event('cart-updated'));
   }, [cart]);
 
   // Fetch e-commerce products in real time
@@ -449,6 +468,23 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
     });
 
     return () => unsubscribe();
+  }, []);
+
+  // Automatically trigger Cart drawer opening when arriving with ecom_open_cart instruction
+  useEffect(() => {
+    if (localStorage.getItem('ecom_open_cart') === 'true') {
+      localStorage.removeItem('ecom_open_cart');
+      setIsCartOpen(true);
+    }
+
+    const handleOpenCart = () => {
+      setIsCartOpen(true);
+    };
+
+    window.addEventListener('open-cart', handleOpenCart);
+    return () => {
+      window.removeEventListener('open-cart', handleOpenCart);
+    };
   }, []);
 
   // Sync shipping CEP with details form CEP
@@ -950,7 +986,10 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                       className="bg-white rounded-3xl overflow-hidden border border-brand-wood/5 flex flex-col hover:shadow-xl transition-all duration-300 group"
                     >
                       {/* Product Card Image Wrapper */}
-                      <div className="relative aspect-square bg-[#FAFAFA] flex items-center justify-center p-6 min-h-[250px] overflow-hidden">
+                      <div 
+                        onClick={() => onNavigateToView('vendas-item', getProductSlug(p))}
+                        className="relative aspect-square bg-[#FAFAFA] flex items-center justify-center p-6 min-h-[250px] overflow-hidden cursor-pointer"
+                      >
                         {firstImg ? (
                           <img 
                             src={firstImg} 
@@ -977,7 +1016,8 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                         {/* Interactive quick view eye button on hover */}
                         <div className="absolute inset-0 bg-brand-ink/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                           <button 
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation(); // prevent triggering image click navigation
                               setSelectedProduct(p);
                               setSelectedImgIndex(0);
                             }}
@@ -990,7 +1030,12 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
 
                       {/* Card details body card footer */}
                       <div className="p-6 flex flex-col flex-grow">
-                        <h4 className="font-serif text-lg font-bold text-brand-ink mb-1 truncate leading-tight">{p.name}</h4>
+                        <h4 
+                          onClick={() => onNavigateToView('vendas-item', getProductSlug(p))}
+                          className="font-serif text-lg font-bold text-brand-ink mb-1 truncate leading-tight cursor-pointer hover:text-brand-wood transition-colors"
+                        >
+                          {p.name}
+                        </h4>
                         <p className="text-gray-400 text-xs line-clamp-2 h-8 leading-normal mb-4">{p.description}</p>
                         
                         <div className="pt-4 border-t border-brand-wood/5 mt-auto flex items-center justify-between">
@@ -1461,7 +1506,7 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
 
                     {/* Recovery Coupon application container field */}
                     <div className="py-2.5 border-t border-b border-brand-wood/10 space-y-2">
-                      <label className="block text-[10px] font-bold text-brand-dark uppercase tracking-wider">Cupom de Recuperação</label>
+                      <label className="block text-[10px] font-bold text-brand-dark uppercase tracking-wider">Cupom</label>
                       <div className="flex gap-2">
                         <input
                           type="text"
@@ -1653,6 +1698,17 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                       ? (selectedProduct.shippingType === 'quote' ? 'Adicionar ao Carrinho (Frete sob consulta)' : 'Adicionar ao Carrinho de Compras') 
                       : 'Produto Indisponível'
                     }
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const slug = getProductSlug(selectedProduct);
+                      setSelectedProduct(null);
+                      onNavigateToView('vendas-item', slug);
+                    }}
+                    className="w-full py-3.5 rounded-2xl border border-brand-wood/40 text-brand-wood text-center font-bold text-xs hover:bg-brand-paper transition-all cursor-pointer flex items-center justify-center gap-1 uppercase tracking-wider"
+                  >
+                    Visualizar Página Inteira & Compartilhar Obra
                   </button>
                 </div>
               </div>

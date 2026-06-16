@@ -28,7 +28,16 @@ service cloud.firestore {
     function isValidArquivo(data) {
       return data.title is string && data.title.size() > 0 && data.title.size() < 300 &&
              data.category is string && data.category.size() > 0 && data.category.size() < 100 &&
-             data.img is string && data.img.size() > 0 && data.img.size() < 1000;
+             data.img is string && data.img.size() > 0 && data.img.size() < 1000 &&
+             (!("abouttext" in data) || data.abouttext == null || (data.abouttext is string && data.abouttext.size() < 5000)) &&
+             (!("technique" in data) || data.technique == null || (data.technique is string && data.technique.size() < 200)) &&
+             (!("materials" in data) || data.materials == null || (data.materials is string && data.materials.size() < 200)) &&
+             (!("finish" in data) || data.finish == null || (data.finish is string && data.finish.size() < 200)) &&
+             (!("care" in data) || data.care == null || (data.care is string && data.care.size() < 1000)) &&
+             (!("dimensions" in data) || data.dimensions == null || (data.dimensions is string && data.dimensions.size() < 100)) &&
+             (!("year" in data) || data.year == null || (data.year is string && data.year.size() < 20)) &&
+             (!("slug" in data) || data.slug == null || (data.slug is string && data.slug.size() < 200)) &&
+             (!("order" in data) || (data.order is int));
     }
 
     function isValidEcomProduct(data) {

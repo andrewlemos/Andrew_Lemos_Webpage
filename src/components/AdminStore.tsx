@@ -41,6 +41,21 @@ const formatAdminDate = (createdAt: any) => {
   return String(createdAt);
 };
 
+function slugify(text: string): string {
+  if (!text) return "";
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .normalize('NFD') // remove accents
+    .replace(/[\u0300-\u036f]/g, '') // remove accented characters
+    .replace(/[_\s]+/g, '-') // replace spaces and underscores with hyphens
+    .replace(/[^\w\-]+/g, '') // remove remaining special chars except hyphens
+    .replace(/\-\-+/g, '-') // remove duplicate hyphens
+    .replace(/^-+/, '') // remove leading hyphens
+    .replace(/-+$/, ''); // remove trailing hyphens
+}
+
 export const AdminStore = () => {
   const [products, setProducts] = useState<EcomProduct[]>([]);
   const [orders, setOrders] = useState<EcomOrder[]>([]);
@@ -71,6 +86,7 @@ export const AdminStore = () => {
   const [editLength, setEditLength] = useState('');
   const [editStock, setEditStock] = useState('');
   const [editShippingType, setEditShippingType] = useState<'automatic' | 'quote'>('automatic');
+  const [editSlug, setEditSlug] = useState('');
 
   useEffect(() => {
     if (editingProduct) {
@@ -85,6 +101,7 @@ export const AdminStore = () => {
       setEditLength(editingProduct.length !== undefined ? String(editingProduct.length) : '');
       setEditStock(editingProduct.stock !== undefined ? String(editingProduct.stock) : '');
       setEditShippingType(editingProduct.shippingType || 'automatic');
+      setEditSlug(editingProduct.slug || '');
     }
   }, [editingProduct]);
   
@@ -308,7 +325,8 @@ export const AdminStore = () => {
     width: '',
     length: '',
     stock: '',
-    shippingType: 'automatic'
+    shippingType: 'automatic',
+    slug: ''
   });
 
   // Load ecom products and orders from firestore in real time
@@ -416,7 +434,8 @@ export const AdminStore = () => {
         length: parseFloat(formData.length) || 18,
         stock: parseInt(formData.stock, 10) || 1,
         shippingType: formData.shippingType || 'automatic',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        slug: formData.slug.trim() || slugify(formData.name)
       };
 
       await addDoc(collection(db, 'ecom_products'), productPayload);
@@ -432,7 +451,8 @@ export const AdminStore = () => {
         width: '',
         length: '',
         stock: '',
-        shippingType: 'automatic'
+        shippingType: 'automatic',
+        slug: ''
       });
     } catch (err: any) {
       console.error("Failed to add ecom product:", err);
@@ -465,7 +485,8 @@ export const AdminStore = () => {
         width: parseFloat(editWidth) || 12,
         length: parseFloat(editLength) || 18,
         stock: parseInt(editStock, 10) || 0,
-        shippingType: editShippingType || 'automatic'
+        shippingType: editShippingType || 'automatic',
+        slug: editSlug.trim() || slugify(editName)
       };
 
       await updateDoc(doc(db, 'ecom_products', editingProduct.id), productPayload);
@@ -824,6 +845,17 @@ export const AdminStore = () => {
                       value={formData.name}
                       onChange={e => setFormData({...formData, name: e.target.value})}
                       className="w-full bg-white border rounded-xl px-4 py-2.5 text-xs focus:ring-1 focus:ring-brand-wood outline-none font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider">Slug URL Personalizado (Opcional)</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: escultura-cavalo-crioulo-imbuia" 
+                      value={formData.slug}
+                      onChange={e => setFormData({...formData, slug: e.target.value})}
+                      className="w-full bg-white border rounded-xl px-4 py-2.5 text-xs focus:ring-1 focus:ring-brand-wood outline-none font-mono text-[11px]"
                     />
                   </div>
 
@@ -2279,6 +2311,17 @@ export const AdminStore = () => {
                       value={editName}
                       onChange={e => setEditName(e.target.value)}
                       className="w-full bg-slate-50 border border-gray-200/80 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood font-medium text-brand-ink"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[10px]">Slug URL (Link Amigável — Opcional)</label>
+                    <input 
+                      type="text" 
+                      value={editSlug}
+                      onChange={e => setEditSlug(e.target.value)}
+                      placeholder="Ex: escultura-cavalo-crioulo-imbuia"
+                      className="w-full bg-slate-50 border border-gray-200/80 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood font-mono text-[11px] text-brand-ink"
                     />
                   </div>
 

@@ -53,9 +53,7 @@
       "required": ["name", "email"]
     },
     "Arquivo": {
-      "title": "Arquivo",
       "description": "Gallery work/media image addresses",
-      "type": "object",
       "properties": {
         "title": {
           "type": "string"
@@ -67,11 +65,41 @@
           "type": "string"
         },
         "createdAt": {
-          "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "type": "string"
+        },
+        "abouttext": {
+          "type": "string"
+        },
+        "technique": {
+          "type": "string"
+        },
+        "materials": {
+          "type": "string"
+        },
+        "finish": {
+          "type": "string"
+        },
+        "care": {
+          "type": "string"
+        },
+        "dimensions": {
+          "type": "string"
+        },
+        "year": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
         }
       },
-      "required": ["title", "category", "img"]
+      "required": [
+        "title",
+        "category",
+        "img"
+      ],
+      "title": "Arquivo",
+      "type": "object"
     },
     "EcomProduct": {
       "title": "EcomProduct",

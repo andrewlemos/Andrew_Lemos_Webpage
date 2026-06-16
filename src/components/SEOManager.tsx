@@ -1,15 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { db, collection, query, onSnapshot } from '../firebase';
-import { where, limit } from 'firebase/firestore';
-import { BlogPost, EcomProduct } from '../types';
+import { where, limit, orderBy } from 'firebase/firestore';
+import { BlogPost, EcomProduct, Arquivo } from '../types';
+import { getWorkSlug } from './GalleryItemPage';
 
 interface SEOManagerProps {
-  currentView: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post';
+  currentView: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item';
   blogSlug?: string;
+  gallerySlug?: string;
+  vendasSlug?: string;
 }
 
-export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug }) => {
+export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug, gallerySlug, vendasSlug }) => {
   const [activePost, setActivePost] = useState<BlogPost | null>(null);
+  const [activeWork, setActiveWork] = useState<Arquivo | null>(null);
+  const [activeVendasProduct, setActiveVendasProduct] = useState<EcomProduct | null>(null);
   const [featuredProducts, setFeaturedProducts] = useState<EcomProduct[]>([]);
 
   // 1. Fetch current blog post details if in blog-post view
@@ -37,6 +42,77 @@ export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug })
 
     return () => unsubscribe();
   }, [currentView, blogSlug]);
+
+  // 1b. Fetch current gallery item details if in galeria-item view
+  useEffect(() => {
+    if (currentView !== 'galeria-item' || !gallerySlug) {
+      setActiveWork(null);
+      return;
+    }
+
+    const q = query(collection(db, 'arquivos'), orderBy('order', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let found: any = null;
+      if (!snapshot.empty) {
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Arquivo[];
+        found = list.find(w => getWorkSlug(w) === gallerySlug);
+      }
+      
+      if (!found) {
+        const defaultWorks = [
+          { title: 'Escultura em Madeira', category: 'Madeira', img: '/arquivos/WhatsApp Image 2025-03-01 at 18.06.49.jpeg' },
+          { title: 'Entalhe em Madeira', category: 'Madeira', img: '/arquivos/WhatsApp Image 2025-03-01 at 17.34.07 - Copia.jpeg' },
+          { title: 'Processo de Escultura', category: 'Madeira', img: '/arquivos/WhatsApp Image 2025-03-01 at 19.39.34 (1).jpeg' },
+          { title: 'Obra em Madeira', category: 'Madeira', img: '/arquivos/WhatsApp Image 2025-03-01 at 20.11.39 (1).jpeg' },
+          { title: 'Desenho Realista', category: 'Grafite', img: '/arquivos/WhatsApp Image 2025-03-01 at 20.11.39.jpeg' },
+          { title: 'Estudo de Grafite', category: 'Grafite', img: '/arquivos/WhatsApp Image 2025-03-01 at 20.11.40 (1).jpeg' },
+          { title: 'Retrato em Grafite', category: 'Grafite', img: '/arquivos/WhatsApp Image 2025-03-01 at 20.11.40 (2) - Copia.jpeg' },
+          { title: 'Anatomia Animal', category: 'Grafite', img: '/arquivos/WhatsApp Image 2025-03-01 at 20.11.40 (4).jpeg' },
+          { title: 'Expressão em Grafite', category: 'Grafite', img: '/arquivos/Screenshot_20221018-195950_Instagram.jpg' },
+          { title: 'Modelagem em Argila', category: 'Modelagem', img: '/arquivos/WhatsApp Image 2025-03-02 at 13.05.07 - Copia.jpeg' },
+          { title: 'Escultura de Peixe I', category: 'Madeira', img: '/arquivos/peixe1.jpg' },
+          { title: 'Escultura de Peixe II', category: 'Madeira', img: '/arquivos/peixe2.jpg' },
+          { title: 'Escultura de Peixe III', category: 'Madeira', img: '/arquivos/peixe3.jpg' },
+          { title: 'Escultura de Peixe IV', category: 'Madeira', img: '/arquivos/peixe4.jpg' },
+          { title: 'Escultura de Peixe V', category: 'Madeira', img: '/arquivos/peixe5.jpg' },
+          { title: 'Escultura de Peixe VI', category: 'Madeira', img: '/arquivos/peixe6.jpg' },
+        ];
+        found = defaultWorks.find(w => getWorkSlug(w) === gallerySlug);
+      }
+
+      setActiveWork(found || null);
+    }, (err) => {
+      console.error("SEOManager: Error loading gallery metadata:", err);
+    });
+
+    return () => unsubscribe();
+  }, [currentView, gallerySlug]);
+
+  // 1c. Fetch current active vendas product if in vendas-item view
+  useEffect(() => {
+    if (currentView !== 'vendas-item' || !vendasSlug) {
+      setActiveVendasProduct(null);
+      return;
+    }
+
+    const q = query(collection(db, 'ecom_products'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let found: EcomProduct | null = null;
+      if (!snapshot.empty) {
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as EcomProduct[];
+        // find item by slug or id
+        found = list.find(p => {
+          const detailSlug = p.slug && p.slug.trim().length > 0 ? p.slug.trim() : (p.name ? p.name.toString().toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '') : "");
+          return detailSlug === vendasSlug || p.id === vendasSlug;
+        }) || null;
+      }
+      setActiveVendasProduct(found);
+    }, (err) => {
+      console.error("SEOManager: Error loading active vendas product:", err);
+    });
+
+    return () => unsubscribe();
+  }, [currentView, vendasSlug]);
 
   // 2. Fetch some products to enrich Product Schema markup
   useEffect(() => {
@@ -92,7 +168,7 @@ export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug })
     let title = 'Andrew Lemos | Artista Plástico & Escultor';
     let description = 'Portfólio de Andrew Lemos, Artista Plástico e Escultor de madeiras nobres. Adquira peças exclusivas ou agende encomendas.';
     let imageUrl = 'https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb';
-    let currentUrl = `${origin}/${window.location.hash || ''}`;
+    let currentUrl = currentView === 'galeria-item' && gallerySlug ? `${origin}/galeria/${gallerySlug}` : `${origin}/${window.location.hash || ''}`;
 
     // Schema definitions
     const schemas: any[] = [];
@@ -258,10 +334,118 @@ export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug })
         ]
       };
       schemas.push(breadcrumbSchema);
+    } else if (currentView === 'galeria-item' && activeWork) {
+      title = `${activeWork.title} — Obra d'Arte por Andrew Lemos`;
+      description = `Visualize a obra "${activeWork.title}" (${activeWork.category}) pelo artista plástico Andrew Lemos. Veja fotos em alta resolução, dimensões, processo artístico e como encomendar ou adquirir.`;
+      imageUrl = getFullImageUrl(activeWork.img);
+      currentUrl = `${origin}/galeria/${gallerySlug}`;
+
+      // JSON-LD VisualArtwork Schema
+      const artworkSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'VisualArtwork',
+        '@id': `${origin}/galeria/${gallerySlug}#artwork`,
+        'name': activeWork.title,
+        'image': imageUrl,
+        'description': description,
+        'artMedium': activeWork.category.toLowerCase().includes('madeira') ? 'Escultura em Madeira / Entalhe' : activeWork.category,
+        'creator': {
+          '@type': 'Person',
+          'name': 'Andrew Lemos'
+        }
+      };
+      schemas.push(artworkSchema);
+
+      // Breadcrumb Schema
+      const breadcrumbSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        'itemListElement': [
+          {
+            '@type': 'ListItem',
+            'position': 1,
+            'name': 'Início',
+            'item': origin
+          },
+          {
+            '@type': 'ListItem',
+            'position': 2,
+            'name': 'Galeria',
+            'item': `${origin}/#gallery`
+          },
+          {
+            '@type': 'ListItem',
+            'position': 3,
+            'name': activeWork.title,
+            'item': currentUrl
+          }
+        ]
+      };
+      schemas.push(breadcrumbSchema);
+    } else if (currentView === 'vendas-item' && activeVendasProduct) {
+      title = `${activeVendasProduct.name} | Ateliê Andrew Lemos`;
+      description = activeVendasProduct.description ? activeVendasProduct.description.substring(0, 160) : `Adquira a obra exclusiva "${activeVendasProduct.name}" esculpida em madeiras nobre, assinada e autografada pelo escultor Andrew Lemos.`;
+      imageUrl = activeVendasProduct.images && activeVendasProduct.images.length > 0 ? getFullImageUrl(activeVendasProduct.images[0]) : imageUrl;
+      currentUrl = `${origin}/vendas/${vendasSlug}`;
+
+      // JSON-LD Product Schema
+      const productSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        '@id': `${origin}/vendas/${vendasSlug}#product`,
+        'name': activeVendasProduct.name,
+        'image': [imageUrl],
+        'description': description,
+        'offers': {
+          '@type': 'Offer',
+          'url': currentUrl,
+          'priceCurrency': 'BRL',
+          'price': activeVendasProduct.price,
+          'availability': activeVendasProduct.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+          'priceValidUntil': new Date(new Date().getFullYear() + 1, 11, 31).toISOString().split('T')[0]
+        }
+      };
+      schemas.push(productSchema);
+
+      // Breadcrumb Schema
+      const breadcrumbSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        'itemListElement': [
+          {
+            '@type': 'ListItem',
+            'position': 1,
+            'name': 'Início',
+            'item': origin
+          },
+          {
+            '@type': 'ListItem',
+            'position': 2,
+            'name': 'Vendas',
+            'item': `${origin}/#vendas`
+          },
+          {
+            '@type': 'ListItem',
+            'position': 3,
+            'name': activeVendasProduct.name,
+            'item': currentUrl
+          }
+        ]
+      };
+      schemas.push(breadcrumbSchema);
     }
 
     // Apply Meta Tags and Title updates
     document.title = title;
+
+    // Dynamic Canonical Tag
+    let canonicalElement = document.head.querySelector('link[rel="canonical"]');
+    if (!canonicalElement) {
+      canonicalElement = document.createElement('link');
+      canonicalElement.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonicalElement);
+    }
+    canonicalElement.setAttribute('href', currentUrl);
     
     // Core details
     setMetaTag('description', description, false);
@@ -295,7 +479,7 @@ export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug })
     }
     scriptTag.text = JSON.stringify(schemas);
 
-  }, [currentView, activePost, featuredProducts]);
+  }, [currentView, activePost, activeWork, activeVendasProduct, featuredProducts, gallerySlug, vendasSlug]);
 
   return null; // Side-effect only component
 };

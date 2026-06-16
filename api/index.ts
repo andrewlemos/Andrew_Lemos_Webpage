@@ -3347,6 +3347,31 @@ function backendEnsureRobustUrl(url: string, baseUrl: string): string {
   return `${baseUrl}/${processedUrl}`;
 }
 
+function backendSlugify(text: string): string {
+  if (!text) return "";
+  return text
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w\-]+/g, "")
+    .replace(/\-\-+/g, "-");
+}
+
+function backendGetWorkSlug(work: any): string {
+  if (work.slug) return work.slug;
+  if (work.title) return backendSlugify(work.title);
+  return work.id || "";
+}
+
+function backendGetProductSlug(prod: any): string {
+  if (prod.slug && prod.slug.trim().length > 0) return prod.slug.trim();
+  if (prod.name) return backendSlugify(prod.name);
+  return prod.id || "";
+}
+
 app.get(["/sitemap.xml", "/api/sitemap.xml"], async (req, res) => {
   const host = req.get("host") || "andrewlemos.com.br";
   const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
@@ -3526,6 +3551,46 @@ app.get(["/sitemap.xml", "/api/sitemap.xml"], async (req, res) => {
       xml += `    </image:image>\n`;
     }
     xml += `  </url>\n`;
+  });
+
+  // 10. Individual Gallery Works (Permanent Links for Pinterest, SEO, organic traffic etc.)
+  galleryItems.forEach((work) => {
+    const slug = backendGetWorkSlug(work);
+    if (slug) {
+      const url = `${baseUrl}/galeria/${slug}`;
+      xml += `  <url>\n`;
+      xml += `    <loc>${url}</loc>\n`;
+      xml += `    <changefreq>weekly</changefreq>\n`;
+      xml += `    <priority>0.8</priority>\n`;
+      const imgUrl = work.img ? backendEnsureRobustUrl(work.img, baseUrl) : "";
+      if (imgUrl) {
+        xml += `    <image:image>\n`;
+        xml += `      <image:loc>${escapeXml(imgUrl)}</image:loc>\n`;
+        xml += `      <image:title>${escapeXml(work.title || "Obra")}</image:title>\n`;
+        xml += `    </image:image>\n`;
+      }
+      xml += `  </url>\n`;
+    }
+  });
+
+  // 11. Individual Vendas Works (Permanent Links for Pinterest, SEO, organic traffic etc.)
+  ecomProducts.forEach((prod) => {
+    const slug = backendGetProductSlug(prod);
+    if (slug) {
+      const url = `${baseUrl}/vendas/${slug}`;
+      xml += `  <url>\n`;
+      xml += `    <loc>${url}</loc>\n`;
+      xml += `    <changefreq>weekly</changefreq>\n`;
+      xml += `    <priority>0.9</priority>\n`;
+      const imgUrl = prod.images && prod.images[0] ? backendEnsureRobustUrl(prod.images[0], baseUrl) : "";
+      if (imgUrl) {
+        xml += `    <image:image>\n`;
+        xml += `      <image:loc>${escapeXml(imgUrl)}</image:loc>\n`;
+        xml += `      <image:title>${escapeXml(prod.name || "Obra")}</image:title>\n`;
+        xml += `    </image:image>\n`;
+      }
+      xml += `  </url>\n`;
+    }
   });
 
   xml += `</urlset>\n`;

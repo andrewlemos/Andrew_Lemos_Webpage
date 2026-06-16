@@ -15,6 +15,14 @@ export interface Arquivo {
   img: string;
   order?: number;
   createdAt?: any;
+  abouttext?: string;
+  technique?: string;
+  materials?: string;
+  finish?: string;
+  care?: string;
+  dimensions?: string;
+  year?: string;
+  slug?: string;
 }
 
 export interface EcomProduct {
@@ -31,6 +39,7 @@ export interface EcomProduct {
   price: number;
   shippingType?: 'automatic' | 'quote';
   createdAt?: any;
+  slug?: string;
 }
 
 export interface CartItem extends EcomProduct {

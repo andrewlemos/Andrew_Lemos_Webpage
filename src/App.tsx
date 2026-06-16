@@ -23,7 +23,8 @@ import {
   MessageCircle,
   Send,
   Lock,
-  Download
+  Download,
+  ShoppingBag
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { cn } from './lib/utils';
@@ -55,6 +56,8 @@ import { AdminBlogTab } from './components/AdminBlogTab';
 import { BlogPage } from './components/BlogPage';
 import { BlogPostPage } from './components/BlogPostPage';
 import { SEOManager } from './components/SEOManager';
+import { GalleryItemPage, getWorkSlug } from './components/GalleryItemPage';
+import { VendasItemPage } from './components/VendasItemPage';
 import { Product, Arquivo, EcomProduct, EcomOrder } from './types';
 
 // --- Helpers ---
@@ -141,12 +144,91 @@ export const ensureRobustUrl = (url: string) => {
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const getCartItemsCount = () => {
+    try {
+      const saved = localStorage.getItem('ecom_cart');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return 0;
+  };
+
+  useEffect(() => {
+    setCartCount(getCartItemsCount());
+
+    const handleCartUpdate = () => {
+      setCartCount(getCartItemsCount());
+    };
+
+    window.addEventListener('cart-updated', handleCartUpdate);
+    window.addEventListener('storage', handleCartUpdate);
+
+    return () => {
+      window.removeEventListener('cart-updated', handleCartUpdate);
+      window.removeEventListener('storage', handleCartUpdate);
+    };
+  }, []);
+
+  const handleLinkClick = (e: React.MouseEvent, href: string) => {
+    if (href.startsWith('#')) {
+      e.preventDefault();
+      
+      // Navigate using history API if we are in a subpath to reset the view to landing
+      if (window.location.pathname !== '/') {
+        window.history.pushState(null, '', '/');
+        window.dispatchEvent(new Event('popstate'));
+      }
+      
+      window.location.hash = href;
+      
+      setTimeout(() => {
+        const targetId = href.substring(1);
+        const elem = document.getElementById(targetId);
+        if (elem) {
+          elem.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 80);
+      
+      setIsMobileMenuOpen(false);
+    }
+  };
+
+  const handleCartClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    localStorage.setItem('ecom_open_cart', 'true');
+    
+    // Navigate using history API if we are in a subpath to reset the view to landing
+    if (window.location.pathname !== '/') {
+      window.history.pushState(null, '', '/');
+      window.dispatchEvent(new Event('popstate'));
+    }
+    
+    window.location.hash = '#vendas';
+    
+    setTimeout(() => {
+      const elem = document.getElementById('vendas');
+      if (elem) {
+        elem.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 80);
+
+    window.dispatchEvent(new Event('open-cart'));
+    setIsMobileMenuOpen(false);
+  };
 
   const navLinks = [
     { name: 'Início', href: '#home' },
@@ -168,7 +250,11 @@ const Navbar = () => {
       isScrolled ? "glass py-3 shadow-sm" : "bg-transparent"
     )}>
       <div className="max-w-7xl mx-auto flex justify-between items-center">
-        <a href="#home" className="flex items-center gap-2">
+        <a 
+          href="#home" 
+          onClick={(e) => handleLinkClick(e, '#home')}
+          className="flex items-center gap-2"
+        >
           <div className="h-10 md:h-12 flex items-center gap-2">
             <img 
               src={ensureRobustUrl("/arquivos/LOGO ANDREW.png")} 
@@ -179,7 +265,6 @@ const Navbar = () => {
                 target.style.display = 'none';
               }}
             />
-            
           </div>
         </a>
 
@@ -189,20 +274,52 @@ const Navbar = () => {
             <a 
               key={link.name} 
               href={link.href}
-              className="text-sm font-medium tracking-wide hover:text-brand-wood transition-colors uppercase"
+              onClick={(e) => handleLinkClick(e, link.href)}
+              className="text-sm font-medium tracking-wide hover:text-brand-wood transition-colors uppercase cursor-pointer"
             >
               {link.name}
             </a>
           ))}
+
+          {/* Icone do Carrinho de Compras */}
+          <button
+            onClick={handleCartClick}
+            className="relative p-2.5 hover:text-brand-wood transition-colors group flex items-center justify-center cursor-pointer text-brand-ink"
+            aria-label="Carrinho de Compras"
+          >
+            <ShoppingBag className="w-5 h-5 group-hover:scale-105 transition-transform" />
+            {cartCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-brand-wood text-white border-2 border-brand-paper rounded-full text-[10px] w-5 h-5 flex items-center justify-center font-bold px-1 select-none animate-pulse">
+                {cartCount}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* Mobile Menu Toggle */}
-        <button 
-          className="md:hidden p-2"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        >
-          {isMobileMenuOpen ? <X /> : <Menu />}
-        </button>
+        {/* Mobile Nav Right Controls */}
+        <div className="md:hidden flex items-center gap-4">
+          {/* Icone do Carrinho para Mobile */}
+          <button
+            onClick={handleCartClick}
+            className="relative p-2 hover:text-brand-wood transition-colors flex items-center justify-center cursor-pointer text-brand-ink"
+            aria-label="Carrinho de Compras"
+          >
+            <ShoppingBag className="w-5 h-5" />
+            {cartCount > 0 && (
+              <span className="absolute top-0 right-0 bg-brand-wood text-white border border-brand-paper rounded-full text-[9px] w-4 h-4 flex items-center justify-center font-bold select-none animate-pulse">
+                {cartCount}
+              </span>
+            )}
+          </button>
+
+          {/* Mobile Menu Toggle */}
+          <button 
+            className="p-2"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          >
+            {isMobileMenuOpen ? <X /> : <Menu />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Nav */}
@@ -218,8 +335,8 @@ const Navbar = () => {
               <a 
                 key={link.name} 
                 href={link.href}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="text-lg font-serif hover:text-brand-wood transition-colors"
+                onClick={(e) => handleLinkClick(e, link.href)}
+                className="text-lg font-serif hover:text-brand-wood transition-colors cursor-pointer"
               >
                 {link.name}
               </a>
@@ -413,7 +530,7 @@ const Expertise = () => {
   );
 };
 
-const Gallery = () => {
+const Gallery = ({ onNavigateToView }: { onNavigateToView?: (view: any, id?: string) => void }) => {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [works, setWorks] = useState<Arquivo[]>([]);
 
@@ -536,7 +653,14 @@ const Gallery = () => {
               whileInView={{ opacity: 1, scale: 1 }}
               transition={{ delay: Math.min(idx * 0.05, 0.5) }}
               viewport={{ once: true }}
-              onClick={() => setSelectedIdx(idx)}
+              onClick={() => {
+                const itemSlug = getWorkSlug(work);
+                if (onNavigateToView) {
+                  onNavigateToView('galeria-item', itemSlug);
+                } else {
+                  setSelectedIdx(idx);
+                }
+              }}
               className="group relative overflow-hidden rounded-2xl aspect-[3/4] cursor-pointer shadow-sm hover:shadow-md transition-shadow"
             >
               <img 
@@ -1044,7 +1168,20 @@ const AdminDashboard = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingArquivo, setIsAddingArquivo] = useState(false);
   const [formData, setFormData] = useState({ name: '', affiliateLink: '', imageUrl: '', category: 'Entalhe/Escultura em Madeira', order: '1' });
-  const [arquivoForm, setArquivoForm] = useState({ title: '', category: 'Madeira', img: '' });
+  const [arquivoForm, setArquivoForm] = useState({ 
+    title: '', 
+    category: 'Madeira', 
+    img: '',
+    abouttext: '',
+    technique: '',
+    materials: '',
+    finish: '',
+    care: '',
+    dimensions: '',
+    year: '',
+    slug: ''
+  });
+  const [expandedDetails, setExpandedDetails] = useState<{[key: string]: boolean}>({});
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -1260,12 +1397,32 @@ const AdminDashboard = () => {
       const maxOrder = arquivos.reduce((max, a) => Math.max(max, a.order || 0), 0);
       await addDoc(collection(db, 'arquivos'), {
         title: arquivoForm.title.trim(),
-        category: arquivoForm.category,
+        category: arquivoForm.category.trim(),
         img: finalImg,
         order: maxOrder + 1,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        abouttext: arquivoForm.abouttext.trim() || null,
+        technique: arquivoForm.technique.trim() || null,
+        materials: arquivoForm.materials.trim() || null,
+        finish: arquivoForm.finish.trim() || null,
+        care: arquivoForm.care.trim() || null,
+        dimensions: arquivoForm.dimensions.trim() || null,
+        year: arquivoForm.year.trim() || null,
+        slug: arquivoForm.slug.trim() || null
       });
-      setArquivoForm({ title: '', category: 'Madeira', img: '' });
+      setArquivoForm({ 
+        title: '', 
+        category: 'Madeira', 
+        img: '',
+        abouttext: '',
+        technique: '',
+        materials: '',
+        finish: '',
+        care: '',
+        dimensions: '',
+        year: '',
+        slug: ''
+      });
       setIsAddingArquivo(false);
     } catch (error) {
       console.error("Erro ao adicionar obra na galeria:", error);
@@ -1523,32 +1680,138 @@ const AdminDashboard = () => {
               {isAddingArquivo && (
                 <form onSubmit={handleSubmitArquivo} className="mb-12 bg-brand-paper/50 p-6 rounded-2xl border border-brand-wood/10">
                   <div className="grid gap-4">
-                    <input 
-                      type="text" 
-                      placeholder="Título da Obra (ex: Escultura de Leão)" 
-                      className="w-full p-3 rounded-xl border"
-                      value={arquivoForm.title}
-                      onChange={e => setArquivoForm({...arquivoForm, title: e.target.value})}
-                      required
-                    />
-                    <input 
-                      type="text" 
-                      placeholder="Tipo de Trabalho / Categoria (ex: Madeira, Grafite, Modelagem, Pintura)" 
-                      className="w-full p-3 rounded-xl border"
-                      value={arquivoForm.category}
-                      onChange={e => setArquivoForm({...arquivoForm, category: e.target.value})}
-                      required
-                    />
-                    <input 
-                      type="text" 
-                      placeholder="Caminho da Imagem no Servidor (ex: /arquivos/nome_da_imagem.jpg)" 
-                      className="w-full p-3 rounded-xl border"
-                      value={arquivoForm.img}
-                      onChange={e => setArquivoForm({...arquivoForm, img: e.target.value})}
-                      required
-                    />
-                    <button type="submit" className="bg-brand-wood text-white p-3 rounded-xl font-bold">
-                      Adicionar na Galeria
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[10px] text-gray-500 font-medium mb-1">Título da Obra *</label>
+                        <input 
+                          type="text" 
+                          placeholder="Título da Obra (ex: Escultura de Leão)" 
+                          className="w-full p-3 rounded-xl border bg-white text-sm"
+                          value={arquivoForm.title}
+                          onChange={e => setArquivoForm({...arquivoForm, title: e.target.value})}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-gray-500 font-medium mb-1">Categoria *</label>
+                        <input 
+                          type="text" 
+                          placeholder="Categoria (ex: Madeira, Grafite, Modelagem)" 
+                          className="w-full p-3 rounded-xl border bg-white text-sm"
+                          value={arquivoForm.category}
+                          onChange={e => setArquivoForm({...arquivoForm, category: e.target.value})}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-gray-500 font-medium mb-1">Caminho da Imagem *</label>
+                        <input 
+                          type="text" 
+                          placeholder="Caminho da Imagem (ex: /arquivos/...)" 
+                          className="w-full p-3 rounded-xl border bg-white text-sm"
+                          value={arquivoForm.img}
+                          onChange={e => setArquivoForm({...arquivoForm, img: e.target.value})}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="border-t border-brand-wood/5 pt-3">
+                      <h4 className="text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Informações Técnicas & Detalhes (Opcional)</h4>
+                      
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-[10px] text-gray-500 font-medium mb-1">Slug URL Personalizado</label>
+                          <input 
+                            type="text" 
+                            placeholder="ex: escultura-leao-imbuia" 
+                            className="w-full p-3 rounded-xl border bg-white text-xs font-mono"
+                            value={arquivoForm.slug}
+                            onChange={e => setArquivoForm({...arquivoForm, slug: e.target.value})}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-gray-500 font-medium mb-1">Ano de Criação</label>
+                          <input 
+                            type="text" 
+                            placeholder="ex: 2025" 
+                            className="w-full p-3 rounded-xl border bg-white text-xs"
+                            value={arquivoForm.year}
+                            onChange={e => setArquivoForm({...arquivoForm, year: e.target.value})}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-gray-500 font-medium mb-1">Dimensões da Obra</label>
+                          <input 
+                            type="text" 
+                            placeholder="ex: 50 x 30 x 20 cm" 
+                            className="w-full p-3 rounded-xl border bg-white text-xs"
+                            value={arquivoForm.dimensions}
+                            onChange={e => setArquivoForm({...arquivoForm, dimensions: e.target.value})}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-4 mt-3">
+                        <div>
+                          <label className="block text-[10px] text-gray-500 font-medium mb-1">Técnica Aplicada</label>
+                          <input 
+                            type="text" 
+                            placeholder="ex: Entalhe manual em relevo" 
+                            className="w-full p-3 rounded-xl border bg-white text-xs"
+                            value={arquivoForm.technique}
+                            onChange={e => setArquivoForm({...arquivoForm, technique: e.target.value})}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-gray-500 font-medium mb-1">Insumos / Materiais</label>
+                          <input 
+                            type="text" 
+                            placeholder="ex: Madeira de Cedro Rosa" 
+                            className="w-full p-3 rounded-xl border bg-white text-xs"
+                            value={arquivoForm.materials}
+                            onChange={e => setArquivoForm({...arquivoForm, materials: e.target.value})}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-4 mt-3">
+                        <div>
+                          <label className="block text-[10px] text-gray-500 font-medium mb-1">Acabamento Final</label>
+                          <input 
+                            type="text" 
+                            placeholder="ex: Cera de abelha e seladora" 
+                            className="w-full p-3 rounded-xl border bg-white text-xs"
+                            value={arquivoForm.finish}
+                            onChange={e => setArquivoForm({...arquivoForm, finish: e.target.value})}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-gray-500 font-medium mb-1">Cuidados Recomendados</label>
+                          <input 
+                            type="text" 
+                            placeholder="ex: Flanela seca, sem umidade" 
+                            className="w-full p-3 rounded-xl border bg-white text-xs"
+                            value={arquivoForm.care}
+                            onChange={e => setArquivoForm({...arquivoForm, care: e.target.value})}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        <label className="block text-[10px] text-gray-500 font-medium mb-1">Descrição Detalhada / Apresentação da Peça (abouttext)</label>
+                        <textarea 
+                          placeholder="Escreva sobre a inspiração, as características exclusivas desta obra da galeria..." 
+                          rows={3}
+                          className="w-full p-3 rounded-xl border bg-white text-xs"
+                          value={arquivoForm.abouttext}
+                          onChange={e => setArquivoForm({...arquivoForm, abouttext: e.target.value})}
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="bg-brand-wood text-white p-3 rounded-xl font-bold hover:bg-brand-wood-dark transition-colors cursor-pointer mt-2 text-sm">
+                      Adicionar na Galeria com Detalhes Completos
                     </button>
                   </div>
                 </form>
@@ -1656,6 +1919,217 @@ const AdminDashboard = () => {
                           ID: {arq.id?.slice(0, 6)}...
                         </div>
                       </div>
+
+                      {/* Seção expansível de detalhes adicionais */}
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <button 
+                          type="button"
+                          onClick={() => setExpandedDetails(prev => ({ ...prev, [arq.id!]: !prev[arq.id!] }))}
+                          className="w-full text-left text-xs font-bold text-brand-clay hover:text-brand-wood flex items-center justify-between cursor-pointer py-1"
+                        >
+                          <span>{expandedDetails[arq.id!] ? '▲ Ocultar Detalhes da Obra' : '▼ Editar Detalhes Completos (Descrição, Dimensões, SEO...)'}</span>
+                          <span className="text-[10px] text-gray-400 font-normal">{expandedDetails[arq.id!] ? 'Modo edição ativo' : 'Campos extras'}</span>
+                        </button>
+
+                        {expandedDetails[arq.id!] && (
+                          <div className="grid gap-3 mt-3 text-xs">
+                            {/* Caminho da Imagem */}
+                            <div>
+                              <label className="block text-[10px] text-gray-500 font-semibold mb-0.5">Caminho da Imagem no Servidor (ex: /arquivos/...)</label>
+                              <input 
+                                type="text"
+                                defaultValue={arq.img}
+                                onBlur={async (e) => {
+                                  const val = e.target.value.trim();
+                                  if (val && val !== arq.img) {
+                                    try {
+                                      await updateDoc(doc(db, 'arquivos', arq.id!), { img: val });
+                                    } catch (err) {
+                                      console.error("Erro ao atualizar caminho da imagem:", err);
+                                    }
+                                  }
+                                }}
+                                className="w-full p-2 border rounded-lg bg-gray-50 focus:bg-white text-gray-700 font-mono text-[11px]"
+                                placeholder="/arquivos/imagem.jpg"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              {/* Slug Personalizado */}
+                              <div>
+                                <label className="block text-[10px] text-gray-500 font-semibold mb-0.5">Slug URL (Opcional)</label>
+                                <input 
+                                  type="text"
+                                  defaultValue={arq.slug || ''}
+                                  onBlur={async (e) => {
+                                    const val = e.target.value.trim();
+                                    if (val !== (arq.slug || '')) {
+                                      try {
+                                        await updateDoc(doc(db, 'arquivos', arq.id!), { slug: val });
+                                      } catch (err) {
+                                        console.error("Erro ao atualizar slug da obra:", err);
+                                      }
+                                    }
+                                  }}
+                                  className="w-full p-2 border rounded-lg bg-gray-50 focus:bg-white text-gray-700 font-mono text-[11px]"
+                                  placeholder="ex: escultura-leao-madeira"
+                                />
+                              </div>
+
+                              {/* Ano de Criação */}
+                              <div>
+                                <label className="block text-[10px] text-gray-500 font-semibold mb-0.5">Ano de Criação</label>
+                                <input 
+                                  type="text"
+                                  defaultValue={arq.year || ''}
+                                  onBlur={async (e) => {
+                                    const val = e.target.value.trim();
+                                    if (val !== (arq.year || '')) {
+                                      try {
+                                        await updateDoc(doc(db, 'arquivos', arq.id!), { year: val });
+                                      } catch (err) {
+                                        console.error("Erro ao atualizar ano da obra:", err);
+                                      }
+                                    }
+                                  }}
+                                  className="w-full p-2 border rounded-lg bg-gray-50 focus:bg-white text-gray-700"
+                                  placeholder="ex: 2025"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              {/* Dimensões */}
+                              <div>
+                                <label className="block text-[10px] text-gray-500 font-semibold mb-0.5">Dimensões da Peça</label>
+                                <input 
+                                  type="text"
+                                  defaultValue={arq.dimensions || ''}
+                                  onBlur={async (e) => {
+                                    const val = e.target.value.trim();
+                                    if (val !== (arq.dimensions || '')) {
+                                      try {
+                                        await updateDoc(doc(db, 'arquivos', arq.id!), { dimensions: val });
+                                    } catch (err) {
+                                      console.error("Erro ao atualizar dimensões da obra:", err);
+                                    }
+                                  }
+                                }}
+                                className="w-full p-2 border rounded-lg bg-gray-50 focus:bg-white text-gray-700"
+                                placeholder="ex: 50 x 25 x 20 cm"
+                              />
+                            </div>
+
+                            {/* Técnica Aplicada */}
+                            <div>
+                              <label className="block text-[10px] text-gray-500 font-semibold mb-0.5">Técnica Aplicada</label>
+                              <input 
+                                type="text"
+                                defaultValue={arq.technique || ''}
+                                onBlur={async (e) => {
+                                  const val = e.target.value.trim();
+                                  if (val !== (arq.technique || '')) {
+                                    try {
+                                      await updateDoc(doc(db, 'arquivos', arq.id!), { technique: val });
+                                    } catch (err) {
+                                      console.error("Erro ao atualizar técnica da obra:", err);
+                                    }
+                                  }
+                                }}
+                                className="w-full p-2 border rounded-lg bg-gray-50 focus:bg-white text-gray-700"
+                                placeholder="ex: Entalhe manual em relevo"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            {/* Insumos / Materiais */}
+                            <div>
+                              <label className="block text-[10px] text-gray-500 font-semibold mb-0.5">Insumos / Materiais</label>
+                              <input 
+                                type="text"
+                                defaultValue={arq.materials || ''}
+                                onBlur={async (e) => {
+                                  const val = e.target.value.trim();
+                                  if (val !== (arq.materials || '')) {
+                                    try {
+                                      await updateDoc(doc(db, 'arquivos', arq.id!), { materials: val });
+                                    } catch (err) {
+                                      console.error("Erro ao atualizar materiais da obra:", err);
+                                    }
+                                  }
+                                }}
+                                className="w-full p-2 border rounded-lg bg-gray-50 focus:bg-white text-gray-700"
+                                placeholder="ex: Madeira Maciça de Imbuia"
+                              />
+                            </div>
+
+                            {/* Acabamento Final */}
+                            <div>
+                              <label className="block text-[10px] text-gray-500 font-semibold mb-0.5">Acabamento Final</label>
+                              <input 
+                                type="text"
+                                defaultValue={arq.finish || ''}
+                                onBlur={async (e) => {
+                                  const val = e.target.value.trim();
+                                  if (val !== (arq.finish || '')) {
+                                    try {
+                                      await updateDoc(doc(db, 'arquivos', arq.id!), { finish: val });
+                                    } catch (err) {
+                                      console.error("Erro ao atualizar acabamento da obra:", err);
+                                    }
+                                  }
+                                }}
+                                className="w-full p-2 border rounded-lg bg-gray-50 focus:bg-white text-gray-700"
+                                placeholder="ex: Seladora e Cera de abelha"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Cuidados Recomendados */}
+                          <div>
+                            <label className="block text-[10px] text-gray-500 font-semibold mb-0.5">Cuidados Recomendados</label>
+                            <input 
+                              type="text"
+                              defaultValue={arq.care || ''}
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim();
+                                if (val !== (arq.care || '')) {
+                                  try {
+                                    await updateDoc(doc(db, 'arquivos', arq.id!), { care: val });
+                                  } catch (err) {
+                                    console.error("Erro ao atualizar cuidados da obra:", err);
+                                  }
+                                }
+                              }}
+                              className="w-full p-2 border rounded-lg bg-gray-50 focus:bg-white text-gray-700"
+                              placeholder="ex: Limpar com flanela seca, evitar umidade"
+                            />
+                          </div>
+
+                          {/* Apresentação / Texto descritivo completo */}
+                          <div>
+                            <label className="block text-[10px] text-gray-500 font-semibold mb-0.5">Descrição Detalhada / Apresentação (abouttext)</label>
+                            <textarea 
+                              defaultValue={arq.abouttext || ''}
+                              rows={3}
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim();
+                                if (val !== (arq.abouttext || '')) {
+                                  try {
+                                    await updateDoc(doc(db, 'arquivos', arq.id!), { abouttext: val });
+                                  } catch (err) {
+                                    console.error("Erro ao atualizar descrição detalhada da obra:", err);
+                                  }
+                                }
+                              }}
+                              className="w-full p-2 border rounded-lg bg-gray-50 focus:bg-white text-gray-700"
+                              placeholder="Escreva sobre a inspiração, as características exclusivas desta obra da galeria..."
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     </div>
                   );
                 })}
@@ -2130,8 +2604,10 @@ const Chatbot = () => {
 };
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item'>('landing');
   const [currentBlogSlug, setCurrentBlogSlug] = useState<string>('');
+  const [currentGallerySlug, setCurrentGallerySlug] = useState<string>('');
+  const [currentVendasSlug, setCurrentVendasSlug] = useState<string>('');
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
   const [currentConviteId, setCurrentConviteId] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<any | null>(null);
@@ -2144,8 +2620,50 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const handleHashChange = () => {
+    const handleHashAndPathChange = () => {
       const hash = window.location.hash;
+      const path = window.location.pathname;
+
+      if (path.startsWith('/galeria/')) {
+        const slug = path.substring(9).replace(/\/$/, '');
+        if (slug) {
+          setCurrentView('galeria-item');
+          setCurrentGallerySlug(slug);
+          window.scrollTo({ top: 0 });
+          return;
+        }
+      }
+
+      if (path.startsWith('/vendas/')) {
+        const slug = path.substring(8).replace(/\/$/, '');
+        if (slug && slug !== 'pay' && slug !== 'confirm') {
+          setCurrentView('vendas-item');
+          setCurrentVendasSlug(slug);
+          window.scrollTo({ top: 0 });
+          return;
+        }
+      }
+
+      if (hash.startsWith('#galeria/')) {
+        const slug = hash.substring(9);
+        if (slug) {
+          setCurrentView('galeria-item');
+          setCurrentGallerySlug(slug);
+          window.scrollTo({ top: 0 });
+          return;
+        }
+      }
+
+      if (hash.startsWith('#vendas/') && !hash.startsWith('#vendas/pay') && !hash.startsWith('#vendas/confirm')) {
+        const slug = hash.substring(8);
+        if (slug) {
+          setCurrentView('vendas-item');
+          setCurrentVendasSlug(slug);
+          window.scrollTo({ top: 0 });
+          return;
+        }
+      }
+
       if (hash.startsWith('#vendas/pay')) {
         const urlParams = new URLSearchParams(hash.replace(/#vendas\/pay\??/, ''));
         const id = urlParams.get('id') || '';
@@ -2189,12 +2707,16 @@ export default function App() {
       }
     };
 
-    handleHashChange();
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    handleHashAndPathChange();
+    window.addEventListener('hashchange', handleHashAndPathChange);
+    window.addEventListener('popstate', handleHashAndPathChange);
+    return () => {
+      window.removeEventListener('hashchange', handleHashAndPathChange);
+      window.removeEventListener('popstate', handleHashAndPathChange);
+    };
   }, []);
 
-  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post', id?: string) => {
+  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item', id?: string) => {
     if (view === 'checkout-pay' && id) {
       window.location.hash = `#vendas/pay?id=${id}`;
     } else if (view === 'checkout-confirm' && id) {
@@ -2207,7 +2729,20 @@ export default function App() {
       window.location.hash = '#blog';
     } else if (view === 'blog-post' && id) {
       window.location.hash = `#blog/${id}`;
+    } else if (view === 'galeria-item' && id) {
+      window.history.pushState(null, '', `/galeria/${id}`);
+      setCurrentView('galeria-item');
+      setCurrentGallerySlug(id);
+      window.scrollTo({ top: 0 });
+    } else if (view === 'vendas-item' && id) {
+      window.history.pushState(null, '', `/vendas/${id}`);
+      setCurrentView('vendas-item');
+      setCurrentVendasSlug(id);
+      window.scrollTo({ top: 0 });
     } else if (view === 'vendas') {
+      if (window.location.pathname.startsWith('/galeria/') || window.location.pathname.startsWith('/vendas/')) {
+        window.history.pushState(null, '', '/');
+      }
       window.location.hash = '#vendas';
       setTimeout(() => {
         const elem = document.getElementById('vendas');
@@ -2216,6 +2751,9 @@ export default function App() {
         }
       }, 50);
     } else {
+      if (window.location.pathname !== '/') {
+        window.history.pushState(null, '', '/');
+      }
       window.location.hash = '';
       setTimeout(() => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2225,13 +2763,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen selection:bg-brand-wood selection:text-white font-sans text-brand-ink antialiased">
-      <SEOManager currentView={currentView} blogSlug={currentBlogSlug} />
+      <SEOManager currentView={currentView} blogSlug={currentBlogSlug} gallerySlug={currentGallerySlug} vendasSlug={currentVendasSlug} />
       <Navbar />
       
       {currentView === 'blog' ? (
         <BlogPage onNavigateToView={navigateToView} />
       ) : currentView === 'blog-post' ? (
         <BlogPostPage slug={currentBlogSlug} onNavigateToView={navigateToView} />
+      ) : currentView === 'galeria-item' ? (
+        <GalleryItemPage slug={currentGallerySlug} onNavigateToView={navigateToView} />
+      ) : currentView === 'vendas-item' ? (
+        <VendasItemPage slug={currentVendasSlug} onNavigateToView={navigateToView} />
       ) : (
         <>
           <Hero />
@@ -2239,7 +2781,7 @@ export default function App() {
           <Expertise />
           <YouTubeSection />
           <Publications />
-          <Gallery />
+          <Gallery onNavigateToView={navigateToView} />
           
           {/* SEÇÃO DE LOJA VENDAS ARTESANAIS */}
           <section id="vendas" className="section-padding bg-brand-paper hover:bg-brand-paper transition-all duration-300 border-t border-brand-wood/10">
