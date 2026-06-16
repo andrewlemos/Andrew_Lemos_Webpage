@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   auth, 
-  db 
+  db,
+  googleProvider,
+  signInWithPopup
 } from '../firebase';
 import { 
   signInWithEmailAndPassword, 
@@ -9,7 +11,9 @@ import {
   signOut,
   updateProfile,
   onAuthStateChanged,
-  User
+  User,
+  linkWithCredential,
+  GoogleAuthProvider
 } from 'firebase/auth';
 import { 
   doc, 
@@ -115,6 +119,10 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
   const [authError, setAuthError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Google OAuth specific states
+  const [pendingGoogleLink, setPendingGoogleLink] = useState<{ email: string; credential: any } | null>(null);
+  const [linkPassword, setLinkPassword] = useState('');
+
   // Profile Form fields
   const [regName, setRegName] = useState('');
   const [regPhone, setRegPhone] = useState('');
@@ -192,7 +200,36 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
         setRegCity(customerData.city || '');
         setRegState(customerData.state || '');
       } else {
-        setProfile(null);
+        // Se a conta existe no Auth do Firebase mas não possui um registro no Firestore (ex: novo usuário do Google)
+        // Criamos automaticamente um esqueleto de dados a partir das informações do Google Auth
+        const curUser = auth.currentUser;
+        if (curUser) {
+          const guestProfile: EcomCustomer = {
+            name: curUser.displayName || 'Cliente Ateliê',
+            email: curUser.email || '',
+            phone: curUser.phoneNumber || '',
+            cpf: '',
+            cep: '',
+            street: '',
+            number: '',
+            complement: '',
+            neighborhood: '',
+            city: '',
+            state: '',
+            createdAt: new Date().toISOString()
+          };
+          
+          try {
+            await setDoc(doc(db, 'ecom_customers', uid), guestProfile);
+            setProfile(guestProfile);
+            setRegName(guestProfile.name || '');
+            setRegPhone(guestProfile.phone || '');
+          } catch (err: any) {
+            console.warn("Erro ao salvar perfil inicial do novo usuário Google no Firestore:", err);
+          }
+        } else {
+          setProfile(null);
+        }
       }
     } catch (e: any) {
       console.error("Erro ao carregar perfil do cliente:", e);
@@ -382,6 +419,82 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
     }
   };
 
+  // Google Sign-In com Account Linking nativo do Firebase
+  const handleGoogleSignIn = async () => {
+    setActionLoading(true);
+    setAuthError('');
+    setSuccessMsg('');
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      // Carrega o perfil do Firestore
+      await loadCustomerProfile(user.uid);
+      setSuccessMsg('Conectado com sucesso com sua conta Google!');
+    } catch (err: any) {
+      console.error("Erro no Google Sign-In:", err);
+      
+      // Trata o caso de o e-mail já possuir uma conta de e-mail e senha
+      if (err.code === 'auth/account-exists-with-different-credential' || 
+          err.message?.includes('auth/account-exists-with-different-credential')) {
+        const pendingCredential = GoogleAuthProvider.credentialFromError(err);
+        const email = err.customData?.email || authEmail || '';
+        
+        if (pendingCredential && email) {
+          setPendingGoogleLink({
+            email,
+            credential: pendingCredential
+          });
+          setAuthError('O e-mail associado à sua conta Google já está cadastrado com uma senha neste site. Por favor, digite sua senha de acesso abaixo para vincular a conta do Google e entrar com um clique no futuro.');
+          return;
+        }
+      }
+      
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        console.log("Login com Google cancelado pelo usuário.");
+      } else {
+        setAuthError('Falha ao autenticar com o Google: ' + (err.message || err.code));
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConfirmLink = async () => {
+    if (!pendingGoogleLink || !linkPassword) return;
+    setActionLoading(true);
+    setAuthError('');
+    setSuccessMsg('');
+    
+    try {
+      // 1. Autentica com o e-mail e senha existentes
+      const userCredential = await signInWithEmailAndPassword(
+        auth, 
+        pendingGoogleLink.email, 
+        linkPassword
+      );
+      
+      // 2. Vincula a credencial do Google para esta conta já existente
+      await linkWithCredential(userCredential.user, pendingGoogleLink.credential);
+      
+      // 3. Sucesso!
+      setSuccessMsg('Sua conta do Google foi vinculada com sucesso! Agora você poderá usar o Google para entrar.');
+      setPendingGoogleLink(null);
+      setLinkPassword('');
+    } catch (err: any) {
+      console.error("Erro ao vincular contas:", err);
+      if (err.code === 'auth/wrong-password') {
+        setAuthError('Senha de acesso incorreta para o e-mail ' + pendingGoogleLink.email + '. Por favor, tente novamente.');
+      } else if (err.code === 'auth/credential-already-in-use') {
+        setAuthError('Este login do Google já está vinculado a esta ou outra conta do site.');
+      } else {
+        setAuthError('Erro ao confirmar vinculação de conta: ' + (err.message || err.code));
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const copyToClipboard = (text: string, orderId: string) => {
     navigator.clipboard.writeText(text);
     setCopiedOrderId(orderId);
@@ -419,8 +532,8 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
             </h2>
             <p className="text-xs sm:text-sm text-gray-500 max-w-sm mx-auto">
               {isRegisterMode 
-                ? 'Inscreva-se preenchendo seus dados para finalizar e-commerce compras, liberar notas e obter rastreios.' 
-                : 'Acesse usando e-mail cadastrado em compras anteriores para verificar envios e liberar códigos.'
+                ? 'Inscreva-se preenchendo seus dados para finalizar e-commerce compras, e obter rastreios.' 
+                : 'Acesse usando seu e-mail e senha cadastrados para acompanha o status do seu pedido.'
               }
             </p>
           </div>
@@ -440,7 +553,66 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
           )}
 
           {/* FORM */}
-          <form className="space-y-5" onSubmit={isRegisterMode ? handleRegister : handleLogin}>
+          {pendingGoogleLink ? (
+            <div className="space-y-5 bg-amber-50/50 border border-amber-100/80 p-5 rounded-2xl">
+              <h3 className="text-xs font-bold text-amber-800 uppercase tracking-wider">Confirmar Vinculação de Conta</h3>
+              <p className="text-xs text-gray-655 leading-relaxed">
+                Para vincular com segurança sua conta Google ao cadastro existente do e-mail <strong className="text-gray-800">{pendingGoogleLink.email}</strong>, digite a sua senha de acesso abaixo:
+              </p>
+              
+              <div className="space-y-1.5 relative">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Sua Senha de Acesso *</label>
+                <div className="relative">
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    required
+                    placeholder="Digite sua senha cadastrada"
+                    value={linkPassword}
+                    onChange={e => setLinkPassword(e.target.value)}
+                    className="w-full bg-[#FAFAFA] border border-gray-150 rounded-xl pl-4 pr-10 py-3 text-xs focus:ring-1 focus:ring-brand-wood outline-none font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 outline-none"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingGoogleLink(null);
+                    setLinkPassword('');
+                    setAuthError('');
+                  }}
+                  className="flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-500 py-3 rounded-full text-xs font-bold transition-all outline-none cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmLink}
+                  disabled={actionLoading || !linkPassword}
+                  className="flex-1 bg-brand-wood text-white py-3 rounded-full text-xs font-bold hover:bg-brand-clay focus:outline-none transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoading ? (
+                    <>
+                      <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                      <span>Vinculando...</span>
+                    </>
+                  ) : (
+                    <span>Confirmar e Entrar</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <form className="space-y-5" onSubmit={isRegisterMode ? handleRegister : handleLogin}>
             
             {isRegisterMode && (
               <div className="space-y-4 border-b border-gray-100 pb-5">
@@ -644,6 +816,28 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
             </button>
           </form>
 
+          <div className="relative my-5 flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-gray-150" />
+            </div>
+            <span className="relative bg-white px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">ou</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={actionLoading}
+            className="w-full bg-white border border-gray-200 hover:border-gray-350 text-gray-750 py-3.5 rounded-full font-bold text-xs hover:bg-gray-50 hover:shadow-sm focus:outline-none transition-all flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50"
+          >
+            <svg className="w-4 h-4 ml-1" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22-.19-.63z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+            </svg>
+            <span>Continuar com Google</span>
+          </button>
+
           <div className="border-t border-gray-100 pt-6 text-center">
             <button
               type="button"
@@ -659,6 +853,8 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
               }
             </button>
           </div>
+          </>
+          )}
 
         </div>
       </div>
