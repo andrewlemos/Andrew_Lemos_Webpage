@@ -3320,4 +3320,231 @@ app.get("/api/download-zip", checkAdminAuth, (req, res) => {
   }
 });
 
+// Advanced SEO: Dynamic Sitemaps (including image schemas) & robots.txt
+
+function backendEnsureRobustUrl(url: string, baseUrl: string): string {
+  if (!url) return "";
+  let processedUrl = url.trim();
+
+  if (processedUrl.includes("drive.google.com")) {
+    const fileDMatch = processedUrl.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
+    if (fileDMatch && fileDMatch[1]) {
+      return `https://lh3.googleusercontent.com/d/${fileDMatch[1]}`;
+    }
+    const queryIdMatch = processedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (queryIdMatch && queryIdMatch[1]) {
+      return `https://lh3.googleusercontent.com/d/${queryIdMatch[1]}`;
+    }
+  }
+
+  if (processedUrl.startsWith("http://") || processedUrl.startsWith("https://")) {
+    return processedUrl;
+  }
+
+  if (processedUrl.startsWith("/")) {
+    return `${baseUrl}${processedUrl}`;
+  }
+  return `${baseUrl}/${processedUrl}`;
+}
+
+app.get("/sitemap.xml", async (req, res) => {
+  const host = req.get("host") || "andrewlemos.com.br";
+  const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+  const baseUrl = `${protocol}://${host}`;
+
+  const blogPosts: any[] = [];
+  const galleryItems: any[] = [];
+  const ecomProducts: any[] = [];
+  const affiliateProducts: any[] = [];
+
+  if (adminDb) {
+    try {
+      const blogSnap = await adminDb.collection("ecom_blog_posts").get();
+      blogSnap.forEach((doc: any) => {
+        const data = doc.data();
+        if (data && data.published) {
+          blogPosts.push({ id: doc.id, ...data });
+        }
+      });
+    } catch (e) {
+      console.error("Sitemap XML: blog fetch error:", e);
+    }
+
+    try {
+      const gallerySnap = await adminDb.collection("arquivos").get();
+      gallerySnap.forEach((doc: any) => {
+        const data = doc.data();
+        if (data) {
+          galleryItems.push({ id: doc.id, ...data });
+        }
+      });
+    } catch (e) {
+      console.error("Sitemap XML: gallery fetch error:", e);
+    }
+
+    try {
+      const ecomProdSnap = await adminDb.collection("ecom_products").get();
+      ecomProdSnap.forEach((doc: any) => {
+        const data = doc.data();
+        if (data) {
+          ecomProducts.push({ id: doc.id, ...data });
+        }
+      });
+    } catch (e) {
+      console.error("Sitemap XML: ecom products fetch error:", e);
+    }
+
+    try {
+      const affiliateSnap = await adminDb.collection("products").get();
+      affiliateSnap.forEach((doc: any) => {
+        const data = doc.data();
+        if (data) {
+          affiliateProducts.push({ id: doc.id, ...data });
+        }
+      });
+    } catch (e) {
+      console.error("Sitemap XML: affiliate products fetch error:", e);
+    }
+  }
+
+  // Generate sitemap XML string
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+  xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n`;
+  xml += `        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n`;
+
+  // Escape special utility
+  const escapeXml = (str: string): string => {
+    if (!str) return "";
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  };
+
+  // 1. Home Page
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/</loc>\n`;
+  xml += `    <changefreq>daily</changefreq>\n`;
+  xml += `    <priority>1.0</priority>\n`;
+  xml += `    <image:image>\n`;
+  xml += `      <image:loc>https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb</image:loc>\n`;
+  xml += `      <image:title>Andrew Lemos - Artista Plástico &amp; Escultor</image:title>\n`;
+  xml += `    </image:image>\n`;
+  xml += `  </url>\n`;
+
+  // 2. Blog View
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/#blog</loc>\n`;
+  xml += `    <changefreq>daily</changefreq>\n`;
+  xml += `    <priority>0.8</priority>\n`;
+  xml += `  </url>\n`;
+
+  // 3. Vendas (E-commerce store)
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/#vendas</loc>\n`;
+  xml += `    <changefreq>weekly</changefreq>\n`;
+  xml += `    <priority>0.9</priority>\n`;
+  ecomProducts.forEach((prod) => {
+    const imgUrl = prod.images && prod.images[0] ? backendEnsureRobustUrl(prod.images[0], baseUrl) : "";
+    if (imgUrl) {
+      xml += `    <image:image>\n`;
+      xml += `      <image:loc>${escapeXml(imgUrl)}</image:loc>\n`;
+      xml += `      <image:title>${escapeXml(prod.name)}</image:title>\n`;
+      xml += `    </image:image>\n`;
+    }
+  });
+  xml += `  </url>\n`;
+
+  // 4. Products list (Affiliates)
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/#products</loc>\n`;
+  xml += `    <changefreq>weekly</changefreq>\n`;
+  xml += `    <priority>0.7</priority>\n`;
+  affiliateProducts.forEach((prod) => {
+    const imgUrl = prod.imageUrl ? backendEnsureRobustUrl(prod.imageUrl, baseUrl) : "";
+    if (imgUrl) {
+      xml += `    <image:image>\n`;
+      xml += `      <image:loc>${escapeXml(imgUrl)}</image:loc>\n`;
+      xml += `      <image:title>${escapeXml(prod.name)}</image:title>\n`;
+      xml += `    </image:image>\n`;
+    }
+  });
+  xml += `  </url>\n`;
+
+  // 5. Gallery works
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/#gallery</loc>\n`;
+  xml += `    <changefreq>weekly</changefreq>\n`;
+  xml += `    <priority>0.8</priority>\n`;
+  galleryItems.forEach((item) => {
+    const imgUrl = item.img ? backendEnsureRobustUrl(item.img, baseUrl) : "";
+    if (imgUrl) {
+      xml += `    <image:image>\n`;
+      xml += `      <image:loc>${escapeXml(imgUrl)}</image:loc>\n`;
+      xml += `      <image:title>${escapeXml(item.title || "Obra")}</image:title>\n`;
+      xml += `    </image:image>\n`;
+    }
+  });
+  xml += `  </url>\n`;
+
+  // 6. Online courses
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/#online-courses</loc>\n`;
+  xml += `    <changefreq>monthly</changefreq>\n`;
+  xml += `    <priority>0.7</priority>\n`;
+  xml += `  </url>\n`;
+
+  // 7. Classes
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/#classes</loc>\n`;
+  xml += `    <changefreq>monthly</changefreq>\n`;
+  xml += `    <priority>0.7</priority>\n`;
+  xml += `  </url>\n`;
+
+  // 8. Contact
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/#contact</loc>\n`;
+  xml += `    <changefreq>monthly</changefreq>\n`;
+  xml += `    <priority>0.5</priority>\n`;
+  xml += `  </url>\n`;
+
+  // 9. Blog posts
+  blogPosts.forEach((post) => {
+    const slug = post.slug || post.id;
+    const url = `${baseUrl}/#blog/${slug}`;
+    xml += `  <url>\n`;
+    xml += `    <loc>${url}</loc>\n`;
+    xml += `    <changefreq>monthly</changefreq>\n`;
+    xml += `    <priority>0.7</priority>\n`;
+    const imgUrl = post.imageUrl ? backendEnsureRobustUrl(post.imageUrl, baseUrl) : "";
+    if (imgUrl) {
+      xml += `    <image:image>\n`;
+      xml += `      <image:loc>${escapeXml(imgUrl)}</image:loc>\n`;
+      xml += `      <image:title>${escapeXml(post.title)}</image:title>\n`;
+      xml += `    </image:image>\n`;
+    }
+    xml += `  </url>\n`;
+  });
+
+  xml += `</urlset>\n`;
+
+  res.header("Content-Type", "application/xml; charset=utf-8");
+  res.send(xml);
+});
+
+app.get("/robots.txt", (req, res) => {
+  const host = req.get("host") || "andrewlemos.com.br";
+  const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+  const baseUrl = `${protocol}://${host}`;
+
+  res.header("Content-Type", "text/plain; charset=utf-8");
+  res.send(`User-agent: *
+Allow: /
+
+Sitemap: ${baseUrl}/sitemap.xml
+`);
+});
+
 export default app;

@@ -54,6 +54,7 @@ import { AdminStore } from './components/AdminStore';
 import { AdminBlogTab } from './components/AdminBlogTab';
 import { BlogPage } from './components/BlogPage';
 import { BlogPostPage } from './components/BlogPostPage';
+import { SEOManager } from './components/SEOManager';
 import { Product, Arquivo, EcomProduct, EcomOrder } from './types';
 
 // --- Helpers ---
@@ -2224,6 +2225,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen selection:bg-brand-wood selection:text-white font-sans text-brand-ink antialiased">
+      <SEOManager currentView={currentView} blogSlug={currentBlogSlug} />
       <Navbar />
       
       {currentView === 'blog' ? (
