@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Instagram, 
@@ -2619,94 +2619,94 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    const handleHashAndPathChange = () => {
-      const hash = window.location.hash;
-      const path = window.location.pathname;
+  const handleHashAndPathChange = useCallback(() => {
+    const hash = window.location.hash;
+    const path = window.location.pathname;
 
-      if (path.startsWith('/galeria/')) {
-        const slug = path.substring(9).replace(/\/$/, '');
-        if (slug) {
-          setCurrentView('galeria-item');
-          setCurrentGallerySlug(slug);
-          window.scrollTo({ top: 0 });
-          return;
-        }
-      }
-
-      if (path.startsWith('/vendas/')) {
-        const slug = path.substring(8).replace(/\/$/, '');
-        if (slug && slug !== 'pay' && slug !== 'confirm') {
-          setCurrentView('vendas-item');
-          setCurrentVendasSlug(slug);
-          window.scrollTo({ top: 0 });
-          return;
-        }
-      }
-
-      if (hash.startsWith('#galeria/')) {
-        const slug = hash.substring(9);
-        if (slug) {
-          setCurrentView('galeria-item');
-          setCurrentGallerySlug(slug);
-          window.scrollTo({ top: 0 });
-          return;
-        }
-      }
-
-      if (hash.startsWith('#vendas/') && !hash.startsWith('#vendas/pay') && !hash.startsWith('#vendas/confirm')) {
-        const slug = hash.substring(8);
-        if (slug) {
-          setCurrentView('vendas-item');
-          setCurrentVendasSlug(slug);
-          window.scrollTo({ top: 0 });
-          return;
-        }
-      }
-
-      if (hash.startsWith('#vendas/pay')) {
-        const urlParams = new URLSearchParams(hash.replace(/#vendas\/pay\??/, ''));
-        const id = urlParams.get('id') || '';
-        setCurrentView('checkout-pay');
-        setCurrentOrderId(id);
-      } else if (hash.startsWith('#vendas/confirm')) {
-        const urlParams = new URLSearchParams(hash.replace(/#vendas\/confirm\??/, ''));
-        const id = urlParams.get('id') || '';
-        setCurrentView('checkout-confirm');
-        setCurrentOrderId(id);
-      } else if (hash.startsWith('#customer-area')) {
-        setCurrentView('customer-area');
-      } else if (hash.startsWith('#avaliar')) {
-        const urlParams = new URLSearchParams(hash.replace(/#avaliar\??/, ''));
-        const pedidoId = urlParams.get('pedido') || '';
-        const conviteId = urlParams.get('conviteId') || '';
-        setCurrentView('avaliar');
-        setCurrentOrderId(pedidoId);
-        setCurrentConviteId(conviteId);
-      } else if (hash.startsWith('#blog')) {
-        const parts = hash.split('/');
-        if (parts.length > 1 && parts[1]) {
-          setCurrentView('blog-post');
-          setCurrentBlogSlug(parts[1]);
-        } else {
-          setCurrentView('blog');
-        }
+    if (path.startsWith('/galeria/')) {
+      const slug = path.substring(9).replace(/\/$/, '');
+      if (slug) {
+        setCurrentView('galeria-item');
+        setCurrentGallerySlug(slug);
         window.scrollTo({ top: 0 });
-      } else {
-        setCurrentView('landing');
-        const landingHashes = ['#home', '#bio', '#expertise', '#gallery', '#publications', '#classes', '#online-courses', '#products', '#contact'];
-        if (landingHashes.includes(hash)) {
-          setTimeout(() => {
-            const id = hash.substring(1);
-            const elem = document.getElementById(id);
-            if (elem) {
-              elem.scrollIntoView({ behavior: 'smooth' });
-            }
-          }, 100);
-        }
+        return;
       }
-    };
+    }
 
+    if (path.startsWith('/vendas/')) {
+      const slug = path.substring(8).replace(/\/$/, '');
+      if (slug && slug !== 'pay' && slug !== 'confirm') {
+        setCurrentView('vendas-item');
+        setCurrentVendasSlug(slug);
+        window.scrollTo({ top: 0 });
+        return;
+      }
+    }
+
+    if (hash.startsWith('#galeria/')) {
+      const slug = hash.substring(9);
+      if (slug) {
+        setCurrentView('galeria-item');
+        setCurrentGallerySlug(slug);
+        window.scrollTo({ top: 0 });
+        return;
+      }
+    }
+
+    if (hash.startsWith('#vendas/') && !hash.startsWith('#vendas/pay') && !hash.startsWith('#vendas/confirm')) {
+      const slug = hash.substring(8);
+      if (slug) {
+        setCurrentView('vendas-item');
+        setCurrentVendasSlug(slug);
+        window.scrollTo({ top: 0 });
+        return;
+      }
+    }
+
+    if (hash.startsWith('#vendas/pay')) {
+      const urlParams = new URLSearchParams(hash.replace(/#vendas\/pay\??/, ''));
+      const id = urlParams.get('id') || '';
+      setCurrentView('checkout-pay');
+      setCurrentOrderId(id);
+    } else if (hash.startsWith('#vendas/confirm')) {
+      const urlParams = new URLSearchParams(hash.replace(/#vendas\/confirm\??/, ''));
+      const id = urlParams.get('id') || '';
+      setCurrentView('checkout-confirm');
+      setCurrentOrderId(id);
+    } else if (hash.startsWith('#customer-area')) {
+      setCurrentView('customer-area');
+    } else if (hash.startsWith('#avaliar')) {
+      const urlParams = new URLSearchParams(hash.replace(/#avaliar\??/, ''));
+      const pedidoId = urlParams.get('pedido') || '';
+      const conviteId = urlParams.get('conviteId') || '';
+      setCurrentView('avaliar');
+      setCurrentOrderId(pedidoId);
+      setCurrentConviteId(conviteId);
+    } else if (hash.startsWith('#blog')) {
+      const parts = hash.split('/');
+      if (parts.length > 1 && parts[1]) {
+        setCurrentView('blog-post');
+        setCurrentBlogSlug(parts[1]);
+      } else {
+        setCurrentView('blog');
+      }
+      window.scrollTo({ top: 0 });
+    } else {
+      setCurrentView('landing');
+      const landingHashes = ['#home', '#bio', '#expertise', '#gallery', '#publications', '#classes', '#online-courses', '#products', '#contact'];
+      if (landingHashes.includes(hash)) {
+        setTimeout(() => {
+          const id = hash.substring(1);
+          const elem = document.getElementById(id);
+          if (elem) {
+            elem.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 100);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     handleHashAndPathChange();
     window.addEventListener('hashchange', handleHashAndPathChange);
     window.addEventListener('popstate', handleHashAndPathChange);
@@ -2714,7 +2714,7 @@ export default function App() {
       window.removeEventListener('hashchange', handleHashAndPathChange);
       window.removeEventListener('popstate', handleHashAndPathChange);
     };
-  }, []);
+  }, [handleHashAndPathChange]);
 
   const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item', id?: string) => {
     if (view === 'checkout-pay' && id) {
@@ -2759,6 +2759,9 @@ export default function App() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }, 50);
     }
+
+    // Force run routing logic because pushState / setting hash back to empty won't trigger popstate/hashchange event listeners
+    handleHashAndPathChange();
   };
 
   return (

@@ -69,14 +69,14 @@ service cloud.firestore {
     function isValidEcomCustomer(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() < 300 &&
              data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
-             data.phone is string && data.phone.size() > 0 && data.phone.size() < 100 &&
-             data.cpf is string && data.cpf.size() > 0 && data.cpf.size() < 50 &&
-             data.cep is string && data.cep.size() > 0 && data.cep.size() < 20 &&
-             data.street is string && data.street.size() > 0 && data.street.size() < 500 &&
-             data.number is string && data.number.size() > 0 && data.number.size() < 50 &&
-             data.neighborhood is string && data.neighborhood.size() > 0 && data.neighborhood.size() < 200 &&
-             data.city is string && data.city.size() > 0 && data.city.size() < 200 &&
-             data.state is string && data.state.size() > 0 && data.state.size() < 50;
+             data.phone is string && data.phone.size() >= 0 && data.phone.size() < 100 &&
+             data.cpf is string && data.cpf.size() >= 0 && data.cpf.size() < 50 &&
+             data.cep is string && data.cep.size() >= 0 && data.cep.size() < 20 &&
+             data.street is string && data.street.size() >= 0 && data.street.size() < 500 &&
+             data.number is string && data.number.size() >= 0 && data.number.size() < 50 &&
+             data.neighborhood is string && data.neighborhood.size() >= 0 && data.neighborhood.size() < 200 &&
+             data.city is string && data.city.size() >= 0 && data.city.size() < 200 &&
+             data.state is string && data.state.size() >= 0 && data.state.size() < 50;
     }
 
     function isValidReview(data) {

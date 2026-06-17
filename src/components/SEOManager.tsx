@@ -27,6 +27,7 @@ export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug, g
     const q = query(
       collection(db, 'ecom_blog_posts'),
       where('slug', '==', blogSlug),
+      where('published', '==', true),
       limit(1)
     );
 
