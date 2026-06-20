@@ -3758,4 +3758,156 @@ app.get(["/blog", "/blog/"], async (req, res) => {
   }
 });
 
+// --- Pinterest Product Feed (Pinterest Catalogs Integration) ---
+app.get("/api/pinterest-feed", async (req, res) => {
+  try {
+    const host = req.get("host") || "andrewlemos.com.br";
+    const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+    const baseUrl = `${protocol}://${host}`;
+
+    const items: any[] = [];
+
+    // Helper functions for CSV escaping & slugification
+    const slugify = (text: string): string => {
+      if (!text) return "";
+      return text
+        .toString()
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[_\s]+/g, '-')
+        .replace(/[^\w\-]+/g, '')
+        .replace(/\-\-+/g, '-')
+        .replace(/^-+/, '')
+        .replace(/-+$/, '');
+    };
+
+    const escapeCsv = (field: string | null | undefined): string => {
+      if (field === null || field === undefined) return '""';
+      const clean = String(field).replace(/\r?\n|\r/g, " "); // Replace newlines with spaces for extra safety in CSV rows
+      const bounciless = clean.replace(/"/g, '""');
+      return `"${bounciless}"`;
+    };
+
+    const resolveImageUrl = (imgUrl: string): string => {
+      if (!imgUrl) return "https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb";
+      const processed = imgUrl.trim();
+      if (processed.startsWith('http://') || processed.startsWith('https://')) {
+        return processed;
+      }
+      let filename = processed;
+      if (processed.includes('/arquivos/')) {
+        const parts = processed.split('/arquivos/');
+        filename = parts.slice(1).join('/arquivos/');
+      } else if (processed.startsWith('arquivos/')) {
+        filename = processed.substring(9);
+      } else if (processed.startsWith('/')) {
+        filename = processed.substring(1);
+      }
+      filename = filename.replace(/^\/+/, '');
+      return `${baseUrl}/arquivos/${encodeURIComponent(filename)}`;
+    };
+
+    if (adminDb) {
+      // 1. Load active e-commerce products
+      try {
+        const ecomProdSnap = await adminDb.collection("ecom_products").get();
+        ecomProdSnap.forEach((doc: any) => {
+          const data = doc.data();
+          if (data) {
+            const id = doc.id;
+            const title = data.name || "Obra de Arte";
+            const description = data.description || "Escultura/Entalhe artesanal em madeira de lei de alta qualidade feito por Andrew Lemos.";
+            
+            const slug = data.slug && data.slug.trim().length > 0 
+              ? data.slug.trim() 
+              : (data.name ? slugify(data.name) : doc.id);
+            const link = `${baseUrl}/vendas/${slug}`;
+
+            let imageLink = "https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb";
+            if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+              imageLink = resolveImageUrl(data.images[0]);
+            }
+
+            const priceVal = data.price !== undefined ? `${data.price} BRL` : "Sob consulta";
+            const availability = (data.stock !== undefined && data.stock <= 0) ? "out of stock" : "in stock";
+
+            items.push({
+              id,
+              title,
+              description,
+              link,
+              imageLink,
+              price: priceVal,
+              availability
+            });
+          }
+        });
+      } catch (e) {
+        console.error("Pinterest Feed: ecom products error:", e);
+      }
+
+      // 2. Load gallery items (arquivos)
+      try {
+        const gallerySnap = await adminDb.collection("arquivos").get();
+        gallerySnap.forEach((doc: any) => {
+          const data = doc.data();
+          if (data) {
+            const id = doc.id;
+            const title = data.title || "Escultura em Madeira";
+            const description = data.abouttext || data.technique || "Obra esculpida sob medida e com detalhes refinados pelo renomado artista plástico Andrew Lemos.";
+            
+            const slug = data.slug && data.slug.trim().length > 0 
+              ? data.slug.trim() 
+              : (data.title ? slugify(data.title) : doc.id);
+            const link = `${baseUrl}/galeria/${slug}`;
+
+            const imageLink = resolveImageUrl(data.img);
+            const priceVal = "Sob consulta";
+            const availability = "in stock"; // Gallery exhibition pieces can be shared as in stock or show room items
+
+            items.push({
+              id,
+              title,
+              description,
+              link,
+              imageLink,
+              price: priceVal,
+              availability
+            });
+          }
+        });
+      } catch (e) {
+        console.error("Pinterest Feed: gallery fetch error:", e);
+      }
+    }
+
+    // Build the CSV
+    const headers = ["id", "title", "description", "link", "image_link", "price", "availability"];
+    let csvContent = headers.join(",") + "\n";
+
+    items.forEach((item) => {
+      const row = [
+        escapeCsv(item.id),
+        escapeCsv(item.title),
+        escapeCsv(item.description),
+        escapeCsv(item.link),
+        escapeCsv(item.imageLink),
+        escapeCsv(item.price),
+        escapeCsv(item.availability)
+      ];
+      csvContent += row.join(",") + "\n";
+    });
+
+    res.header("Content-Type", "text/csv; charset=utf-8");
+    res.attachment("pinterest_product_feed.csv");
+    return res.status(200).send(csvContent);
+
+  } catch (err) {
+    console.error("Pinterest Feed Exception:", err);
+    return res.status(500).json({ error: "Erro interno ao gerar o feed do Pinterest." });
+  }
+});
+
 export default app;
