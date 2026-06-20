@@ -94,7 +94,8 @@ export const BlogPostPage: React.FC<BlogPostPageProps> = ({ slug, onNavigateToVi
   };
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
+    const shareUrl = `${window.location.origin}/blog/${slug}`;
+    navigator.clipboard.writeText(shareUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };

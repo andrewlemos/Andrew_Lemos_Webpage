@@ -3612,4 +3612,150 @@ Sitemap: ${baseUrl}/sitemap.xml
 `);
 });
 
+// --- Server-Side SEO & Open Graph Interceptors for Blog Articles ---
+app.get("/blog/:slug", async (req, res) => {
+  const { slug } = req.params;
+
+  try {
+    const host = req.get("host") || "andrewlemos.com.br";
+    const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+    const baseUrl = `${protocol}://${host}`;
+
+    // Prevent asset lookups or other main files accidentally matching
+    if (slug.includes('.') || slug === 'sitemap.xml' || slug === 'robots.txt' || slug === 'api') {
+      return res.status(404).end();
+    }
+
+    let title = "Andrew Lemos | Artista Plástico & Escultor";
+    let description = "Portfólio de Andrew Lemos, Artista Plástico e Escultor. Conheça incríveis entalhes em madeira de lei e esculturas detalhadas.";
+    let imageUrl = "https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb";
+    const url = `${baseUrl}/blog/${slug}`;
+
+    // Load active post details from Firestore Admin
+    if (adminDb) {
+      try {
+        const postsRef = adminDb.collection('ecom_blog_posts');
+        const snapshot = await postsRef.where('slug', '==', slug).where('published', '==', true).limit(1).get();
+
+        if (!snapshot.empty) {
+          const postData = snapshot.docs[0].data();
+          title = `${postData.title} | Blog Andrew Lemos`;
+          description = postData.summary || postData.content?.substring(0, 160) || description;
+
+          // Resolve Drive / Local picture URLs
+          if (postData.imageUrl) {
+            const processed = postData.imageUrl.trim();
+            if (processed.includes('drive.google.com')) {
+              const fileDMatch = processed.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
+              if (fileDMatch && fileDMatch[1]) {
+                imageUrl = `https://lh3.googleusercontent.com/d/${fileDMatch[1]}`;
+              } else {
+                const queryIdMatch = processed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                if (queryIdMatch && queryIdMatch[1]) {
+                  imageUrl = `https://lh3.googleusercontent.com/d/${queryIdMatch[1]}`;
+                }
+              }
+            } else if (processed.startsWith('http://') || processed.startsWith('https://')) {
+              imageUrl = processed;
+            } else {
+              imageUrl = processed.startsWith('/') ? `${baseUrl}${processed}` : `${baseUrl}/${processed}`;
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.error("SEO blog dynamic fetch failed from Firestore:", dbErr);
+      }
+    }
+
+    // Read index.html compiled assets safely
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+
+    if (!fs.existsSync(indexPath)) {
+      return res.status(404).send("Template index.html não localizado.");
+    }
+
+    let html = fs.readFileSync(indexPath, 'utf8');
+
+    // Secure title replacement
+    html = html.replace(/<title>.*?<\/title>/gi, `<title>${title}</title>`);
+    
+    // Secure meta tag adjustments
+    html = html.replace(/<meta\s+name="description"\s+content=".*?"\s*\/?>/gi, `<meta name="description" content="${description}" />`);
+    
+    html = html.replace(/<meta\s+property="og:type"\s+content=".*?"\s*\/?>/gi, `<meta property="og:type" content="article" />`);
+    html = html.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/gi, `<meta property="og:url" content="${url}" />`);
+    html = html.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/gi, `<meta property="og:title" content="${title}" />`);
+    html = html.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/gi, `<meta property="og:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/gi, `<meta property="og:image" content="${imageUrl}" />`);
+    
+    html = html.replace(/<meta\s+property="twitter:card"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:card" content="summary_large_image" />`);
+    html = html.replace(/<meta\s+property="twitter:url"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:url" content="${url}" />`);
+    html = html.replace(/<meta\s+property="twitter:title"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:title" content="${title}" />`);
+    html = html.replace(/<meta\s+property="twitter:description"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property="twitter:image"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:image" content="${imageUrl}" />`);
+
+    res.header("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(html);
+
+  } catch (err) {
+    console.error("SEO blogger exception:", err);
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+    return res.sendFile(indexPath);
+  }
+});
+
+app.get(["/blog", "/blog/"], async (req, res) => {
+  try {
+    const host = req.get("host") || "andrewlemos.com.br";
+    const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+    const baseUrl = `${protocol}://${host}`;
+
+    const title = "Blog do Ateliê | Andrew Lemos";
+    const description = "Técnicas de entalhe em madeira, vídeos, segredos do ateliê e lições valiosas publicadas por Andrew Lemos.";
+    const imageUrl = "https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb";
+    const url = `${baseUrl}/blog`;
+
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+
+    if (!fs.existsSync(indexPath)) {
+      return res.status(404).send("Template index.html não localizado.");
+    }
+
+    let html = fs.readFileSync(indexPath, 'utf8');
+
+    html = html.replace(/<title>.*?<\/title>/gi, `<title>${title}</title>`);
+    html = html.replace(/<meta name="description" content=".*?"\s*\/?>/gi, `<meta name="description" content="${description}" />`);
+    
+    html = html.replace(/<meta\s+property="og:type"\s+content=".*?"\s*\/?>/gi, `<meta property="og:type" content="website" />`);
+    html = html.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/gi, `<meta property="og:url" content="${url}" />`);
+    html = html.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/gi, `<meta property="og:title" content="${title}" />`);
+    html = html.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/gi, `<meta property="og:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/gi, `<meta property="og:image" content="${imageUrl}" />`);
+    
+    html = html.replace(/<meta\s+property="twitter:card"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:card" content="summary_large_image" />`);
+    html = html.replace(/<meta\s+property="twitter:url"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:url" content="${url}" />`);
+    html = html.replace(/<meta\s+property="twitter:title"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:title" content="${title}" />`);
+    html = html.replace(/<meta\s+property="twitter:description"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property="twitter:image"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:image" content="${imageUrl}" />`);
+
+    res.header("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(html);
+  } catch (err) {
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+    return res.sendFile(indexPath);
+  }
+});
+
 export default app;

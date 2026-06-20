@@ -169,7 +169,16 @@ export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug, g
     let title = 'Andrew Lemos | Artista Plástico & Escultor';
     let description = 'Portfólio de Andrew Lemos, Artista Plástico e Escultor de madeiras nobres. Adquira peças exclusivas ou agende encomendas.';
     let imageUrl = 'https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb';
-    let currentUrl = currentView === 'galeria-item' && gallerySlug ? `${origin}/galeria/${gallerySlug}` : `${origin}/${window.location.hash || ''}`;
+    let currentUrl = `${origin}/${window.location.hash || ''}`;
+    if (currentView === 'galeria-item' && gallerySlug) {
+      currentUrl = `${origin}/galeria/${gallerySlug}`;
+    } else if (currentView === 'vendas-item' && vendasSlug) {
+      currentUrl = `${origin}/vendas/${vendasSlug}`;
+    } else if (currentView === 'blog-post' && blogSlug) {
+      currentUrl = `${origin}/blog/${blogSlug}`;
+    } else if (currentView === 'blog') {
+      currentUrl = `${origin}/blog`;
+    }
 
     // Schema definitions
     const schemas: any[] = [];

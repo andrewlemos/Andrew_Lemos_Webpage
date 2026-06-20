@@ -2643,6 +2643,22 @@ export default function App() {
       }
     }
 
+    if (path.startsWith('/blog/')) {
+      const slug = path.substring(6).replace(/\/$/, '');
+      if (slug) {
+        setCurrentView('blog-post');
+        setCurrentBlogSlug(slug);
+        window.scrollTo({ top: 0 });
+        return;
+      }
+    }
+
+    if (path === '/blog' || path === '/blog/') {
+      setCurrentView('blog');
+      window.scrollTo({ top: 0 });
+      return;
+    }
+
     if (hash.startsWith('#galeria/')) {
       const slug = hash.substring(9);
       if (slug) {
@@ -2726,9 +2742,14 @@ export default function App() {
     } else if (view === 'avaliar' && id) {
       window.location.hash = `#avaliar?pedido=${id}`;
     } else if (view === 'blog') {
-      window.location.hash = '#blog';
+      window.history.pushState(null, '', '/blog');
+      setCurrentView('blog');
+      window.scrollTo({ top: 0 });
     } else if (view === 'blog-post' && id) {
-      window.location.hash = `#blog/${id}`;
+      window.history.pushState(null, '', `/blog/${id}`);
+      setCurrentView('blog-post');
+      setCurrentBlogSlug(id);
+      window.scrollTo({ top: 0 });
     } else if (view === 'galeria-item' && id) {
       window.history.pushState(null, '', `/galeria/${id}`);
       setCurrentView('galeria-item');
@@ -2740,7 +2761,11 @@ export default function App() {
       setCurrentVendasSlug(id);
       window.scrollTo({ top: 0 });
     } else if (view === 'vendas') {
-      if (window.location.pathname.startsWith('/galeria/') || window.location.pathname.startsWith('/vendas/')) {
+      if (
+        window.location.pathname.startsWith('/galeria/') || 
+        window.location.pathname.startsWith('/vendas/') ||
+        window.location.pathname.startsWith('/blog')
+      ) {
         window.history.pushState(null, '', '/');
       }
       window.location.hash = '#vendas';
