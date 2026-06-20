@@ -3759,8 +3759,29 @@ app.get(["/blog", "/blog/"], async (req, res) => {
 });
 
 // --- Pinterest Product Feed (Pinterest Catalogs Integration) ---
-app.get(["/api/pinterest-feed", "/api/pinterest-feed.csv"], async (req, res) => {
+const handlePinterestFeed = async (req: any, res: any) => {
   try {
+    console.log(`[PINTEREST-FEED] Request received: ${req.method} ${req.url}`);
+
+    // Set permissive CORS headers to ensure the crawler can access the feed regardless of strict routing or preflight checks
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "*");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    // Standard pre-flight check response
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
+    }
+
+    if (req.method === "HEAD") {
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      return res.status(200).end();
+    }
+
     const host = req.get("host") || "andrewlemos.com.br";
     const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
     const baseUrl = `${protocol}://${host}`;
@@ -3941,6 +3962,8 @@ app.get(["/api/pinterest-feed", "/api/pinterest-feed.csv"], async (req, res) => 
       } catch (e) {
         console.error("Pinterest Feed: gallery fetch error:", e);
       }
+    } else {
+      console.warn("[PINTEREST-FEED] adminDb is not initialized. Serving empty fallback feed.");
     }
 
     // Build the CSV
@@ -3960,14 +3983,18 @@ app.get(["/api/pinterest-feed", "/api/pinterest-feed.csv"], async (req, res) => 
       csvContent += row.join(",") + "\n";
     });
 
-    // Send the feed inline directly so crawlers can scrape/fetch it without needing download trigger handlers
-    res.header("Content-Type", "text/csv; charset=utf-8");
+    // Content-Type MUST be text/csv with charset=utf-8
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
     return res.status(200).send(csvContent);
 
   } catch (err) {
     console.error("Pinterest Feed Exception:", err);
+    res.setHeader("Content-Type", "application/json");
     return res.status(500).json({ error: "Erro interno ao gerar o feed do Pinterest." });
   }
-});
+};
+
+app.all("/api/pinterest-feed", handlePinterestFeed);
+app.all("/api/pinterest-feed.csv", handlePinterestFeed);
 
 export default app;
