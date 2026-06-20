@@ -14,6 +14,14 @@
       "destination": "/api/index.ts"
     },
     {
+      "source": "/blog",
+      "destination": "/api/index.ts"
+    },
+    {
+      "source": "/blog/:slug",
+      "destination": "/api/index.ts"
+    },
+    {
       "source": "/:path*",
       "destination": "/index.html"
     }
