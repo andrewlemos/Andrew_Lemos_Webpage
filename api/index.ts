@@ -3759,7 +3759,7 @@ app.get(["/blog", "/blog/"], async (req, res) => {
 });
 
 // --- Pinterest Product Feed (Pinterest Catalogs Integration) ---
-app.get("/api/pinterest-feed", async (req, res) => {
+app.get(["/api/pinterest-feed", "/api/pinterest-feed.csv"], async (req, res) => {
   try {
     const host = req.get("host") || "andrewlemos.com.br";
     const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
@@ -3790,23 +3790,73 @@ app.get("/api/pinterest-feed", async (req, res) => {
       return `"${bounciless}"`;
     };
 
+    // Mirrors exactly the frontend robust image url resolver to guarantee Pinterest gets valid direct images
     const resolveImageUrl = (imgUrl: string): string => {
       if (!imgUrl) return "https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb";
-      const processed = imgUrl.trim();
-      if (processed.startsWith('http://') || processed.startsWith('https://')) {
-        return processed;
+      let processedUrl = imgUrl.trim();
+
+      if (processedUrl.includes('drive.google.com')) {
+        const fileDMatch = processedUrl.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
+        if (fileDMatch && fileDMatch[1]) {
+          return `https://lh3.googleusercontent.com/d/${fileDMatch[1]}`;
+        }
+        const queryIdMatch = processedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (queryIdMatch && queryIdMatch[1]) {
+          return `https://lh3.googleusercontent.com/d/${queryIdMatch[1]}`;
+        }
       }
-      let filename = processed;
-      if (processed.includes('/arquivos/')) {
-        const parts = processed.split('/arquivos/');
-        filename = parts.slice(1).join('/arquivos/');
-      } else if (processed.startsWith('arquivos/')) {
-        filename = processed.substring(9);
-      } else if (processed.startsWith('/')) {
-        filename = processed.substring(1);
+
+      if ((processedUrl.startsWith('http://') || processedUrl.startsWith('https://')) && !processedUrl.includes('/arquivos/')) {
+        return processedUrl;
       }
-      filename = filename.replace(/^\/+/, '');
-      return `${baseUrl}/arquivos/${encodeURIComponent(filename)}`;
+
+      if (processedUrl.includes('/arquivos/')) {
+        try {
+          const parts = processedUrl.split('/arquivos/');
+          if (parts.length >= 2) {
+            processedUrl = `/arquivos/${parts.slice(1).join('/arquivos/')}`;
+          }
+        } catch (e) {}
+      }
+
+      if (!processedUrl.startsWith('http') && !processedUrl.includes('/') && (
+        processedUrl.endsWith('.jpg') || 
+        processedUrl.endsWith('.jpeg') || 
+        processedUrl.endsWith('.png') || 
+        processedUrl.endsWith('.webp') ||
+        processedUrl.endsWith('.gif') ||
+        processedUrl.endsWith('.PNG') ||
+        processedUrl.endsWith('.JPG') ||
+        processedUrl.endsWith('.JPEG')
+      )) {
+        processedUrl = `/arquivos/${processedUrl}`;
+      }
+
+      if (processedUrl.startsWith('/arquivos/') || processedUrl.startsWith('arquivos/')) {
+        const filename = processedUrl.replace(/^\/?arquivos\//, '');
+        let decoded = filename;
+        try {
+          decoded = decodeURIComponent(filename);
+        } catch (e) {}
+
+        const lower = decoded.toLowerCase();
+        if (lower === 'capa_curso_udemy_game.jpeg') {
+          return `https://raw.githubusercontent.com/andrewlemos/Andrew_Lemos_Webpage/main/public/arquivos/${encodeURIComponent(decoded)}?v=${Date.now()}`;
+        }
+
+        if (
+          lower === 'favicon.png' ||
+          lower === 'ico.png' ||
+          lower === 'banner andrew.png' ||
+          lower === 'dreamina_course_thumbnail.jpeg'
+        ) {
+          return `${baseUrl}/arquivos/${encodeURIComponent(decoded)}`;
+        } else {
+          return `https://cdn.jsdelivr.net/gh/andrewlemos/Andrew_Lemos_Webpage@16eec916efc1342685e03616e5222f2ee1b1c784/public/arquivos/${encodeURIComponent(decoded)}`;
+        }
+      }
+
+      return processedUrl.startsWith('/') ? `${baseUrl}${processedUrl}` : `${baseUrl}/${processedUrl}`;
     };
 
     if (adminDb) {
@@ -3830,7 +3880,15 @@ app.get("/api/pinterest-feed", async (req, res) => {
               imageLink = resolveImageUrl(data.images[0]);
             }
 
-            const priceVal = data.price !== undefined ? `${data.price} BRL` : "Sob consulta";
+            // Price MUST be numeric followed by currency code (e.g. "150.00 BRL") for Pinterest catalog loader
+            let priceVal = "0.00 BRL";
+            if (data.price !== undefined && data.price !== null) {
+              const numericPrice = parseFloat(data.price);
+              if (!isNaN(numericPrice)) {
+                priceVal = `${numericPrice.toFixed(2)} BRL`;
+              }
+            }
+            
             const availability = (data.stock !== undefined && data.stock <= 0) ? "out of stock" : "in stock";
 
             items.push({
@@ -3864,8 +3922,10 @@ app.get("/api/pinterest-feed", async (req, res) => {
             const link = `${baseUrl}/galeria/${slug}`;
 
             const imageLink = resolveImageUrl(data.img);
-            const priceVal = "Sob consulta";
-            const availability = "in stock"; // Gallery exhibition pieces can be shared as in stock or show room items
+            
+            // Showroom items where order is customized are listed as 0.00 BRL per Pinterest specs
+            const priceVal = "0.00 BRL";
+            const availability = "in stock"; 
 
             items.push({
               id,
@@ -3900,8 +3960,8 @@ app.get("/api/pinterest-feed", async (req, res) => {
       csvContent += row.join(",") + "\n";
     });
 
+    // Send the feed inline directly so crawlers can scrape/fetch it without needing download trigger handlers
     res.header("Content-Type", "text/csv; charset=utf-8");
-    res.attachment("pinterest_product_feed.csv");
     return res.status(200).send(csvContent);
 
   } catch (err) {
