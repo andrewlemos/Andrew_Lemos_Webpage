@@ -3593,6 +3593,34 @@ app.get(["/sitemap.xml", "/api/sitemap.xml"], async (req, res) => {
     }
   });
 
+  // 12. Política de Devolução e Reembolso
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/politica-devolucao</loc>\n`;
+  xml += `    <changefreq>monthly</changefreq>\n`;
+  xml += `    <priority>0.5</priority>\n`;
+  xml += `  </url>\n`;
+
+  // 13. Política de Frete
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/politica-frete</loc>\n`;
+  xml += `    <changefreq>monthly</changefreq>\n`;
+  xml += `    <priority>0.5</priority>\n`;
+  xml += `  </url>\n`;
+
+  // 14. Termos de Uso
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/termos-de-uso</loc>\n`;
+  xml += `    <changefreq>monthly</changefreq>\n`;
+  xml += `    <priority>0.5</priority>\n`;
+  xml += `  </url>\n`;
+
+  // 15. Política de Privacidade
+  xml += `  <url>\n`;
+  xml += `    <loc>${baseUrl}/politica-privacidade</loc>\n`;
+  xml += `    <changefreq>monthly</changefreq>\n`;
+  xml += `    <priority>0.5</priority>\n`;
+  xml += `  </url>\n`;
+
   xml += `</urlset>\n`;
 
   res.header("Content-Type", "application/xml; charset=utf-8");
@@ -3720,6 +3748,198 @@ app.get(["/blog", "/blog/"], async (req, res) => {
     const description = "Técnicas de entalhe em madeira, vídeos, segredos do ateliê e lições valiosas publicadas por Andrew Lemos.";
     const imageUrl = "https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb";
     const url = `${baseUrl}/blog`;
+
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+
+    if (!fs.existsSync(indexPath)) {
+      return res.status(404).send("Template index.html não localizado.");
+    }
+
+    let html = fs.readFileSync(indexPath, 'utf8');
+
+    html = html.replace(/<title>.*?<\/title>/gi, `<title>${title}</title>`);
+    html = html.replace(/<meta name="description" content=".*?"\s*\/?>/gi, `<meta name="description" content="${description}" />`);
+    
+    html = html.replace(/<meta\s+property="og:type"\s+content=".*?"\s*\/?>/gi, `<meta property="og:type" content="website" />`);
+    html = html.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/gi, `<meta property="og:url" content="${url}" />`);
+    html = html.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/gi, `<meta property="og:title" content="${title}" />`);
+    html = html.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/gi, `<meta property="og:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/gi, `<meta property="og:image" content="${imageUrl}" />`);
+    
+    html = html.replace(/<meta\s+property="twitter:card"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:card" content="summary_large_image" />`);
+    html = html.replace(/<meta\s+property="twitter:url"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:url" content="${url}" />`);
+    html = html.replace(/<meta\s+property="twitter:title"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:title" content="${title}" />`);
+    html = html.replace(/<meta\s+property="twitter:description"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property="twitter:image"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:image" content="${imageUrl}" />`);
+
+    res.header("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(html);
+  } catch (err) {
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+    return res.sendFile(indexPath);
+  }
+});
+
+app.get(["/politica-devolucao", "/politica-devolucao/"], async (req, res) => {
+  try {
+    const host = req.get("host") || "andrewlemos.com.br";
+    const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+    const baseUrl = `${protocol}://${host}`;
+
+    const title = "Política de Devolução e Reembolso | Ateliê Andrew Lemos";
+    const description = "Confira nossa política de devolução, direito de arrependimento (7 dias) e reembolso integral na Andrew Lemos Arte em Madeira.";
+    const imageUrl = "https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb";
+    const url = `${baseUrl}/politica-devolucao`;
+
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+
+    if (!fs.existsSync(indexPath)) {
+      return res.status(404).send("Template index.html não localizado.");
+    }
+
+    let html = fs.readFileSync(indexPath, 'utf8');
+
+    html = html.replace(/<title>.*?<\/title>/gi, `<title>${title}</title>`);
+    html = html.replace(/<meta name="description" content=".*?"\s*\/?>/gi, `<meta name="description" content="${description}" />`);
+    
+    html = html.replace(/<meta\s+property="og:type"\s+content=".*?"\s*\/?>/gi, `<meta property="og:type" content="website" />`);
+    html = html.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/gi, `<meta property="og:url" content="${url}" />`);
+    html = html.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/gi, `<meta property="og:title" content="${title}" />`);
+    html = html.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/gi, `<meta property="og:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/gi, `<meta property="og:image" content="${imageUrl}" />`);
+    
+    html = html.replace(/<meta\s+property="twitter:card"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:card" content="summary_large_image" />`);
+    html = html.replace(/<meta\s+property="twitter:url"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:url" content="${url}" />`);
+    html = html.replace(/<meta\s+property="twitter:title"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:title" content="${title}" />`);
+    html = html.replace(/<meta\s+property="twitter:description"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property="twitter:image"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:image" content="${imageUrl}" />`);
+
+    res.header("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(html);
+  } catch (err) {
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+    return res.sendFile(indexPath);
+  }
+});
+
+app.get(["/politica-frete", "/politica-frete/"], async (req, res) => {
+  try {
+    const host = req.get("host") || "andrewlemos.com.br";
+    const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+    const baseUrl = `${protocol}://${host}`;
+
+    const title = "Política de Frete | Ateliê Andrew Lemos";
+    const description = "Informações sobre prazos de produção, prazos de entrega e rastreamento para todo o Brasil na Andrew Lemos Arte em Madeira.";
+    const imageUrl = "https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb";
+    const url = `${baseUrl}/politica-frete`;
+
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+
+    if (!fs.existsSync(indexPath)) {
+      return res.status(404).send("Template index.html não localizado.");
+    }
+
+    let html = fs.readFileSync(indexPath, 'utf8');
+
+    html = html.replace(/<title>.*?<\/title>/gi, `<title>${title}</title>`);
+    html = html.replace(/<meta name="description" content=".*?"\s*\/?>/gi, `<meta name="description" content="${description}" />`);
+    
+    html = html.replace(/<meta\s+property="og:type"\s+content=".*?"\s*\/?>/gi, `<meta property="og:type" content="website" />`);
+    html = html.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/gi, `<meta property="og:url" content="${url}" />`);
+    html = html.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/gi, `<meta property="og:title" content="${title}" />`);
+    html = html.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/gi, `<meta property="og:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/gi, `<meta property="og:image" content="${imageUrl}" />`);
+    
+    html = html.replace(/<meta\s+property="twitter:card"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:card" content="summary_large_image" />`);
+    html = html.replace(/<meta\s+property="twitter:url"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:url" content="${url}" />`);
+    html = html.replace(/<meta\s+property="twitter:title"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:title" content="${title}" />`);
+    html = html.replace(/<meta\s+property="twitter:description"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property="twitter:image"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:image" content="${imageUrl}" />`);
+
+    res.header("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(html);
+  } catch (err) {
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+    return res.sendFile(indexPath);
+  }
+});
+
+app.get(["/termos-de-uso", "/termos-de-uso/"], async (req, res) => {
+  try {
+    const host = req.get("host") || "andrewlemos.com.br";
+    const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+    const baseUrl = `${protocol}://${host}`;
+
+    const title = "Termos de Uso | Ateliê Andrew Lemos";
+    const description = "Regras e termos sobre o acesso e uso dos recursos, produtos artesanais e direitos autorais da Andrew Lemos Arte em Madeira.";
+    const imageUrl = "https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb";
+    const url = `${baseUrl}/termos-de-uso`;
+
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+
+    if (!fs.existsSync(indexPath)) {
+      return res.status(404).send("Template index.html não localizado.");
+    }
+
+    let html = fs.readFileSync(indexPath, 'utf8');
+
+    html = html.replace(/<title>.*?<\/title>/gi, `<title>${title}</title>`);
+    html = html.replace(/<meta name="description" content=".*?"\s*\/?>/gi, `<meta name="description" content="${description}" />`);
+    
+    html = html.replace(/<meta\s+property="og:type"\s+content=".*?"\s*\/?>/gi, `<meta property="og:type" content="website" />`);
+    html = html.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/gi, `<meta property="og:url" content="${url}" />`);
+    html = html.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/gi, `<meta property="og:title" content="${title}" />`);
+    html = html.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/gi, `<meta property="og:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/gi, `<meta property="og:image" content="${imageUrl}" />`);
+    
+    html = html.replace(/<meta\s+property="twitter:card"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:card" content="summary_large_image" />`);
+    html = html.replace(/<meta\s+property="twitter:url"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:url" content="${url}" />`);
+    html = html.replace(/<meta\s+property="twitter:title"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:title" content="${title}" />`);
+    html = html.replace(/<meta\s+property="twitter:description"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:description" content="${description}" />`);
+    html = html.replace(/<meta\s+property="twitter:image"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:image" content="${imageUrl}" />`);
+
+    res.header("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(html);
+  } catch (err) {
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+    return res.sendFile(indexPath);
+  }
+});
+
+app.get(["/politica-privacidade", "/politica-privacidade/"], async (req, res) => {
+  try {
+    const host = req.get("host") || "andrewlemos.com.br";
+    const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+    const baseUrl = `${protocol}://${host}`;
+
+    const title = "Política de Privacidade | Ateliê Andrew Lemos";
+    const description = "Saiba mais sobre como coletamos, protegemos e tratamos seus dados pessoais de forma transparente no Ateliê Andrew Lemos.";
+    const imageUrl = "https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb";
+    const url = `${baseUrl}/politica-privacidade`;
 
     let indexPath = path.join(process.cwd(), 'dist', 'index.html');
     if (!fs.existsSync(indexPath)) {

@@ -58,6 +58,10 @@ import { BlogPostPage } from './components/BlogPostPage';
 import { SEOManager } from './components/SEOManager';
 import { GalleryItemPage, getWorkSlug } from './components/GalleryItemPage';
 import { VendasItemPage } from './components/VendasItemPage';
+import { PoliticaDevolucaoPage } from './components/PoliticaDevolucaoPage';
+import { PoliticaFretePage } from './components/PoliticaFretePage';
+import { TermosUsoPage } from './components/TermosUsoPage';
+import { PoliticaPrivacidadePage } from './components/PoliticaPrivacidadePage';
 import { Product, Arquivo, EcomProduct, EcomOrder } from './types';
 
 // --- Helpers ---
@@ -2386,6 +2390,55 @@ const Footer = () => {
             <span className="font-serif font-bold text-lg">Andrew Lemos</span>
           </div>
           <p className="text-gray-400 text-sm">© {new Date().getFullYear()} Andrew Lemos. Todos os direitos reservados.</p>
+          <div className="flex flex-wrap items-center gap-4 mt-2">
+            <a 
+              href="/politica-devolucao"
+              onClick={(e) => {
+                e.preventDefault();
+                window.history.pushState(null, '', '/politica-devolucao');
+                window.dispatchEvent(new Event('popstate'));
+              }}
+              className="text-xs text-brand-wood hover:text-brand-ink transition-colors underline"
+            >
+              Política de Devolução e Reembolso
+            </a>
+            <span className="text-gray-350 text-xs">•</span>
+            <a 
+              href="/politica-frete"
+              onClick={(e) => {
+                e.preventDefault();
+                window.history.pushState(null, '', '/politica-frete');
+                window.dispatchEvent(new Event('popstate'));
+              }}
+              className="text-xs text-brand-wood hover:text-brand-ink transition-colors underline"
+            >
+              Política de Frete
+            </a>
+            <span className="text-gray-350 text-xs">•</span>
+            <a 
+              href="/termos-de-uso"
+              onClick={(e) => {
+                e.preventDefault();
+                window.history.pushState(null, '', '/termos-de-uso');
+                window.dispatchEvent(new Event('popstate'));
+              }}
+              className="text-xs text-brand-wood hover:text-brand-ink transition-colors underline"
+            >
+              Termos de Uso
+            </a>
+            <span className="text-gray-350 text-xs">•</span>
+            <a 
+              href="/politica-privacidade"
+              onClick={(e) => {
+                e.preventDefault();
+                window.history.pushState(null, '', '/politica-privacidade');
+                window.dispatchEvent(new Event('popstate'));
+              }}
+              className="text-xs text-brand-wood hover:text-brand-ink transition-colors underline"
+            >
+              Política de Privacidade
+            </a>
+          </div>
         </div>
 
         <div className="flex gap-6">
@@ -2604,7 +2657,7 @@ const Chatbot = () => {
 };
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade'>('landing');
   const [currentBlogSlug, setCurrentBlogSlug] = useState<string>('');
   const [currentGallerySlug, setCurrentGallerySlug] = useState<string>('');
   const [currentVendasSlug, setCurrentVendasSlug] = useState<string>('');
@@ -2622,6 +2675,30 @@ export default function App() {
   const handleHashAndPathChange = useCallback(() => {
     const hash = window.location.hash;
     const path = window.location.pathname;
+
+    if (path === '/politica-devolucao' || path === '/politica-devolucao/') {
+      setCurrentView('politica-devolucao');
+      window.scrollTo({ top: 0 });
+      return;
+    }
+
+    if (path === '/politica-frete' || path === '/politica-frete/') {
+      setCurrentView('politica-frete');
+      window.scrollTo({ top: 0 });
+      return;
+    }
+
+    if (path === '/termos-de-uso' || path === '/termos-de-uso/') {
+      setCurrentView('termos-de-uso');
+      window.scrollTo({ top: 0 });
+      return;
+    }
+
+    if (path === '/politica-privacidade' || path === '/politica-privacidade/') {
+      setCurrentView('politica-privacidade');
+      window.scrollTo({ top: 0 });
+      return;
+    }
 
     if (path.startsWith('/galeria/')) {
       const slug = path.substring(9).replace(/\/$/, '');
@@ -2707,6 +2784,18 @@ export default function App() {
         setCurrentView('blog');
       }
       window.scrollTo({ top: 0 });
+    } else if (hash === '#politica-devolucao') {
+      setCurrentView('politica-devolucao');
+      window.scrollTo({ top: 0 });
+    } else if (hash === '#politica-frete') {
+      setCurrentView('politica-frete');
+      window.scrollTo({ top: 0 });
+    } else if (hash === '#termos-de-uso') {
+      setCurrentView('termos-de-uso');
+      window.scrollTo({ top: 0 });
+    } else if (hash === '#politica-privacidade') {
+      setCurrentView('politica-privacidade');
+      window.scrollTo({ top: 0 });
     } else {
       setCurrentView('landing');
       const landingHashes = ['#home', '#bio', '#expertise', '#gallery', '#publications', '#classes', '#online-courses', '#products', '#contact'];
@@ -2732,7 +2821,7 @@ export default function App() {
     };
   }, [handleHashAndPathChange]);
 
-  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item', id?: string) => {
+  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade', id?: string) => {
     if (view === 'checkout-pay' && id) {
       window.location.hash = `#vendas/pay?id=${id}`;
     } else if (view === 'checkout-confirm' && id) {
@@ -2760,11 +2849,31 @@ export default function App() {
       setCurrentView('vendas-item');
       setCurrentVendasSlug(id);
       window.scrollTo({ top: 0 });
+    } else if (view === 'politica-devolucao') {
+      window.history.pushState(null, '', '/politica-devolucao');
+      setCurrentView('politica-devolucao');
+      window.scrollTo({ top: 0 });
+    } else if (view === 'politica-frete') {
+      window.history.pushState(null, '', '/politica-frete');
+      setCurrentView('politica-frete');
+      window.scrollTo({ top: 0 });
+    } else if (view === 'termos-de-uso') {
+      window.history.pushState(null, '', '/termos-de-uso');
+      setCurrentView('termos-de-uso');
+      window.scrollTo({ top: 0 });
+    } else if (view === 'politica-privacidade') {
+      window.history.pushState(null, '', '/politica-privacidade');
+      setCurrentView('politica-privacidade');
+      window.scrollTo({ top: 0 });
     } else if (view === 'vendas') {
       if (
         window.location.pathname.startsWith('/galeria/') || 
         window.location.pathname.startsWith('/vendas/') ||
-        window.location.pathname.startsWith('/blog')
+        window.location.pathname.startsWith('/blog') ||
+        window.location.pathname.startsWith('/politica-devolucao') ||
+        window.location.pathname.startsWith('/politica-frete') ||
+        window.location.pathname.startsWith('/termos-de-uso') ||
+        window.location.pathname.startsWith('/politica-privacidade')
       ) {
         window.history.pushState(null, '', '/');
       }
@@ -2802,6 +2911,14 @@ export default function App() {
         <GalleryItemPage slug={currentGallerySlug} onNavigateToView={navigateToView} />
       ) : currentView === 'vendas-item' ? (
         <VendasItemPage slug={currentVendasSlug} onNavigateToView={navigateToView} />
+      ) : currentView === 'politica-devolucao' ? (
+        <PoliticaDevolucaoPage onNavigateToView={navigateToView} />
+      ) : currentView === 'politica-frete' ? (
+        <PoliticaFretePage onNavigateToView={navigateToView} />
+      ) : currentView === 'termos-de-uso' ? (
+        <TermosUsoPage onNavigateToView={navigateToView} />
+      ) : currentView === 'politica-privacidade' ? (
+        <PoliticaPrivacidadePage onNavigateToView={navigateToView} />
       ) : (
         <>
           <Hero />

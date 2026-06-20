@@ -5,7 +5,7 @@ import { BlogPost, EcomProduct, Arquivo } from '../types';
 import { getWorkSlug } from './GalleryItemPage';
 
 interface SEOManagerProps {
-  currentView: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item';
+  currentView: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade';
   blogSlug?: string;
   gallerySlug?: string;
   vendasSlug?: string;
@@ -438,6 +438,106 @@ export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug, g
             '@type': 'ListItem',
             'position': 3,
             'name': activeVendasProduct.name,
+            'item': currentUrl
+          }
+        ]
+      };
+      schemas.push(breadcrumbSchema);
+    } else if (currentView === 'politica-devolucao') {
+      title = 'Política de Devolução e Reembolso | Ateliê Andrew Lemos';
+      description = 'Garantimos transparência total com nossa política de devolução, arrependimento e reembolso para peças de arte e esculturas artesanais sob medida.';
+      currentUrl = `${origin}/politica-devolucao`;
+
+      // Breadcrumb Schema
+      const breadcrumbSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        'itemListElement': [
+          {
+            '@type': 'ListItem',
+            'position': 1,
+            'name': 'Início',
+            'item': origin
+          },
+          {
+            '@type': 'ListItem',
+            'position': 2,
+            'name': 'Política de Devolução e Reembolso',
+            'item': currentUrl
+          }
+        ]
+      };
+      schemas.push(breadcrumbSchema);
+    } else if (currentView === 'politica-frete') {
+      title = 'Política de Frete | Ateliê Andrew Lemos';
+      description = 'Saiba mais sobre os nossos prazos de produção, prazos de entrega e cuidados de transporte para esculturas e entalhes em madeira artesanais.';
+      currentUrl = `${origin}/politica-frete`;
+
+      // Breadcrumb Schema
+      const breadcrumbSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        'itemListElement': [
+          {
+            '@type': 'ListItem',
+            'position': 1,
+            'name': 'Início',
+            'item': origin
+          },
+          {
+            '@type': 'ListItem',
+            'position': 2,
+            'name': 'Política de Frete',
+            'item': currentUrl
+          }
+        ]
+      };
+      schemas.push(breadcrumbSchema);
+    } else if (currentView === 'termos-de-uso') {
+      title = 'Termos de Uso | Ateliê Andrew Lemos';
+      description = 'Confira os Termos de Uso do site Ateliê Andrew Lemos. Regras sobre direitos autorais, obras sob encomenda e propriedade intelectual.';
+      currentUrl = `${origin}/termos-de-uso`;
+
+      // Breadcrumb Schema
+      const breadcrumbSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        'itemListElement': [
+          {
+            '@type': 'ListItem',
+            'position': 1,
+            'name': 'Início',
+            'item': origin
+          },
+          {
+            '@type': 'ListItem',
+            'position': 2,
+            'name': 'Termos de Uso',
+            'item': currentUrl
+          }
+        ]
+      };
+      schemas.push(breadcrumbSchema);
+    } else if (currentView === 'politica-privacidade') {
+      title = 'Política de Privacidade | Ateliê Andrew Lemos';
+      description = 'Conheça nossa política de privacidade e como protegemos os seus dados pessoais durante o uso do site e no processo de compras no Ateliê Andrew Lemos.';
+      currentUrl = `${origin}/politica-privacidade`;
+
+      // Breadcrumb Schema
+      const breadcrumbSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        'itemListElement': [
+          {
+            '@type': 'ListItem',
+            'position': 1,
+            'name': 'Início',
+            'item': origin
+          },
+          {
+            '@type': 'ListItem',
+            'position': 2,
+            'name': 'Política de Privacidade',
             'item': currentUrl
           }
         ]
