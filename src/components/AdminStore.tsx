@@ -687,6 +687,26 @@ export const AdminStore = () => {
     });
   };
 
+  const handleDeleteQuote = (quoteId: string) => {
+    setConfirmConfig({
+      title: "Excluir Cotação de Frete",
+      message: `ATENÇÃO: Você está prestes a EXCLUIR DEFINITIVAMENTE a solicitação de cotação de frete ID ${quoteId} do banco de dados!\n\nEsta ação é irreversível e o cliente não poderá mais concluir a compra usando esse link de cotação.\n\nDeseja prosseguir?`,
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'ecom_quotes', quoteId));
+          if (selectedQuote && selectedQuote.id === quoteId) {
+            setSelectedQuote(null);
+          }
+          alert("Solicitação de cotação de frete excluída permanentemente!");
+        } catch (err: any) {
+          console.error("Failed to delete quote:", err);
+          alert(`Falha ao excluir solicitação de cotação: ${err.message}`);
+        }
+      }
+    });
+  };
+
   const handleRefundOrder = (orderId: string, refundValStr: string, notes: string) => {
     if (!selectedOrder) return;
     const value = parseFloat(refundValStr);
@@ -1294,6 +1314,14 @@ export const AdminStore = () => {
                         className="bg-brand-paper hover:bg-brand-wood/10 text-brand-wood px-3.5 py-2 rounded-lg font-bold transition-all text-[10px] cursor-pointer"
                       >
                         Avaliar & Responder
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteQuote(quote.id!)}
+                        title="Excluir cotação definitivamente"
+                        className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-red-100"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -2460,9 +2488,18 @@ export const AdminStore = () => {
               </button>
 
               <div className="space-y-6">
-                <div>
-                  <h3 className="font-serif font-bold text-lg text-brand-ink leading-tight">Cotação Especial de Frete</h3>
-                  <span className="font-mono text-gray-450">ID: {selectedQuote.id}</span>
+                <div className="flex justify-between items-start mr-8 flex-wrap gap-4">
+                  <div>
+                    <h3 className="font-serif font-bold text-lg text-brand-ink leading-tight">Cotação Especial de Frete</h3>
+                    <span className="font-mono text-gray-450">ID: {selectedQuote.id}</span>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteQuote(selectedQuote.id!)}
+                    className="flex items-center gap-1.5 bg-red-50 text-red-600 hover:bg-red-100 px-3.5 py-1.5 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all cursor-pointer border border-red-200/50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Excluir Cotação</span>
+                  </button>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-4">
