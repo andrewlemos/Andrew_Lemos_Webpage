@@ -4121,16 +4121,23 @@ const handlePinterestFeed = async (req: any, res: any) => {
               imageLink = resolveImageUrl(data.images[0]);
             }
 
-            // Price MUST be numeric followed by currency code (e.g. "150.00 BRL") for Pinterest catalog loader
-            let priceVal = "0.00 BRL";
-            if (data.price !== undefined && data.price !== null) {
-              const numericPrice = parseFloat(data.price);
-              if (!isNaN(numericPrice)) {
-                priceVal = `${numericPrice.toFixed(2)} BRL`;
-              }
+            const priceValNum = data.price !== undefined && data.price !== null ? parseFloat(data.price) : 0;
+            const stockValInt = data.stock !== undefined && data.stock !== null ? parseInt(data.stock, 10) : 0;
+
+            // Strict requirements for Pinterest Catalog items:
+            // 1. Must belong to the active ecommerce store (ecom_products)
+            // 2. Must be actively "À Venda" (price > 0 and stock > 0)
+            // 3. Must not be archived or sold (stock <= 0 means sold out, price <= 0 / missing price means no price)
+            if (priceValNum <= 0 || stockValInt <= 0 || data.archived === true || data.status === 'archived') {
+              // Automatically exclude items with no price, sold out, or completed/archived
+              return;
             }
-            
-            const availability = (data.stock !== undefined && data.stock <= 0) ? "out of stock" : "in stock";
+
+            // Price MUST be numeric followed by currency code (e.g. "150.00 BRL") for Pinterest catalog loader
+            const priceVal = `${priceValNum.toFixed(2)} BRL`;
+            const availability = "in stock"; // since stockValInt > 0
+            const condition = "new"; // Handmade, original art pieces are new products
+            const googleProductCategory = "Arts & Entertainment > Hobbies & Creative Arts > Artwork > Sculptures & Statues";
 
             items.push({
               id,
@@ -4139,55 +4146,21 @@ const handlePinterestFeed = async (req: any, res: any) => {
               link,
               imageLink,
               price: priceVal,
-              availability
+              availability,
+              condition,
+              google_product_category: googleProductCategory
             });
           }
         });
       } catch (e) {
         console.error("Pinterest Feed: ecom products error:", e);
       }
-
-      // 2. Load gallery items (arquivos)
-      try {
-        const gallerySnap = await adminDb.collection("arquivos").get();
-        gallerySnap.forEach((doc: any) => {
-          const data = doc.data();
-          if (data) {
-            const id = doc.id;
-            const title = data.title || "Escultura em Madeira";
-            const description = data.abouttext || data.technique || "Obra esculpida sob medida e com detalhes refinados pelo renomado artista plástico Andrew Lemos.";
-            
-            const slug = data.slug && data.slug.trim().length > 0 
-              ? data.slug.trim() 
-              : (data.title ? slugify(data.title) : doc.id);
-            const link = `${baseUrl}/galeria/${slug}`;
-
-            const imageLink = resolveImageUrl(data.img);
-            
-            // Showroom items where order is customized are listed as 0.00 BRL per Pinterest specs
-            const priceVal = "0.00 BRL";
-            const availability = "in stock"; 
-
-            items.push({
-              id,
-              title,
-              description,
-              link,
-              imageLink,
-              price: priceVal,
-              availability
-            });
-          }
-        });
-      } catch (e) {
-        console.error("Pinterest Feed: gallery fetch error:", e);
-      }
     } else {
       console.warn("[PINTEREST-FEED] adminDb is not initialized. Serving empty fallback feed.");
     }
 
-    // Build the CSV
-    const headers = ["id", "title", "description", "link", "image_link", "price", "availability"];
+    // Build the CSV with required standard catalog columns (price, availability, condition, google_product_category)
+    const headers = ["id", "title", "description", "link", "image_link", "price", "availability", "condition", "google_product_category"];
     let csvContent = headers.join(",") + "\n";
 
     items.forEach((item) => {
@@ -4198,7 +4171,9 @@ const handlePinterestFeed = async (req: any, res: any) => {
         escapeCsv(item.link),
         escapeCsv(item.imageLink),
         escapeCsv(item.price),
-        escapeCsv(item.availability)
+        escapeCsv(item.availability),
+        escapeCsv(item.condition),
+        escapeCsv(item.google_product_category)
       ];
       csvContent += row.join(",") + "\n";
     });

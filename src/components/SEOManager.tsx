@@ -398,24 +398,43 @@ export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug, g
       imageUrl = activeVendasProduct.images && activeVendasProduct.images.length > 0 ? getFullImageUrl(activeVendasProduct.images[0]) : imageUrl;
       currentUrl = `${origin}/vendas/${vendasSlug}`;
 
-      // JSON-LD Product Schema
-      const productSchema = {
-        '@context': 'https://schema.org',
-        '@type': 'Product',
-        '@id': `${origin}/vendas/${vendasSlug}#product`,
-        'name': activeVendasProduct.name,
-        'image': [imageUrl],
-        'description': description,
-        'offers': {
-          '@type': 'Offer',
-          'url': currentUrl,
-          'priceCurrency': 'BRL',
-          'price': activeVendasProduct.price,
-          'availability': activeVendasProduct.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-          'priceValidUntil': new Date(new Date().getFullYear() + 1, 11, 31).toISOString().split('T')[0]
-        }
-      };
-      schemas.push(productSchema);
+      // JSON-LD Product Schema conditionally based on active commercial status
+      const isAvailableForSale = activeVendasProduct.price > 0 && activeVendasProduct.stock > 0;
+
+      if (isAvailableForSale) {
+        const productSchema = {
+          '@context': 'https://schema.org',
+          '@type': 'Product',
+          '@id': `${origin}/vendas/${vendasSlug}#product`,
+          'name': activeVendasProduct.name,
+          'image': [imageUrl],
+          'description': description,
+          'offers': {
+            '@type': 'Offer',
+            'url': currentUrl,
+            'priceCurrency': 'BRL',
+            'price': activeVendasProduct.price,
+            'availability': 'https://schema.org/InStock',
+            'priceValidUntil': new Date(new Date().getFullYear() + 1, 11, 31).toISOString().split('T')[0]
+          }
+        };
+        schemas.push(productSchema);
+      } else {
+        const artworkSchema = {
+          '@context': 'https://schema.org',
+          '@type': 'VisualArtwork',
+          '@id': `${origin}/vendas/${vendasSlug}#artwork`,
+          'name': activeVendasProduct.name,
+          'image': [imageUrl],
+          'description': description,
+          'artMedium': activeVendasProduct.category || 'Escultura em Madeira / Design',
+          'creator': {
+            '@type': 'Person',
+            'name': 'Andrew Lemos'
+          }
+        };
+        schemas.push(artworkSchema);
+      }
 
       // Breadcrumb Schema
       const breadcrumbSchema = {
