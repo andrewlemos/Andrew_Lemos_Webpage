@@ -772,11 +772,12 @@ export const AdminStore = () => {
     <div className="space-y-6">
       
       {/* Sub menu selectors */}
-      <div className="flex border-b pb-1 gap-6 text-sm font-semibold flex-wrap">
+      {/* Desktop Navigation (hidden on mobile/tablet) */}
+      <div className="hidden xl:flex border-b pb-1 gap-6 text-sm font-semibold flex-wrap">
         <button 
           onClick={() => setActiveSubTab('products')} 
           className={`pb-2.5 transition-colors cursor-pointer ${
-            activeSubTab === 'products' ? 'text-brand-wood border-b-2 border-brand-wood' : 'text-gray-400'
+            activeSubTab === 'products' ? 'text-brand-wood border-b-2 border-brand-wood' : 'text-gray-400 hover:text-brand-ink'
           }`}
         >
           Catálogo E-commerce ({products.length})
@@ -784,7 +785,7 @@ export const AdminStore = () => {
         <button 
           onClick={() => setActiveSubTab('orders')} 
           className={`pb-2.5 transition-colors cursor-pointer ${
-            activeSubTab === 'orders' ? 'text-brand-wood border-b-2 border-brand-wood' : 'text-gray-400'
+            activeSubTab === 'orders' ? 'text-brand-wood border-b-2 border-brand-wood' : 'text-gray-400 hover:text-brand-ink'
           }`}
         >
           Ordens & Vendas Realizadas ({orders.length})
@@ -792,7 +793,7 @@ export const AdminStore = () => {
         <button 
           onClick={() => setActiveSubTab('quotes')} 
           className={`pb-2.5 transition-colors cursor-pointer ${
-            activeSubTab === 'quotes' ? 'text-brand-wood border-b-2 border-brand-wood' : 'text-gray-400'
+            activeSubTab === 'quotes' ? 'text-brand-wood border-b-2 border-brand-wood' : 'text-gray-400 hover:text-brand-ink'
           }`}
         >
           Cotações de Frete ({quotes.length})
@@ -830,6 +831,30 @@ export const AdminStore = () => {
         >
           Carrinhos Abandonados
         </button>
+      </div>
+
+      {/* Mobile Navigation Dropdown (hidden on desktop) */}
+      <div className="xl:hidden relative z-30">
+        <label htmlFor="mobile-subtab-select" className="sr-only">Selecione a seção</label>
+        <select 
+          id="mobile-subtab-select"
+          value={activeSubTab} 
+          onChange={(e) => setActiveSubTab(e.target.value as any)}
+          className="w-full bg-white border border-brand-wood/15 text-brand-wood rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-brand-wood focus:outline-none cursor-pointer appearance-none shadow-sm"
+        >
+          <option value="products">📦 Catálogo E-commerce ({products.length})</option>
+          <option value="orders">💵 Ordens & Vendas Realizadas ({orders.length})</option>
+          <option value="quotes">🚚 Cotações de Frete ({quotes.length})</option>
+          <option value="marketing">✉️ Mala Direta</option>
+          <option value="packaging">📦 Configurações de Embalagem</option>
+          <option value="reviews">⭐️ Avaliações de Clientes ({reviews.length})</option>
+          <option value="recovery">🛒 Carrinhos Abandonados</option>
+        </select>
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-brand-wood">
+          <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+            <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+          </svg>
+        </div>
       </div>
 
       {activeSubTab === 'products' ? (
@@ -960,7 +985,7 @@ export const AdminStore = () => {
                   {/* Shipment specs elements */}
                   <div className="bg-white p-4 rounded-xl border space-y-2">
                     <span className="font-bold text-[10px] text-brand-wood uppercase tracking-wider block">Dimensões para cálculo de Frete (MelhorEnvio)</span>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <div>
                         <label className="text-[10px] text-gray-400 block mb-0.5">Peso (kg)</label>
                         <input type="number" step="0.1" placeholder="0.3" value={formData.weight} onChange={e=>setFormData({...formData, weight:e.target.value})} className="w-full p-2 border rounded-lg text-center" />
@@ -2431,7 +2456,7 @@ export const AdminStore = () => {
                   {/* Shipment specs elements */}
                   <div className="bg-slate-50 p-4 rounded-xl border border-gray-200/70 space-y-2 text-left">
                     <span className="font-bold text-[9.5px] text-brand-wood uppercase tracking-wider block">Dados Dimensionais (Cálculo de Envio / MelhorEnvio)</span>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <div>
                         <label className="text-[9px] text-gray-400 block mb-0.5">Peso (kg)</label>
                         <input type="number" step="0.01" value={editWeight} onChange={e=>setEditWeight(e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg text-center font-semibold text-brand-ink" />
@@ -2644,7 +2669,7 @@ export const AdminStore = () => {
                       }}
                       className="space-y-3 font-medium"
                     >
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <div>
                           <label className="text-[10px] text-gray-500 block mb-1">Custo do Frete (R$)</label>
                           <input 

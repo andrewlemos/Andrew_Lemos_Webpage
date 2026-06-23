@@ -1169,6 +1169,7 @@ const AdminDashboard = () => {
   const [leads, setLeads] = useState<any[]>([]);
   const [arquivos, setArquivos] = useState<Arquivo[]>([]);
   const [activeTab, setActiveTab] = useState<'products' | 'leads' | 'arquivos' | 'vendas' | 'blog'>('products');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingArquivo, setIsAddingArquivo] = useState(false);
   const [formData, setFormData] = useState({ name: '', affiliateLink: '', imageUrl: '', category: 'Entalhe/Escultura em Madeira', order: '1' });
@@ -1481,42 +1482,44 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col">
-        <div className="p-6 border-b flex justify-between items-center bg-brand-paper">
+    <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
+      <div className="bg-white w-full max-w-4xl h-[95vh] sm:max-h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl relative">
+        
+        {/* Header - Desktop view (hidden on small screens) */}
+        <div className="hidden md:flex p-6 border-b justify-between items-center bg-brand-paper">
           <div className="flex gap-6">
             <button 
               onClick={() => setActiveTab('products')}
-              className={cn("text-2xl font-serif", activeTab === 'products' ? "text-brand-ink" : "text-gray-400")}
+              className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-ink", activeTab === 'products' ? "text-brand-ink border-b-2 border-brand-ink pb-1" : "text-gray-400")}
             >
               Produtos
             </button>
             <button 
               onClick={() => setActiveTab('arquivos')}
-              className={cn("text-2xl font-serif", activeTab === 'arquivos' ? "text-brand-ink" : "text-gray-400")}
+              className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-ink", activeTab === 'arquivos' ? "text-brand-ink border-b-2 border-brand-ink pb-1" : "text-gray-400")}
             >
               Galeria ({arquivos.length})
             </button>
             <button 
               onClick={() => setActiveTab('leads')}
-              className={cn("text-2xl font-serif", activeTab === 'leads' ? "text-brand-ink" : "text-gray-400")}
+              className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-ink", activeTab === 'leads' ? "text-brand-ink border-b-2 border-brand-ink pb-1" : "text-gray-400")}
             >
               Leads ({leads.length})
             </button>
             <button 
               onClick={() => setActiveTab('vendas')}
-              className={cn("text-2xl font-serif", activeTab === 'vendas' ? "text-brand-wood" : "text-gray-400")}
+              className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-wood", activeTab === 'vendas' ? "text-brand-wood border-b-2 border-brand-wood pb-1" : "text-gray-400")}
             >
               E-commerce 🛍️
             </button>
             <button 
               onClick={() => setActiveTab('blog')}
-              className={cn("text-2xl font-serif", activeTab === 'blog' ? "text-brand-wood" : "text-gray-400")}
+              className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-wood", activeTab === 'blog' ? "text-brand-wood border-b-2 border-brand-wood pb-1" : "text-gray-400")}
             >
               Blog ✍️
             </button>
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-4 items-center">
             <button 
               onClick={handleDownloadZip}
               className="bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 rounded-full flex items-center justify-center transition-all shadow-sm cursor-pointer border-0"
@@ -1527,7 +1530,7 @@ const AdminDashboard = () => {
             {activeTab === 'products' && (
               <button 
                 onClick={() => setIsAdding(!isAdding)}
-                className="bg-brand-wood text-white px-4 py-2 rounded-full text-sm cursor-pointer"
+                className="bg-brand-wood text-white px-4 py-2 rounded-full text-sm cursor-pointer hover:bg-brand-clay transition-colors font-medium"
               >
                 {isAdding ? 'Cancelar' : 'Novo Produto'}
               </button>
@@ -1535,18 +1538,120 @@ const AdminDashboard = () => {
             {activeTab === 'arquivos' && (
               <button 
                 onClick={() => setIsAddingArquivo(!isAddingArquivo)}
-                className="bg-brand-wood text-white px-4 py-2 rounded-full text-sm cursor-pointer"
+                className="bg-brand-wood text-white px-4 py-2 rounded-full text-sm cursor-pointer hover:bg-brand-clay transition-colors font-medium"
               >
                 {isAddingArquivo ? 'Cancelar' : 'Nova Obra'}
               </button>
             )}
-            <button onClick={handleLogout} className="text-gray-500 hover:text-red-500 cursor-pointer">
+            <button onClick={handleLogout} className="text-gray-500 hover:text-red-500 cursor-pointer font-medium text-sm transition-colors">
               Sair
             </button>
           </div>
         </div>
 
-        <div className="flex-grow overflow-y-auto p-6">
+        {/* Header - Mobile view with Hamburger (hidden on large screens) */}
+        <div className="md:hidden flex p-4 border-b justify-between items-center bg-brand-paper relative z-50">
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 rounded-lg bg-white/80 border border-brand-wood/15 text-brand-ink focus:outline-none cursor-pointer"
+              aria-label="Abrir menu de navegação"
+            >
+              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+            <div className="font-serif font-bold text-sm text-brand-ink flex items-center gap-1">
+              <span>Painel:</span>
+              <span className="text-brand-wood">
+                {activeTab === 'products' && 'Produtos'}
+                {activeTab === 'arquivos' && 'Galeria'}
+                {activeTab === 'leads' && 'Leads'}
+                {activeTab === 'vendas' && 'E-commerce 🛍️'}
+                {activeTab === 'blog' && 'Blog ✍️'}
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex gap-2 items-center">
+            {activeTab === 'products' && (
+              <button 
+                onClick={() => setIsAdding(!isAdding)}
+                className="bg-brand-wood text-white px-3 py-1.5 rounded-full text-[10px] cursor-pointer font-bold"
+              >
+                {isAdding ? 'Sair' : 'Novo'}
+              </button>
+            )}
+            {activeTab === 'arquivos' && (
+              <button 
+                onClick={() => setIsAddingArquivo(!isAddingArquivo)}
+                className="bg-brand-wood text-white px-3 py-1.5 rounded-full text-[10px] cursor-pointer font-bold"
+              >
+                {isAddingArquivo ? 'Sair' : 'Nova'}
+              </button>
+            )}
+            <button 
+              onClick={handleDownloadZip}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded-full flex items-center justify-center transition-all shadow-xs cursor-pointer border-0"
+              title="Baixar Backup ZIP"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile menu drop-down list */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.15 }}
+              className="md:hidden absolute top-[57px] left-0 w-full bg-white border-b shadow-lg z-40 flex flex-col divide-y text-xs font-medium"
+            >
+              <button 
+                onClick={() => { setActiveTab('products'); setIsMobileMenuOpen(false); }}
+                className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'products' ? "bg-brand-paper text-brand-ink font-bold" : "text-gray-600 hover:bg-gray-50")}
+              >
+                <span>Produtos</span>
+                <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{products.length}</span>
+              </button>
+              <button 
+                onClick={() => { setActiveTab('arquivos'); setIsMobileMenuOpen(false); }}
+                className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'arquivos' ? "bg-brand-paper text-brand-ink font-bold" : "text-gray-600 hover:bg-gray-50")}
+              >
+                <span>Galeria</span>
+                <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{arquivos.length}</span>
+              </button>
+              <button 
+                onClick={() => { setActiveTab('leads'); setIsMobileMenuOpen(false); }}
+                className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'leads' ? "bg-brand-paper text-brand-ink font-bold" : "text-gray-600 hover:bg-gray-50")}
+              >
+                <span>Leads</span>
+                <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{leads.length}</span>
+              </button>
+              <button 
+                onClick={() => { setActiveTab('vendas'); setIsMobileMenuOpen(false); }}
+                className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'vendas' ? "bg-brand-paper text-brand-wood font-bold" : "text-gray-600 hover:bg-gray-50")}
+              >
+                <span>E-commerce 🛍️</span>
+              </button>
+              <button 
+                onClick={() => { setActiveTab('blog'); setIsMobileMenuOpen(false); }}
+                className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'blog' ? "bg-brand-paper text-brand-wood font-bold" : "text-gray-600 hover:bg-gray-50")}
+              >
+                <span>Blog ✍️</span>
+              </button>
+              <button 
+                onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+                className="p-3.5 text-left w-full text-red-500 hover:bg-red-50 cursor-pointer font-bold"
+              >
+                Sair da Conta Restrita
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="flex-grow overflow-y-auto p-4 sm:p-6">
           {activeTab === 'products' ? (
             <>
               {isAdding && (
