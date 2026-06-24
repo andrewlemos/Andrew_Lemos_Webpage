@@ -415,6 +415,73 @@ const Hero = () => {
   );
 };
 
+const ENABLE_ARTIST_IMAGE = true;
+
+const ArtistBioSection = () => {
+  const [imgSrc, setImgSrc] = useState("https://lh3.googleusercontent.com/d/1XHVgsBmBxrdIl93npJVGETbq6VUPaQZ9");
+  const [hasError, setHasError] = useState(false);
+
+  const handleImageError = () => {
+    if (!hasError) {
+      setHasError(true);
+      // Fallback: Using an existing local image known to be reliable in the system
+      setImgSrc(ensureRobustUrl("/arquivos/IMG_20230520_122543_345-1.jpg"));
+    }
+  };
+
+  const textContent = (
+    <div className="space-y-8 text-lg text-gray-700 leading-relaxed font-light flex-1">
+      <motion.p 
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        viewport={{ once: true }}
+      >
+        <strong className="font-medium text-brand-ink">Andrew Filipe Moreira Lemos</strong>, artista plástico das áreas de Desenho, Pintura, Escultura, Entalhe, Modelagem e Produtor Digital, residente em Pirassununga/SP, é natural de Lorena/SP. Sua jornada artística começou cedo, em 1993, estudando pintura no ateliê de Leice Novaes.
+      </motion.p>
+      
+      <motion.p 
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        viewport={{ once: true }}
+      >
+        Em 2016, a arte retornou à sua vida de forma transformadora através do renomado escultor amazonense <strong className="font-medium text-brand-wood">Joe Alcantara</strong>, com quem se iniciou no entalhe e escultura em madeira. Desde então, Andrew tem dedicado sua vida a capturar a essência da natureza em suas obras.
+      </motion.p>
+    </div>
+  );
+
+  if (!ENABLE_ARTIST_IMAGE) {
+    return textContent;
+  }
+
+  return (
+    <div className="flex flex-col md:flex-row items-stretch gap-8 md:gap-12 my-6">
+      {/* Text on Left (Desktop) or Top (Mobile) */}
+      {textContent}
+      
+      {/* Image on Right (Desktop) or Bottom (Mobile) */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        whileInView={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.8 }}
+        viewport={{ once: true }}
+        className="w-full md:w-[45%] flex-shrink-0 flex items-stretch"
+      >
+        <div className="relative w-full rounded-2xl overflow-hidden border border-brand-wood/10 shadow-lg min-h-[320px] md:min-h-full flex">
+          <img 
+            src={imgSrc} 
+            alt="Andrew Lemos - Artista Plástico" 
+            onError={handleImageError}
+            className="w-full h-full object-cover transition-all duration-300 hover:scale-[1.02]"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const Biography = () => {
   return (
     <section id="bio" className="section-padding bg-white relative overflow-hidden">
@@ -431,23 +498,7 @@ const Biography = () => {
         </motion.div>
 
         <div className="space-y-8 text-lg text-gray-700 leading-relaxed font-light">
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            viewport={{ once: true }}
-          >
-            <strong className="font-medium text-brand-ink">Andrew Filipe Moreira Lemos</strong>, artista plástico das áreas de Desenho, Pintura, Escultura, Entalhe, Modelagem e Produtor Digital, residente em Pirassununga/SP, é natural de Lorena/SP. Sua jornada artística começou cedo, em 1993, estudando pintura no ateliê de Leice Novaes.
-          </motion.p>
-          
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            viewport={{ once: true }}
-          >
-            Em 2016, a arte retornou à sua vida de forma transformadora através do renomado escultor amazonense <strong className="font-medium text-brand-wood">Joe Alcantara</strong>, com quem se iniciou no entalhe e escultura em madeira. Desde então, Andrew tem dedicado sua vida a capturar a essência da natureza em suas obras.
-          </motion.p>
+          <ArtistBioSection />
 
           <div className="grid md:grid-cols-2 gap-8 my-12">
             <div className="bg-brand-paper p-8 rounded-2xl border border-brand-wood/10">
@@ -774,6 +825,47 @@ const Gallery = ({ onNavigateToView }: { onNavigateToView?: (view: any, id?: str
   );
 };
 
+const YouTubeEmbed = () => {
+  const [thumbnailUrl, setThumbnailUrl] = useState("https://img.youtube.com/vi/zecs-tUK2dk/maxresdefault.jpg");
+
+  const handleThumbnailError = () => {
+    setThumbnailUrl("https://img.youtube.com/vi/zecs-tUK2dk/hqdefault.jpg");
+  };
+
+  return (
+    <div className="relative w-full aspect-video bg-gray-900 rounded-3xl overflow-hidden shadow-2xl border border-white/10">
+      {/* Thumbnail underneath as a fallback/loading state */}
+      <div 
+        className="absolute inset-0 w-full h-full bg-cover bg-center" 
+        style={{ backgroundImage: `url(${thumbnailUrl})` }}
+      >
+        <img 
+          src={thumbnailUrl} 
+          alt="YouTube Thumbnail Fallback" 
+          onError={handleThumbnailError} 
+          className="hidden" 
+        />
+        {/* Spinner/play visual icon beneath the iframe to keep layout perfect while loading or if it fails */}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/45">
+          <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center shadow-lg">
+            <div className="w-0 h-0 border-t-[10px] border-t-transparent border-l-[16px] border-l-white border-b-[10px] border-b-transparent ml-1"></div>
+          </div>
+        </div>
+      </div>
+
+      <iframe
+        src="https://www.youtube.com/embed/zecs-tUK2dk"
+        title="Do Lápis ao Aço - Canal de Desenho, Escultura e Pintura de Andrew Lemos"
+        frameBorder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+        loading="lazy"
+        className="w-full h-full absolute inset-0 z-10 bg-transparent border-0"
+      />
+    </div>
+  );
+};
+
 const YouTubeSection = () => {
   return (
     <section className="section-padding bg-brand-ink text-white overflow-hidden">
@@ -789,7 +881,7 @@ const YouTubeSection = () => {
           </div>
           <h2 className="text-4xl md:text-5xl font-serif mb-8">Do Lápis ao Aço</h2>
           <p className="text-gray-400 text-lg mb-8 leading-relaxed">
-            Compartilhando conhecimento e técnicas artísticas para democratizar o acesso à arte. Com mais de <span className="text-white font-medium">250 mil visualizações</span>, o canal é um ponto de encontro para aprendizes e entusiastas das artes plásticas.
+            Compartilhando conhecimento e técnicas artísticas para democratizar o acesso à arte. Com mais de <span className="text-white font-medium">350 mil visualizações</span>, o canal é um ponto de encontro para aprendizes e entusiastas das artes plásticas.
           </p>
           <a 
             href="https://www.youtube.com/@DoL%C3%A1pisaoA%C3%A7o" 
@@ -807,19 +899,7 @@ const YouTubeSection = () => {
           viewport={{ once: true }}
           className="relative"
         >
-          <div className="aspect-video bg-gray-800 rounded-3xl overflow-hidden shadow-2xl border border-white/10 group">
-            <img 
-              src={ensureRobustUrl("/arquivos/WhatsApp Image 2025-03-01 at 18.06.49.jpeg")} 
-              alt="YouTube Thumbnail" 
-              className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700"
-              referrerPolicy="no-referrer"
-            />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
-                <div className="w-0 h-0 border-t-[12px] border-t-transparent border-l-[20px] border-l-white border-b-[12px] border-b-transparent ml-2"></div>
-              </div>
-            </div>
-          </div>
+          <YouTubeEmbed />
           {/* Decorative elements */}
           <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-brand-wood/20 rounded-full blur-3xl"></div>
           <div className="absolute -top-6 -left-6 w-32 h-32 bg-red-600/10 rounded-full blur-3xl"></div>
