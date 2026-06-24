@@ -446,7 +446,7 @@ const ArtistBioSection = () => {
         transition={{ delay: 0.2 }}
         viewport={{ once: true }}
       >
-        Em 2016, a arte retornou à sua vida de forma transformadora através do renomado escultor amazonense <strong className="font-medium text-brand-wood">Joe Alcantara</strong>, com quem se iniciou no entalhe e escultura em madeira. Desde então, Andrew tem dedicado sua vida a capturar a essência da natureza em suas obras.
+        Em 2016, a arte retornou à sua vida de forma transformadora através do renomado escultor amazonense <a href="https://linktr.ee/joealcantara?utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAZXh0bgNhZW0CMTEAc3J0YwZhcHBfaWQPOTM2NjE5NzQzMzkyNDU5AAGneezmOXOSKW280KYUHJUGq7lT0C9cUpwb3Rcyvomc3mVqfWyJWTJhJuPYWAs_aem_zLA7mck5FBptJSnttBKQsA" target="_blank" rel="noopener noreferrer" className="font-medium text-brand-wood hover:text-brand-wood no-underline hover:no-underline cursor-pointer">Joe Alcantara</a>, com quem se iniciou no entalhe e escultura em madeira. Desde então, Andrew tem dedicado sua vida a capturar a essência da natureza em suas obras.
       </motion.p>
     </div>
   );
