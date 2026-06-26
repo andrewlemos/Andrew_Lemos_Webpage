@@ -1039,7 +1039,7 @@ const ClassesSection = () => {
           </div>
           <div className="relative h-[400px] md:h-auto">
             <img 
-              src={ensureRobustUrl("/arquivos/Apresentação do Canal.jpg")} 
+              src={ensureRobustUrl("https://drive.google.com/file/d/19eW-HQIP_VjSz5mQNI5EDB0L12BM-b99/view?usp=sharing")} 
               alt="Ateliê Andrew Lemos" 
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
