@@ -377,17 +377,24 @@ const Hero = () => {
           <p className="text-base sm:text-lg text-gray-600 max-w-md mb-6 md:mb-8 leading-relaxed">
             Transformando madeira, clay e grafite em expressões vivas da natureza.
           </p>
-          <div className="flex gap-4">
+          <div className="flex flex-row items-center gap-1.5 sm:gap-4 w-full md:w-auto">
             <a 
               href="#gallery" 
-              className="bg-brand-wood text-white px-6 sm:px-8 py-3.5 sm:py-4 rounded-full font-medium hover:bg-brand-clay transition-all flex items-center gap-2 group shadow-lg shadow-brand-wood/20 text-sm sm:text-base"
+              className="bg-brand-wood text-white px-2.5 min-[360px]:px-4 sm:px-8 py-3 sm:py-4 rounded-full font-medium hover:bg-brand-clay transition-all flex items-center justify-center gap-1 sm:gap-2 group shadow-lg shadow-brand-wood/20 text-[11px] min-[360px]:text-xs sm:text-base whitespace-nowrap flex-1 md:flex-initial"
             >
               Ver Obras
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 group-hover:translate-x-1 transition-transform flex-shrink-0" />
+            </a>
+            <a 
+              href="#vendas" 
+              className="bg-brand-wood text-white px-2.5 min-[360px]:px-4 sm:px-8 py-3 sm:py-4 rounded-full font-medium hover:bg-brand-clay transition-all flex items-center justify-center gap-1 sm:gap-2 group shadow-lg shadow-brand-wood/20 text-[11px] min-[360px]:text-xs sm:text-base whitespace-nowrap flex-1 md:flex-initial"
+            >
+              Loja
+              <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 group-hover:translate-x-1 transition-transform flex-shrink-0" />
             </a>
             <a 
               href="#contact" 
-              className="border border-brand-wood text-brand-wood px-6 sm:px-8 py-3.5 sm:py-4 rounded-full font-medium hover:bg-brand-wood hover:text-white transition-all text-sm sm:text-base"
+              className="border border-brand-wood text-brand-wood px-2.5 min-[360px]:px-4 sm:px-8 py-3 sm:py-4 rounded-full font-medium hover:bg-brand-wood hover:text-white transition-all text-[11px] min-[360px]:text-xs sm:text-base whitespace-nowrap flex-1 md:flex-initial text-center"
             >
               Contato
             </a>
