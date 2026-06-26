@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
@@ -115,6 +115,8 @@ export const AdminStore = () => {
 
   // Registered customers collection
   const [customers, setCustomers] = useState<any[]>([]);
+  // Captured leads collection
+  const [leads, setLeads] = useState<any[]>([]);
 
   // Filtering dates for sales reporting
   const [startDate, setStartDate] = useState('');
@@ -129,6 +131,41 @@ export const AdminStore = () => {
   const [marketingProgress, setMarketingProgress] = useState(0);
   const [marketingLogs, setMarketingLogs] = useState<string[]>([]);
   const [marketingStatusMessage, setMarketingStatusMessage] = useState('');
+
+  // Combined, deduplicated and sorted list of marketing recipients (customers + leads)
+  const combinedMarketingRecipients = useMemo(() => {
+    const combinedMap = new Map<string, { id: string; name: string; email: string; type: 'customer' | 'lead' }>();
+    
+    customers.forEach(c => {
+      if (c.email) {
+        const emailLower = c.email.toLowerCase().trim();
+        combinedMap.set(emailLower, {
+          id: c.id || `cust-${emailLower}`,
+          name: c.name || '',
+          email: c.email,
+          type: 'customer'
+        });
+      }
+    });
+
+    leads.forEach(l => {
+      if (l.email) {
+        const emailLower = l.email.toLowerCase().trim();
+        if (!combinedMap.has(emailLower)) {
+          combinedMap.set(emailLower, {
+            id: l.id || `lead-${emailLower}`,
+            name: l.name || '',
+            email: l.email,
+            type: 'lead'
+          });
+        }
+      }
+    });
+
+    return Array.from(combinedMap.values()).sort((a, b) => 
+      (a.name || '').localeCompare(b.name || '')
+    );
+  }, [customers, leads]);
 
   const [packagingSettings, setPackagingSettings] = useState<PackagingSettings>({
     extraHeight: 5,
@@ -263,7 +300,7 @@ export const AdminStore = () => {
     setMarketingStatusMessage('');
     setMarketingLogs(['[Mala Direta] Iniciando processo de envio individual...']);
 
-    const selectedCustomers = customers.filter(c => marketingSelectedRecipients.includes(c.email));
+    const selectedRecipients = combinedMarketingRecipients.filter(r => marketingSelectedRecipients.includes(r.email));
     
     try {
       const logsList = ['[Mala Direta] Iniciando processo de envio...'];
@@ -277,7 +314,7 @@ export const AdminStore = () => {
           subject: marketingSubject,
           bannerUrl: marketingBannerUrl,
           bodyText: marketingBodyText,
-          recipients: selectedCustomers.map(sc => ({ email: sc.email, name: sc.name }))
+          recipients: selectedRecipients.map(sr => ({ email: sr.email, name: sr.name }))
         })
       });
 
@@ -397,6 +434,14 @@ export const AdminStore = () => {
       console.warn("[Admin Invitations Sync] Read failed or permission was denied:", error);
     });
 
+    const unsubLeads = onSnapshot(collection(db, 'leads'), (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
+      setLeads(list);
+    }, (error) => {
+      console.warn("[Admin Leads Sync] Read failed or permission was denied:", error);
+    });
+
     return () => {
       unsubProds();
       unsubOrders();
@@ -405,6 +450,7 @@ export const AdminStore = () => {
       unsubPackaging();
       unsubReviews();
       unsubInvitations();
+      unsubLeads();
     };
   }, []);
 
@@ -1453,7 +1499,7 @@ export const AdminStore = () => {
                   <span>
                     {marketingSending 
                       ? `Enviando Comunicados (${marketingProgress}/${marketingSelectedRecipients.length})...` 
-                      : `Enviar Mala Direta para ${marketingSelectedRecipients.length} Cliente(s)`
+                      : `Enviar Mala Direta para ${marketingSelectedRecipients.length} Destinatário(s)`
                     }
                   </span>
                 </button>
@@ -1489,11 +1535,11 @@ export const AdminStore = () => {
             {/* Recipients selection column */}
             <div className="lg:col-span-5 bg-white p-6 rounded-2xl border flex flex-col h-[600px]">
               <div className="flex justify-between items-center mb-3">
-                <span className="font-bold text-brand-ink leading-tight">Lista de Destinatários ({customers.length})</span>
+                <span className="font-bold text-brand-ink leading-tight">Lista de Destinatários ({combinedMarketingRecipients.length})</span>
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setMarketingSelectedRecipients(customers.map(c => c.email).filter(Boolean))}
+                    onClick={() => setMarketingSelectedRecipients(combinedMarketingRecipients.map(r => r.email).filter(Boolean))}
                     className="text-brand-wood font-semibold text-[10px] hover:underline cursor-pointer"
                     disabled={marketingSending}
                   >
@@ -1512,30 +1558,39 @@ export const AdminStore = () => {
               </div>
 
               <div className="flex-grow overflow-y-auto border rounded-xl divide-y bg-slate-50">
-                {customers.map(cust => (
-                  <div key={cust.id} className="p-3 flex items-start gap-2.5 transition-colors hover:bg-white">
+                {combinedMarketingRecipients.map(rec => (
+                  <div key={rec.id} className="p-3 flex items-start gap-2.5 transition-colors hover:bg-white">
                     <input 
                       type="checkbox"
-                      checked={marketingSelectedRecipients.includes(cust.email)}
+                      checked={marketingSelectedRecipients.includes(rec.email)}
                       onChange={() => {
-                        if (marketingSelectedRecipients.includes(cust.email)) {
-                          setMarketingSelectedRecipients(marketingSelectedRecipients.filter(e => e !== cust.email));
+                        if (marketingSelectedRecipients.includes(rec.email)) {
+                          setMarketingSelectedRecipients(marketingSelectedRecipients.filter(e => e !== rec.email));
                         } else {
-                          setMarketingSelectedRecipients([...marketingSelectedRecipients, cust.email]);
+                          setMarketingSelectedRecipients([...marketingSelectedRecipients, rec.email]);
                         }
                       }}
                       className="mt-0.5 rounded cursor-pointer"
-                      disabled={marketingSending || !cust.email}
+                      disabled={marketingSending || !rec.email}
                     />
                     <div className="flex-grow min-w-0">
-                      <div className="font-bold text-gray-800 truncate">{cust.name || 'Sem Nome'}</div>
-                      <div className="text-[10px] text-gray-400 truncate">{cust.email || 'Sem E-mail'}</div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-gray-800 truncate">{rec.name || 'Sem Nome'}</span>
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-semibold border ${
+                          rec.type === 'customer' 
+                            ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                            : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                        }`}>
+                          {rec.type === 'customer' ? 'Cliente' : 'Lead'}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-gray-400 truncate">{rec.email || 'Sem E-mail'}</div>
                     </div>
                   </div>
                 ))}
 
-                {customers.length === 0 && (
-                  <p className="text-center text-gray-400 py-12 px-4">Nenhum cliente cadastrado no e-commerce ainda.</p>
+                {combinedMarketingRecipients.length === 0 && (
+                  <p className="text-center text-gray-400 py-12 px-4">Nenhum destinatário (clientes ou leads) cadastrado ainda.</p>
                 )}
               </div>
             </div>
