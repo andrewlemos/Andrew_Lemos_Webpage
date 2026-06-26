@@ -652,6 +652,234 @@ app.post("/api/vendas/shipping/calculate", async (req, res) => {
   res.json({ success: true, carrier: "Local Engine Surcharge Fallback", services });
 });
 
+// Helper to send Telegram message safely
+async function sendTelegramNotification(text: string) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (!botToken || !chatId) {
+    console.warn("[Telegram Notificação] TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID não configurados no servidor.");
+    return;
+  }
+
+  try {
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+        parse_mode: "HTML"
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[Telegram Notificação] Erro ao enviar mensagem. Status: ${response.status}. Retorno: ${errText}`);
+    } else {
+      console.log("[Telegram Notificação] Mensagem de notificação enviada com sucesso ao administrador.");
+    }
+  } catch (error) {
+    console.error("[Telegram Notificação] Erro de rede/exceção ao enviar notificação Telegram:", error);
+  }
+}
+
+// Helper to notify admin via E-mail and Telegram when a new order is created
+async function notifyAdminNewOrder(orderId: string, orderData: any) {
+  try {
+    const adminEmail = "andrewfmlemos@gmail.com";
+    const customerInfo = orderData?.customerInfo || {};
+    const items = orderData?.items || [];
+    const total = Number(orderData?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const subtotal = Number(orderData?.subtotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const shippingCost = Number(orderData?.shippingCost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const shippingMethod = orderData?.shippingMethod || "Não especificado";
+
+    const itemsText = items.map((itm: any) => `- ${itm.name || "Item"} (x${itm.quantity || 1}): R$ ${Number((itm.price || 0) * (itm.quantity || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join("\n");
+    const itemsHtml = items.map((itm: any) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">${itm.name || "Item"} (x${itm.quantity || 1})</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">R$ ${Number((itm.price || 0) * (itm.quantity || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+      </tr>
+    `).join("");
+
+    const address = customerInfo.address || {};
+    const addressStr = address.street 
+      ? `${address.street}, ${address.number || 'S/N'}${address.complement ? ` - ${address.complement}` : ''}, ${address.neighborhood || ''}, ${address.city || ''} - ${address.state || ''} (CEP: ${address.cep || ''})`
+      : "Não informado";
+
+    // 1. Telegram Notification
+    const telegramMessage = `🛒 <b>[Ateliê Andrew Lemos] Novo Pedido Criado!</b>\n\n` +
+      `<b>ID do Pedido:</b> #${orderId}\n` +
+      `<b>Cliente:</b> ${customerInfo.name || "Cliente"}\n` +
+      `<b>E-mail:</b> ${customerInfo.email || "Não informado"}\n` +
+      `<b>Telefone:</b> ${customerInfo.phone || "Não informado"}\n` +
+      `<b>CPF:</b> ${customerInfo.cpf || "Não informado"}\n\n` +
+      `<b>Endereço de Entrega:</b>\n${addressStr}\n\n` +
+      `<b>Método de Envio:</b> ${shippingMethod} (R$ ${shippingCost})\n` +
+      `<b>Total:</b> R$ ${total}\n\n` +
+      `<b>Itens do Pedido:</b>\n${itemsText}`;
+
+    sendTelegramNotification(telegramMessage).catch(e => console.error("[Telegram Notificação] Erro async no novo pedido:", e));
+
+    // 2. Email Notification to Admin
+    const SMTP_PASS = (process.env.SMTP_PASS || "").replace(/\s+/g, "");
+    if (!SMTP_PASS) {
+      console.warn("[E-mail Admin] SMTP_PASS não configurado. Ignorando envio de e-mail de notificação de novo pedido ao administrador.");
+      return;
+    }
+
+    const transporter = getSmtpTransporter();
+    const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
+
+    await transporter.sendMail({
+      from: `"Ateliê Andrew Lemos (Sistema)" <${SMTP_USER}>`,
+      to: adminEmail,
+      replyTo: customerInfo.email || SMTP_USER,
+      subject: `🛒 [Novo Pedido] Pedido #${orderId} - R$ ${total}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 650px; margin: 0 auto; padding: 25px; border: 1px solid #e5e5e5; border-radius: 20px; background-color: #fbfbf9;">
+          <h2 style="color: #8d6e63; border-bottom: 2px solid #8d6e63; padding-bottom: 10px; margin-top: 0; font-family: 'Georgia', serif; text-align: center;">🛒 Novo Pedido Recebido no Site!</h2>
+          <p>Olá Andrew,</p>
+          <p>Um novo pedido de número <strong>#${orderId}</strong> foi criado no sistema e está aguardando pagamento.</p>
+          
+          <div style="background-color: #f7f5f0; border-radius: 12px; padding: 15px; margin: 20px 0;">
+            <h4 style="margin: 0 0 10px 0; color: #8d6e63; font-family: 'Georgia', serif;">Dados do Cliente</h4>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Nome:</strong> ${customerInfo.name || "Não informado"}</p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>E-mail:</strong> ${customerInfo.email || "Não informado"}</p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Telefone:</strong> ${customerInfo.phone || "Não informado"}</p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>CPF:</strong> ${customerInfo.cpf || "Não informado"}</p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Endereço:</strong> ${addressStr}</p>
+          </div>
+
+          <div style="background-color: #f7f5f0; border-radius: 12px; padding: 15px; margin: 20px 0;">
+            <h4 style="margin: 0 0 10px 0; color: #8d6e63; font-family: 'Georgia', serif;">Resumo dos Itens</h4>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <thead>
+                <tr style="border-bottom: 2px solid #e5e5e5; text-align: left;">
+                  <th style="padding: 8px;">Item</th>
+                  <th style="padding: 8px; text-align: right;">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+                <tr>
+                  <td style="padding: 8px; font-weight: bold;">Subtotal dos Itens</td>
+                  <td style="padding: 8px; text-align: right; font-weight: bold;">R$ ${subtotal}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px;">Frete (${shippingMethod})</td>
+                  <td style="padding: 8px; text-align: right;">R$ ${shippingCost}</td>
+                </tr>
+                <tr style="border-top: 2px solid #e5e5e5; font-size: 15px; font-weight: bold; color: #8d6e63;">
+                  <td style="padding: 8px;">Total Geral</td>
+                  <td style="padding: 8px; text-align: right;">R$ ${total}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size: 12px; color: #777; text-align: center; margin-top: 25px;">Notificação automática gerada pelo sistema do Ateliê Andrew Lemos.</p>
+        </div>
+      `,
+      text: `Novo Pedido Recebido!\n\nID do Pedido: #${orderId}\nCliente: ${customerInfo.name}\nE-mail: ${customerInfo.email}\nTelefone: ${customerInfo.phone}\nCPF: ${customerInfo.cpf}\nEndereço: ${addressStr}\n\nItens:\n${itemsText}\n\nFrete: R$ ${shippingCost} (${shippingMethod})\nTotal: R$ ${total}`
+    });
+    console.log(`[Notificação Admin Novo Pedido] E-mail enviado com sucesso para ${adminEmail}`);
+  } catch (err) {
+    console.error(`[Notificação Admin Novo Pedido] Falha ao enviar e-mail ao administrador para o pedido ${orderId}:`, err);
+  }
+}
+
+// Helper to notify admin via E-mail and Telegram when a payment is approved
+async function notifyAdminPaymentApproved(orderId: string, orderData: any) {
+  try {
+    const adminEmail = "andrewfmlemos@gmail.com";
+    const customerInfo = orderData?.customerInfo || {};
+    const items = orderData?.items || [];
+    const total = Number(orderData?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const itemsText = items.map((itm: any) => `- ${itm.name || "Item"} (x${itm.quantity || 1})`).join("\n");
+
+    // 1. Telegram Notification
+    const telegramMessage = `✅ <b>[Ateliê Andrew Lemos] Pagamento Aprovado!</b>\n\n` +
+      `<b>ID do Pedido:</b> #${orderId}\n` +
+      `<b>Cliente:</b> ${customerInfo.name || "Cliente"}\n` +
+      `<b>Status:</b> Pago (Aprovado)\n` +
+      `<b>Total:</b> R$ ${total}\n\n` +
+      `<b>Itens comprados:</b>\n${itemsText}\n\n` +
+      `Prepare o pacote para envio seguro!`;
+
+    sendTelegramNotification(telegramMessage).catch(e => console.error("[Telegram Notificação] Erro async no pagamento aprovado:", e));
+
+    // 2. Email Notification to Admin
+    const SMTP_PASS = (process.env.SMTP_PASS || "").replace(/\s+/g, "");
+    if (!SMTP_PASS) {
+      console.warn("[E-mail Admin] SMTP_PASS não configurado. Ignorando envio de e-mail de notificação de pagamento aprovado ao administrador.");
+      return;
+    }
+
+    const transporter = getSmtpTransporter();
+    const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
+
+    const itemsHtml = items.map((itm: any) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">${itm.name || "Item"} (x${itm.quantity || 1})</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">R$ ${Number((itm.price || 0) * (itm.quantity || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+      </tr>
+    `).join("");
+
+    await transporter.sendMail({
+      from: `"Ateliê Andrew Lemos (Sistema)" <${SMTP_USER}>`,
+      to: adminEmail,
+      replyTo: customerInfo.email || SMTP_USER,
+      subject: `✅ [Pagamento Aprovado] Pedido #${orderId} - R$ ${total}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 650px; margin: 0 auto; padding: 25px; border: 1px solid #e5e5e5; border-radius: 20px; background-color: #fbfbf9;">
+          <h2 style="color: #2e7d32; border-bottom: 2px solid #2e7d32; padding-bottom: 10px; margin-top: 0; font-family: 'Georgia', serif; text-align: center;">✅ Pagamento Aprovado!</h2>
+          <p>Olá Andrew,</p>
+          <p>O pagamento do pedido <strong>#${orderId}</strong> no valor de <strong>R$ ${total}</strong> foi confirmado com sucesso!</p>
+          <p>O cliente já recebeu o e-mail de confirmação e a etiqueta do Melhor Envio já está sendo processada.</p>
+          
+          <div style="background-color: #f7f5f0; border-radius: 12px; padding: 15px; margin: 20px 0;">
+            <h4 style="margin: 0 0 10px 0; color: #8d6e63; font-family: 'Georgia', serif;">Dados do Cliente</h4>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Nome:</strong> ${customerInfo.name || "Não informado"}</p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>E-mail:</strong> ${customerInfo.email || "Não informado"}</p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Telefone:</strong> ${customerInfo.phone || "Não informado"}</p>
+          </div>
+
+          <div style="background-color: #f7f5f0; border-radius: 12px; padding: 15px; margin: 20px 0;">
+            <h4 style="margin: 0 0 10px 0; color: #8d6e63; font-family: 'Georgia', serif;">Itens Pagos</h4>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <thead>
+                <tr style="border-bottom: 2px solid #e5e5e5; text-align: left;">
+                  <th style="padding: 8px;">Item</th>
+                  <th style="padding: 8px; text-align: right;">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+                <tr style="border-top: 2px solid #e5e5e5; font-size: 15px; font-weight: bold; color: #2e7d32;">
+                  <td style="padding: 8px;">Total Pago</td>
+                  <td style="padding: 8px; text-align: right;">R$ ${total}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <p style="font-weight: bold; color: #2e7d32; text-align: center; margin: 20px 0;">Por favor, embale os itens com carinho e faça o envio!</p>
+          
+          <p style="font-size: 12px; color: #777; text-align: center; margin-top: 25px;">Notificação automática gerada pelo sistema do Ateliê Andrew Lemos.</p>
+        </div>
+      `,
+      text: `Pagamento Aprovado!\n\nID do Pedido: #${orderId}\nCliente: ${customerInfo.name}\nTotal Pago: R$ ${total}\n\nPrepare os itens para envio:\n${itemsText}`
+    });
+    console.log(`[Notificação Admin Pagamento] E-mail enviado com sucesso para ${adminEmail}`);
+  } catch (err) {
+    console.error(`[Notificação Admin Pagamento] Falha ao enviar e-mail ao administrador para o pedido ${orderId}:`, err);
+  }
+}
+
 // Helper to send order placement confirmation email
 async function sendOrderPlacementEmail(orderId: string, orderData: any, baseUrl: string) {
   try {
@@ -1367,6 +1595,7 @@ app.post("/api/vendas/checkout", async (req, res) => {
     const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") ? "http" : "https";
     const baseUrl = `${protocol}://${host}`;
     sendOrderPlacementEmail(orderId, orderDoc, baseUrl).catch(e => console.error("Async sending of order confirmation failed:", e));
+    notifyAdminNewOrder(orderId, orderDoc).catch(e => console.error("Async sending of admin order notification failed:", e));
   } catch (err: any) {
     console.error("Erro ao salvar pedido no Firestore:", err);
     return res.status(500).json({ error: "Erro interno ao cadastrar o pedido no banco de dados: " + formatFirebaseError(err) });
@@ -1863,6 +2092,7 @@ async function updateOrderStatusInDatabase(orderId: string, status: string, paym
     // Send payment email confirmation
     const finalBaseUrl = baseUrl || "http://localhost:3000";
     sendOrderPaymentConfirmationEmail(orderId, orderData, finalBaseUrl).catch(e => console.error("Async sending of payment confirmation failed:", e));
+    notifyAdminPaymentApproved(orderId, orderData).catch(e => console.error("Async sending of admin payment notification failed:", e));
 
     // Handle coupon and cart recovery updates upon legitimate payment receipt
     if (orderData?.couponCode) {
