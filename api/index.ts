@@ -2031,11 +2031,8 @@ async function updateOrderStatusInDatabase(orderId: string, status: string, paym
   }
 
   const orderRef = adminDb.collection("ecom_orders").doc(orderId);
-  let orderData: any = null;
-  let items: any[] = [];
-  let transitionToPaid = false;
 
-  await adminDb.runTransaction(async (transaction: any) => {
+  const result = await adminDb.runTransaction(async (transaction: any) => {
     const orderSnap = await transaction.get(orderRef);
 
     if (!orderSnap.exists) {
@@ -2043,20 +2040,44 @@ async function updateOrderStatusInDatabase(orderId: string, status: string, paym
       throw new Error(`Pedido ${orderId} não localizado.`);
     }
 
-    orderData = orderSnap.data();
-    const currentStatus = orderData?.status || "Aguardando pagamento";
-    items = orderData?.items || [];
+    const currentOrderData = orderSnap.data();
+    const currentStatus = currentOrderData?.status || "Aguardando pagamento";
+    const stockDecremented = currentOrderData?.stockDecremented || false;
+    const currentItems = currentOrderData?.items || [];
 
-    console.log(`[Transaction - Webhook MercadoPago] Pedido ${orderId}: status atual é '${currentStatus}', novo status recebido é '${status}'`);
+    console.log(`[Transaction - Webhook MercadoPago] Pedido ${orderId}: status atual é '${currentStatus}', novo status recebido é '${status}', estoque já decrementado: ${stockDecremented}`);
 
-    // Lock and update the order status
-    if (currentStatus === "Aguardando pagamento" && status === "Pago") {
-      transitionToPaid = true;
+    let willTransitionToPaid = false;
+
+    if (currentStatus === "Aguardando pagamento" && status === "Pago" && !stockDecremented) {
+      willTransitionToPaid = true;
+
+      // 1. Read all product documents first (since all reads must precede writes in a Firestore transaction)
+      const productsInfo = [];
+      for (const item of currentItems) {
+        if (item.productId) {
+          const productRef = adminDb.collection("ecom_products").doc(item.productId);
+          const prodDoc = await transaction.get(productRef);
+          productsInfo.push({ item, productRef, prodDoc });
+        }
+      }
+
+      // 2. Perform updates (writes) on order and products
       transaction.update(orderRef, {
         status: status,
         paymentId: paymentId,
+        stockDecremented: true,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
+
+      for (const info of productsInfo) {
+        if (info.prodDoc.exists) {
+          const prevStock = info.prodDoc.data()?.stock || 0;
+          const nextStock = Math.max(0, prevStock - info.item.quantity);
+          transaction.update(info.productRef, { stock: nextStock });
+          console.log(`[Transaction - Webhook MercadoPago] Decrementando estoque do produto '${info.item.name}' de ${prevStock} para ${nextStock}`);
+        }
+      }
     } else {
       // If payment status update or any other status update, apply standard update if different
       if (currentStatus !== status) {
@@ -2067,53 +2088,43 @@ async function updateOrderStatusInDatabase(orderId: string, status: string, paym
         });
       }
     }
+
+    return {
+      transitionToPaid: willTransitionToPaid,
+      orderData: currentOrderData,
+      items: currentItems
+    };
   });
 
   // Decrease stock, send confirmation email, and trigger Melhor Envio ONLY if the state transitioned to Paid in this call
-  if (transitionToPaid) {
-    console.log(`[Webhook MercadoPago] Transição legítima para 'Pago' efetuada para o pedido ${orderId}. Iniciando estoque e processamento de envio.`);
-    for (const item of items) {
-      const productRef = adminDb.collection("ecom_products").doc(item.productId);
-      try {
-        await adminDb.runTransaction(async (transaction: any) => {
-          const prodDoc = await transaction.get(productRef);
-          if (prodDoc.exists) {
-            const prevStock = prodDoc.data()?.stock || 0;
-            const nextStock = Math.max(0, prevStock - item.quantity);
-            transaction.update(productRef, { stock: nextStock });
-            console.log(`[Webhook MercadoPago] Atualizado estoque do produto '${item.name}' de ${prevStock} para ${nextStock}`);
-          }
-        });
-      } catch (stockError) {
-        console.error(`[Webhook MercadoPago] Erro ao diminuir estoque de '${item.name}':`, stockError);
-      }
-    }
+  if (result.transitionToPaid) {
+    console.log(`[Webhook MercadoPago] Transição legítima para 'Pago' efetuada para o pedido ${orderId}. Iniciando processamento de envio.`);
 
     // Send payment email confirmation
     const finalBaseUrl = baseUrl || "http://localhost:3000";
-    sendOrderPaymentConfirmationEmail(orderId, orderData, finalBaseUrl).catch(e => console.error("Async sending of payment confirmation failed:", e));
-    notifyAdminPaymentApproved(orderId, orderData).catch(e => console.error("Async sending of admin payment notification failed:", e));
+    sendOrderPaymentConfirmationEmail(orderId, result.orderData, finalBaseUrl).catch(e => console.error("Async sending of payment confirmation failed:", e));
+    notifyAdminPaymentApproved(orderId, result.orderData).catch(e => console.error("Async sending of admin payment notification failed:", e));
 
     // Handle coupon and cart recovery updates upon legitimate payment receipt
-    if (orderData?.couponCode) {
-      adminDb.collection("ecom_coupons").doc(orderData.couponCode.toUpperCase().trim()).update({
+    if (result.orderData?.couponCode) {
+      adminDb.collection("ecom_coupons").doc(result.orderData.couponCode.toUpperCase().trim()).update({
         used: true,
         usedAt: admin.firestore.FieldValue.serverTimestamp(),
         orderId: orderId
-      }).then(() => console.log(`[Recuperação de Carrinho] Cupom ${orderData.couponCode} invalidado com sucesso.`))
+      }).then(() => console.log(`[Recuperação de Carrinho] Cupom ${result.orderData.couponCode} invalidado com sucesso.`))
         .catch((e: any) => console.warn("[Recuperação de Carrinho] Falha ao marcar cupom de recuperação como usado:", e));
     }
 
-    if (orderData?.cartId) {
-      adminDb.collection("ecom_abandoned_carts").doc(orderData.cartId).update({
+    if (result.orderData?.cartId) {
+      adminDb.collection("ecom_abandoned_carts").doc(result.orderData.cartId).update({
         status: "Recuperado",
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      }).then(() => console.log(`[Recuperação de Carrinho] Carrinho ${orderData.cartId} marcado como Recuperado.`))
+      }).then(() => console.log(`[Recuperação de Carrinho] Carrinho ${result.orderData.cartId} marcado como Recuperado.`))
         .catch((e: any) => console.warn("[Recuperação de Carrinho] Falha ao transicionar status do carrinho para Recuperado:", e));
     }
 
     // Automatized automatic shipping label generation on Melhor Envio
-    processMelhorEnvioShipmentForPaidOrder(orderId, orderData).catch(e => console.error("[Melhor Envio] Auto-processing failure:", e));
+    processMelhorEnvioShipmentForPaidOrder(orderId, result.orderData).catch(e => console.error("[Melhor Envio] Auto-processing failure:", e));
   } else {
     console.log(`[Webhook MercadoPago] Pedido ${orderId} já transicionado ou sem mudança requerida. Pulando redução de estoque e envio em dobro.`);
   }
