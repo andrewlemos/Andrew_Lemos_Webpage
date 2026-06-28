@@ -44,6 +44,7 @@ import {
   updateDoc 
 } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { ENABLE_COURSES_PUBLIC_ACCESS, COURSES_EXTERNAL_URL } from './config/coursesConfig';
 import { serverTimestamp, Timestamp } from 'firebase/firestore';
 import { Storefront } from './components/Storefront';
 import { CheckoutPay } from './components/CheckoutPay';
@@ -149,6 +150,14 @@ const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
@@ -188,6 +197,18 @@ const Navbar = () => {
   }, []);
 
   const handleLinkClick = (e: React.MouseEvent, href: string) => {
+    if (href === '#online-courses') {
+      e.preventDefault();
+      const isAdmin = currentUser?.email === 'andrewfmlemos@gmail.com';
+      if (ENABLE_COURSES_PUBLIC_ACCESS || isAdmin) {
+        window.open(COURSES_EXTERNAL_URL, '_blank', 'noopener,noreferrer');
+      } else {
+        alert("Acesso restrito. A área de cursos online está em manutenção no momento e o acesso está reservado ao administrador.");
+      }
+      setIsMobileMenuOpen(false);
+      return;
+    }
+
     if (href.startsWith('#')) {
       e.preventDefault();
       
@@ -2868,6 +2889,19 @@ export default function App() {
     const hash = window.location.hash;
     const path = window.location.pathname;
 
+    if (path === '/cursos-online' || path === '/cursos-online/') {
+      const isAdmin = currentUser?.email === 'andrewfmlemos@gmail.com';
+      if (ENABLE_COURSES_PUBLIC_ACCESS || isAdmin) {
+        window.location.href = COURSES_EXTERNAL_URL;
+      } else {
+        alert("Acesso restrito. A área de cursos online está em manutenção no momento e o acesso está reservado ao administrador.");
+        window.history.replaceState(null, '', '/');
+        window.dispatchEvent(new Event('popstate'));
+        setCurrentView('landing');
+      }
+      return;
+    }
+
     if (path === '/politica-devolucao' || path === '/politica-devolucao/') {
       setCurrentView('politica-devolucao');
       window.scrollTo({ top: 0 });
@@ -2988,6 +3022,19 @@ export default function App() {
     } else if (hash === '#politica-privacidade') {
       setCurrentView('politica-privacidade');
       window.scrollTo({ top: 0 });
+    } else if (hash === '#cursos-bloqueado') {
+      alert("Acesso restrito. A plataforma de cursos online está em manutenção no momento e o acesso está reservado ao administrador.");
+      window.history.replaceState(null, '', '/');
+      setCurrentView('landing');
+    } else if (hash === '#online-courses') {
+      const isAdmin = currentUser?.email === 'andrewfmlemos@gmail.com';
+      if (ENABLE_COURSES_PUBLIC_ACCESS || isAdmin) {
+        window.location.href = COURSES_EXTERNAL_URL;
+      } else {
+        alert("Acesso restrito. A área de cursos online está em manutenção no momento e o acesso está reservado ao administrador.");
+        window.history.replaceState(null, '', '/');
+        setCurrentView('landing');
+      }
     } else {
       setCurrentView('landing');
       const landingHashes = ['#home', '#bio', '#expertise', '#gallery', '#publications', '#classes', '#online-courses', '#products', '#contact'];

@@ -8,6 +8,7 @@ import crypto from "crypto";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import AdmZip from "adm-zip";
+import { ENABLE_COURSES_PUBLIC_ACCESS, COURSES_EXTERNAL_URL } from "../src/config/coursesConfig";
 
 dotenv.config();
 
@@ -4216,6 +4217,46 @@ app.get(["/politica-privacidade", "/politica-privacidade/"], async (req, res) =>
       indexPath = path.join(process.cwd(), 'index.html');
     }
     return res.sendFile(indexPath);
+  }
+});
+
+app.get(["/cursos-online", "/cursos-online/"], async (req, res) => {
+  try {
+    // 1. Se o acesso público estiver ativado globalmente, redireciona diretamente para o link externo
+    if (ENABLE_COURSES_PUBLIC_ACCESS) {
+      return res.redirect(302, COURSES_EXTERNAL_URL);
+    }
+
+    // 2. Se estiver bloqueado, verifica se há um token de admin válido na requisição
+    let idToken = "";
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      idToken = authHeader.split("Bearer ")[1];
+    }
+    if (!idToken && req.query.token) {
+      idToken = String(req.query.token);
+    }
+
+    if (idToken) {
+      try {
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        if (decodedToken.email === "andrewfmlemos@gmail.com" && decodedToken.email_verified === true) {
+          // É o administrador autenticado, acesso liberado!
+          return res.redirect(302, COURSES_EXTERNAL_URL);
+        }
+      } catch (err) {
+        console.warn("Token de administrador inválido fornecido para /cursos-online:", err);
+      }
+    }
+
+    // Se não for o administrador e o acesso estiver bloqueado, redireciona de volta para a Home com hash informativa
+    const host = req.get("host") || "andrewlemos.com.br";
+    const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+    const baseUrl = `${protocol}://${host}`;
+    return res.redirect(302, `${baseUrl}/#cursos-bloqueado`);
+  } catch (err) {
+    console.error("Erro na rota /cursos-online:", err);
+    return res.redirect(302, "/#cursos-bloqueado");
   }
 });
 
