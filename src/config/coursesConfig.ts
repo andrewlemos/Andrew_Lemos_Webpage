@@ -5,9 +5,9 @@
  *   - true: Qualquer visitante ou visitante logado pode acessar o link externo.
  *   - false: Somente o administrador autenticado (andrewfmlemos@gmail.com) pode acessar.
  */
-export const ENABLE_COURSES_PUBLIC_ACCESS = false;
+export const ENABLE_COURSES_PUBLIC_ACCESS = true;
 
 /**
  * Endereço do novo link externo para o sistema de cursos online.
  */
-export const COURSES_EXTERNAL_URL = "https://plataforma-de-cursos-e-apostilas-de-arte-743645073573.us-east1.run.app";
+export const COURSES_EXTERNAL_URL = "https://academiadeartes.andrewlemos.com/";
