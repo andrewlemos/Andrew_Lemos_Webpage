@@ -128,12 +128,10 @@ export async function bootstrapDatabase() {
 
     // --- Structured migration from local db.json if Firestore is empty ---
     try {
-      const isProd = process.env.NODE_ENV === "production";
-      if (!isProd) {
-        Logger.info("[FIREBASE] Verificando se o Firestore precisa de migração inicial...");
-        const coursesSnapshot = await firestoreDb.collection("courses").limit(1).get();
+      Logger.info("[FIREBASE] Verificando se o Firestore precisa de migração inicial...");
+      const coursesSnapshot = await firestoreDb.collection("courses").limit(1).get();
 
-        if (coursesSnapshot.empty) {
+      if (coursesSnapshot.empty) {
           const DB_PATH = path.join(process.cwd(), "data", "db.json");
           const fs = await import("fs");
           if (fs.existsSync(DB_PATH)) {
@@ -176,7 +174,6 @@ export async function bootstrapDatabase() {
         } else {
           Logger.info("[FIREBASE] Firestore já possui dados. Pulando migração estruturada.");
         }
-      }
     } catch (migError: any) {
       Logger.error("[FIREBASE] Erro ao executar migração estruturada do db.json:", migError);
     }

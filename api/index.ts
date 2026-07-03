@@ -4441,6 +4441,16 @@ app.all("/api/pinterest-feed.csv", handlePinterestFeed);
 // Mount courses API v1 router
 app.use("/api/v1", apiV1Router);
 
+// General API error handling middleware
+app.use("/api", (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error(`[API Error] Encountered at ${req.method} ${req.originalUrl || req.path}:`, err);
+  return res.status(err.status || 500).json({
+    error: true,
+    message: err.message || "Erro interno do servidor.",
+    details: process.env.NODE_ENV !== "production" ? err.stack : undefined
+  });
+});
+
 // Run Database Seeder for RBAC on startup
 try {
   bootstrapDatabase().then(() => {

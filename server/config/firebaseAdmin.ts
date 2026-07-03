@@ -29,6 +29,20 @@ try {
   console.warn("Failed to dynamically load firebase-applet-config.json (using default resilient fallback):", readErr);
 }
 
+// Support overriding via standard environment variables and handle custom project fallback
+const hasCustomCredentials = !!process.env.FIREBASE_SERVICE_ACCOUNT || (!!process.env.FIREBASE_PRIVATE_KEY && !!process.env.FIREBASE_CLIENT_EMAIL);
+
+if (process.env.FIREBASE_PROJECT_ID) {
+  firebaseConfig.projectId = process.env.FIREBASE_PROJECT_ID;
+}
+if (process.env.FIREBASE_DATABASE_ID) {
+  firebaseConfig.firestoreDatabaseId = process.env.FIREBASE_DATABASE_ID;
+} else if (hasCustomCredentials || process.env.NODE_ENV === "production" || !!process.env.VERCEL) {
+  // If we are in production, deployed, or using custom credentials, we should connect to the "(default)" database,
+  // since custom multi-databases like "ai-studio-..." are sandboxed and do not exist in custom/production projects.
+  firebaseConfig.firestoreDatabaseId = "";
+}
+
 let credential = undefined;
 
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
