@@ -15,21 +15,18 @@ const firebaseConfig = {
 };
 
 // Check if we are running in their custom external production/deployment environment
-const isCustomDomain = typeof window !== 'undefined' && 
-  window.location.hostname !== 'localhost' && 
-  !window.location.hostname.endsWith('.run.app') &&
-  !window.location.hostname.endsWith('.aistudio.google') &&
-  !window.location.hostname.includes('webcontainer.io');
+const isCustomProject = firebaseConfig.projectId !== "gen-lang-client-0853696923" && 
+  !firebaseConfig.projectId.startsWith("gen-lang-client-");
 
 const hasCustomEnvId = !!import.meta.env.VITE_FIREBASE_DATABASE_ID;
 
-if (isCustomDomain && !hasCustomEnvId) {
-  // If on a custom production domain and no explicit database ID is provided in env,
+if (isCustomProject && !hasCustomEnvId) {
+  // If on a custom production project and no explicit database ID is provided in env,
   // default to "(default)" since custom projects do not have the AI Studio sandbox database.
   firebaseConfig.firestoreDatabaseId = "";
 }
 
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,

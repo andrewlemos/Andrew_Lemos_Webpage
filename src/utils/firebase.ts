@@ -1,7 +1,4 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
-  getAuth, 
-  GoogleAuthProvider, 
   EmailAuthProvider,
   signInWithPopup,
   signInWithEmailAndPassword,
@@ -9,25 +6,13 @@ import {
   signOut,
   linkWithCredential,
   onAuthStateChanged,
-  updateProfile
+  updateProfile,
+  GoogleAuthProvider
 } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
-import configJson from '../../firebase-applet-config.json';
+import { app, auth, googleProvider } from '../firebase';
 
-const config = {
-  ...configJson,
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || configJson.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || configJson.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || configJson.projectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || configJson.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || configJson.messagingSenderId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || configJson.appId,
-};
-
-const app = getApps().length > 0 ? getApp() : initializeApp(config);
-export const auth = getAuth(app);
 export const storage = getStorage(app);
-export const googleProvider = new GoogleAuthProvider();
 
 // Ensure Google provider requests email profile
 googleProvider.addScope('email');
@@ -54,6 +39,8 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
 }
 
 export {
+  auth,
+  googleProvider,
   GoogleAuthProvider,
   EmailAuthProvider,
   signInWithPopup,
