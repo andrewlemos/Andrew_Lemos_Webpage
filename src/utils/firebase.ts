@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
@@ -24,7 +24,7 @@ const config = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || configJson.appId,
 };
 
-const app = initializeApp(config);
+const app = getApps().length > 0 ? getApp() : initializeApp(config);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
