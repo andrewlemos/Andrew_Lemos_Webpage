@@ -194,5 +194,66 @@ service cloud.firestore {
       allow create, update: if isAdmin() && isValidBlogPost(request.resource.data);
       allow delete: if isAdmin();
     }
+
+    // Course and Academy Collections (accessed via Server-side proxy)
+    match /courses/{courseId} {
+      allow read, write: if true;
+    }
+
+    match /modules/{moduleId} {
+      allow read, write: if true;
+    }
+
+    match /lessons/{lessonId} {
+      allow read, write: if true;
+    }
+
+    match /progress/{progressId} {
+      allow read, write: if true;
+    }
+
+    match /supportComments/{commentId} {
+      allow read, write: if true;
+    }
+
+    match /apostilas/{handoutId} {
+      allow read, write: if true;
+    }
+
+    match /coupons/{couponId} {
+      allow read, write: if true;
+    }
+
+    match /sales/{saleId} {
+      allow read, write: if true;
+    }
+
+    match /supportTickets/{ticketId} {
+      allow read, write: if true;
+    }
+
+    match /certificates/{certificateId} {
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    match /permissions/{permissionId} {
+      allow read, write: if true;
+    }
+
+    match /user_permissions/{userPermissionId} {
+      allow read, write: if true;
+    }
+
+    match /roles/{roleId} {
+      allow read, write: if true;
+    }
+
+    match /role_permissions/{rolePermissionId} {
+      allow read, write: if true;
+    }
   }
 }
