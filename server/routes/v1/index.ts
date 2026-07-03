@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import AdmZip from "adm-zip";
 import { execSync } from "child_process";
-import { getDatabaseProvider } from "../../config/firebase";
+import { firestoreDb } from "../../config/firebase";
 
 // Import existing modules
 import authRouter from "../../modules/auth/routes";
@@ -112,7 +112,7 @@ router.post("/users", (req, res, next) => userController.syncUser(req, res, next
 router.put("/users/:id", authenticate, requirePermission("users.update"), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const db = getDatabaseProvider();
+    const db = firestoreDb;
     await db.collection("users").doc(id).set(req.body, { merge: true });
     res.status(200).json({ success: true, message: "Usuário atualizado com sucesso." });
   } catch (error) {
@@ -123,7 +123,7 @@ router.put("/users/:id", authenticate, requirePermission("users.update"), async 
 router.delete("/users/:id", authenticate, requirePermission("users.update"), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const db = getDatabaseProvider();
+    const db = firestoreDb;
     await db.collection("users").doc(id).delete();
     res.status(200).json({ success: true, message: "Usuário excluído com sucesso." });
   } catch (error) {
@@ -155,7 +155,7 @@ router.post("/comments", (req, res, next) => courseController.createComment(req,
 router.delete("/comments/:id", authenticate, requirePermission("support.update"), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const db = getDatabaseProvider();
+    const db = firestoreDb;
     
     // 1. Delete main comment
     await db.collection("comments").doc(id).delete();
@@ -188,7 +188,7 @@ router.use("/sales", salesRouter);
 router.put("/sales/:id", authenticate, requirePermission("users.update"), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const db = getDatabaseProvider();
+    const db = firestoreDb;
     await db.collection("sales").doc(id).set(req.body, { merge: true });
     res.status(200).json({ success: true, message: "Venda atualizada com sucesso." });
   } catch (error) {
@@ -199,7 +199,7 @@ router.put("/sales/:id", authenticate, requirePermission("users.update"), async 
 router.delete("/sales/:id", authenticate, requirePermission("users.update"), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const db = getDatabaseProvider();
+    const db = firestoreDb;
     await db.collection("sales").doc(id).delete();
     res.status(200).json({ success: true, message: "Venda excluída com sucesso." });
   } catch (error) {
@@ -221,7 +221,7 @@ router.use("/certificates", certificateRouter);
 router.delete("/certificates/:id", authenticate, requirePermission("certificates.issue"), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const db = getDatabaseProvider();
+    const db = firestoreDb;
     await db.collection("certificates").doc(id).delete();
     res.status(200).json({ success: true, message: "Certificado excluído com sucesso." });
   } catch (error) {

@@ -1,4 +1,3 @@
-import { getDatabaseProvider } from "../infrastructure/database";
+import { adminDb } from "./firebaseAdmin";
 
-export const firestoreDb = getDatabaseProvider();
-export { getDatabaseProvider };
+export const firestoreDb = adminDb;
