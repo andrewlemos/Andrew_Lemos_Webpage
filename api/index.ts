@@ -5,14 +5,88 @@ import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { admin, adminDb } from "../server/config/firebaseAdmin";
+import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import AdmZip from "adm-zip";
 import { ENABLE_COURSES_PUBLIC_ACCESS, COURSES_EXTERNAL_URL } from "../src/config/coursesConfig";
-import apiV1Router from "../server/routes/v1";
-import { bootstrapDatabase } from "../server/config/seeder";
 
 dotenv.config();
 
+// Dynamic secure Firestore config parsing + static failsafe fallback container
+let adminDb: any = null;
+try {
+  const firebaseConfig = {
+    projectId: "gen-lang-client-0853696923",
+    firestoreDatabaseId: "ai-studio-8daf606b-b021-4ffa-9ea1-9b7ced315035"
+  };
+
+  try {
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    const parentConfigPath = path.join(process.cwd(), "..", "firebase-applet-config.json");
+    
+    if (fs.existsSync(configPath)) {
+      const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      if (parsed.projectId) firebaseConfig.projectId = parsed.projectId;
+      if (parsed.firestoreDatabaseId) firebaseConfig.firestoreDatabaseId = parsed.firestoreDatabaseId;
+    } else if (fs.existsSync(parentConfigPath)) {
+      const parsed = JSON.parse(fs.readFileSync(parentConfigPath, "utf-8"));
+      if (parsed.projectId) firebaseConfig.projectId = parsed.projectId;
+      if (parsed.firestoreDatabaseId) firebaseConfig.firestoreDatabaseId = parsed.firestoreDatabaseId;
+    }
+  } catch (readErr) {
+    console.warn("Failed to dynamically load firebase-applet-config.json (using default resilient fallback):", readErr);
+  }
+
+  let credential = undefined;
+  
+  // Try loading from FIREBASE_SERVICE_ACCOUNT JSON string first
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+      let saString = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+      if (saString.startsWith('"') && saString.endsWith('"')) {
+        saString = saString.substring(1, saString.length - 1);
+      }
+      const sa = JSON.parse(saString);
+      credential = admin.credential.cert(sa);
+      console.log("Firebase Admin SDK: Initializing using FIREBASE_SERVICE_ACCOUNT environment variable.");
+    } catch (parseErr) {
+      console.error("Firebase Admin SDK: Failed to parse FIREBASE_SERVICE_ACCOUNT JSON string:", parseErr);
+    }
+  }
+  
+  // If not loaded, check individual environment variables
+  if (!credential && process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY.trim();
+    if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+      privateKey = privateKey.substring(1, privateKey.length - 1);
+    }
+    const formattedPrivateKey = privateKey.replace(/\\n/g, "\n");
+    credential = admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL.trim(),
+      privateKey: formattedPrivateKey,
+    });
+    console.log("Firebase Admin SDK: Initializing using individual environment variables.");
+  }
+
+  let appInstance;
+  if (admin.apps.length === 0) {
+    appInstance = admin.initializeApp({
+      projectId: firebaseConfig.projectId,
+      credential: credential
+    });
+  } else {
+    appInstance = admin.apps[0];
+  }
+  if (firebaseConfig.firestoreDatabaseId) {
+    adminDb = getFirestore(appInstance, firebaseConfig.firestoreDatabaseId);
+  } else {
+    adminDb = getFirestore(appInstance);
+  }
+  console.log("Firebase Admin SDK successfully ready for database:", firebaseConfig.firestoreDatabaseId || "(default)");
+} catch (error) {
+  console.error("Warning: Failed to initialize Firebase Admin SDK in backend:", error);
+}
 
 // User-friendly error message formatter to guide Vercel/Netlify developers on Firebase credentials configuration
 function formatFirebaseError(err: any): string {
@@ -2262,20 +2336,6 @@ app.post("/api/vendas/webhook-pagseguro", async (req, res) => {
 });
 
 // Reusable admin auth token verification helper
-function decodeJwtPayload(token: string): any {
-  try {
-    const parts = token.split(".");
-    if (parts.length === 3) {
-      const payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-      const jsonStr = Buffer.from(payloadBase64, "base64").toString("utf8");
-      return JSON.parse(jsonStr);
-    }
-  } catch (e) {
-    console.error("Error decoding JWT payload:", e);
-  }
-  return null;
-}
-
 async function checkAdminAuth(req: any, res: any, next: any) {
   let idToken = "";
 
@@ -2296,30 +2356,20 @@ async function checkAdminAuth(req: any, res: any, next: any) {
 
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
-    if (decodedToken.email && decodedToken.email.toLowerCase() === "andrewfmlemos@gmail.com") {
+    if (decodedToken.email === "andrewfmlemos@gmail.com" && decodedToken.email_verified === true) {
       req.adminUser = decodedToken;
       return next();
     } else {
       return res.status(403).json({ error: "Acesso negado. Apenas o administrador autorizado de Andrew Lemos tem permissão para realizar esta operação." });
     }
   } catch (err: any) {
-    console.error("Erro ao verificar token de administrador via Admin SDK:", err);
+    console.error("Erro ao verificar token de administrador:", err);
     // Safe development bypass fallback to allow developers to use the app in AI Studio preview if server credentials are not fully deployed yet.
     const isLocalDev = process.env.NODE_ENV !== "production" || !process.env.FIREBASE_PRIVATE_KEY;
-    if (isLocalDev) {
-      // Decode the JWT token to see if it belongs to the admin
-      const decoded = decodeJwtPayload(idToken);
-      if (decoded && decoded.email && decoded.email.toLowerCase() === "andrewfmlemos@gmail.com") {
-        console.warn("Firebase Admin SDK: Bypass de desenvolvimento ativado via leitura segura de JWT local.");
-        req.adminUser = { email: decoded.email, email_verified: true, uid: decoded.sub || decoded.user_id };
-        return next();
-      }
-
-      if (idToken === "dev-bypass-token" || idToken.length < 50) {
-        console.warn("Firebase Admin SDK: Bypass temporário permitido em ambiente local/desenvolvimento.");
-        req.adminUser = { email: "andrewfmlemos@gmail.com", email_verified: true };
-        return next();
-      }
+    if (isLocalDev && (idToken === "dev-bypass-token" || idToken.length < 50)) {
+      console.warn("Firebase Admin SDK: Bypass temporário permitido em ambiente local/desenvolvimento.");
+      req.adminUser = { email: "andrewfmlemos@gmail.com", email_verified: true };
+      return next();
     }
     return res.status(401).json({ error: "Sessão expirada ou token inválido. Por favor, reinicie sua sessão no painel do administrador." });
   }
@@ -3469,7 +3519,6 @@ app.get("/api/download-zip", checkAdminAuth, (req, res) => {
         const stat = fs.statSync(fullPath);
         
         // Excluir pastas desnecessárias ou dados sensíveis de credenciais reais
-        const lowerFile = file.toLowerCase();
         if (
           file === "node_modules" ||
           file === ".git" ||
@@ -3478,20 +3527,7 @@ app.get("/api/download-zip", checkAdminAuth, (req, res) => {
           file === "server.log" ||
           file === ".next" ||
           file === "arquivos" || // Excluir os arquivos/mídias pesados do backup de código
-          file === "temp_courses" ||
-          file === "modelo-pagina-vendas-alunos" ||
-          lowerFile.endsWith(".zip") ||
-          lowerFile.endsWith(".jpg") ||
-          lowerFile.endsWith(".jpeg") ||
-          lowerFile.endsWith(".png") ||
-          lowerFile.endsWith(".gif") ||
-          lowerFile.endsWith(".dng") ||
-          lowerFile.endsWith(".xls") ||
-          lowerFile.endsWith(".xlsx") ||
-          lowerFile.endsWith(".pdf") ||
-          lowerFile.endsWith(".mp4") ||
-          lowerFile.endsWith(".mp3") ||
-          lowerFile.endsWith(".wav")
+          file.endsWith(".zip")
         ) {
           continue;
         }
@@ -4204,7 +4240,7 @@ app.get(["/cursos-online", "/cursos-online/"], async (req, res) => {
     if (idToken) {
       try {
         const decodedToken = await admin.auth().verifyIdToken(idToken);
-        if (decodedToken.email && decodedToken.email.toLowerCase() === "andrewfmlemos@gmail.com" && decodedToken.email_verified === true) {
+        if (decodedToken.email === "andrewfmlemos@gmail.com" && decodedToken.email_verified === true) {
           // É o administrador autenticado, acesso liberado!
           return res.redirect(302, COURSES_EXTERNAL_URL);
         }
@@ -4437,29 +4473,5 @@ const handlePinterestFeed = async (req: any, res: any) => {
 
 app.all("/api/pinterest-feed", handlePinterestFeed);
 app.all("/api/pinterest-feed.csv", handlePinterestFeed);
-
-// Mount courses API v1 router
-app.use("/api/v1", apiV1Router);
-
-// General API error handling middleware
-app.use("/api", (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error(`[API Error] Encountered at ${req.method} ${req.originalUrl || req.path}:`, err);
-  return res.status(err.status || 500).json({
-    error: true,
-    message: err.message || "Erro interno do servidor.",
-    details: process.env.NODE_ENV !== "production" ? err.stack : undefined
-  });
-});
-
-// Run Database Seeder for RBAC on startup
-try {
-  bootstrapDatabase().then(() => {
-    console.log("Sistema de cursos: Database bootstrap/seeder executado com sucesso.");
-  }).catch((err) => {
-    console.error("Erro ao inicializar banco de dados de cursos (seeder):", err);
-  });
-} catch (err) {
-  console.error("Falha ao invocar bootstrap do banco de dados de cursos:", err);
-}
 
 export default app;

@@ -44,10 +44,9 @@ import {
   Eye, 
   EyeOff, 
   Grid,
-  Info,
-  BookOpen
+  Info
 } from 'lucide-react';
-import { EcomOrder, EcomCustomer, Course } from '../types';
+import { EcomOrder, EcomCustomer } from '../types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -97,7 +96,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 interface CustomerAreaProps {
-  onNavigateToView: (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'cursos-online', id?: string) => void;
+  onNavigateToView: (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm', id?: string) => void;
   initialEmail?: string;
 }
 
@@ -109,44 +108,7 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
   const [ordersLoading, setOrdersLoading] = useState(false);
   
   // Tab states
-  const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'cursos'>('orders');
-
-  // Load enrolled courses from "users" collection
-  const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
-  const [coursesLoading, setCoursesLoading] = useState(false);
-
-  useEffect(() => {
-    if (!currentUser) {
-      setEnrolledCourses([]);
-      return;
-    }
-    const fetchEnrolledCourses = async () => {
-      setCoursesLoading(true);
-      try {
-        // 1. Get the student user document from 'users' collection to check purchasedProducts
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        const userSnap = await getDoc(userDocRef);
-        let purchased: string[] = [];
-        if (userSnap.exists()) {
-          purchased = userSnap.data()?.purchasedProducts || [];
-        }
-
-        // 2. Fetch all courses from public REST API
-        const res = await fetch('/api/v1/courses');
-        if (res.ok) {
-          const allCourses = await res.json();
-          // Filter courses that are in student's purchasedProducts
-          const enrolled = allCourses.filter((c: any) => purchased.includes(c.id));
-          setEnrolledCourses(enrolled);
-        }
-      } catch (err) {
-        console.error('Erro ao buscar cursos matriculados:', err);
-      } finally {
-        setCoursesLoading(false);
-      }
-    };
-    fetchEnrolledCourses();
-  }, [currentUser]);
+  const [activeTab, setActiveTab] = useState<'orders' | 'profile'>('orders');
 
   // Login & Register Form fields
   const [isRegisterMode, setIsRegisterMode] = useState(false);
@@ -933,7 +895,7 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
         </div>
 
         {/* NAVIGATION TAB HEADERS */}
-        <div className="flex flex-wrap gap-2.5 border-b border-gray-200 pb-0.5">
+        <div className="flex gap-2.5 border-b border-gray-200 pb-0.5">
           <button
             onClick={() => setActiveTab('orders')}
             className={`px-5 py-3 text-xs font-bold tracking-wider uppercase transition-all flex items-center gap-2 border-b-2 outline-none cursor-pointer ${
@@ -955,17 +917,6 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
           >
             <MapPin className="w-4 h-4" />
             <span>Dados da Entrega</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('cursos')}
-            className={`px-5 py-3 text-xs font-bold tracking-wider uppercase transition-all flex items-center gap-2 border-b-2 outline-none cursor-pointer ${
-              activeTab === 'cursos' 
-                ? 'border-brand-wood text-brand-wood' 
-                : 'border-transparent text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span>Meus Cursos ({enrolledCourses.length})</span>
           </button>
         </div>
 
@@ -1374,63 +1325,6 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
                   )}
                 </button>
               </form>
-            </div>
-          )}
-
-          {/* COURSES TAB */}
-          {activeTab === 'cursos' && (
-            <div className="space-y-6">
-              {coursesLoading ? (
-                <div className="p-12 text-center bg-white border border-gray-150 rounded-3xl">
-                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-brand-wood border-t-transparent mx-auto mb-4" />
-                  <p className="text-xs text-gray-400 font-medium font-serif">Carregando seus cursos matriculados...</p>
-                </div>
-              ) : enrolledCourses.length === 0 ? (
-                <div className="p-12 text-center bg-white border border-gray-150 rounded-3xl space-y-4">
-                  <BookOpen className="w-12 h-12 text-gray-300 mx-auto" />
-                  <p className="text-sm text-gray-500 font-medium">Você ainda não possui nenhum curso matriculado.</p>
-                  <button
-                    onClick={() => onNavigateToView('cursos-online')}
-                    className="px-6 py-2.5 bg-brand-wood hover:bg-brand-clay text-white text-xs font-bold uppercase rounded-full transition-all tracking-wider cursor-pointer font-sans"
-                  >
-                    Ver Catálogo de Cursos
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {enrolledCourses.map((course: Course) => (
-                    <div key={course.id} className="bg-white border border-gray-150 rounded-3xl overflow-hidden flex flex-col md:flex-row h-full">
-                      {course.coverUrl && (
-                        <div className="md:w-1/3 h-48 md:h-full relative flex-shrink-0">
-                          <img
-                            src={course.coverUrl}
-                            alt={course.title}
-                            className="w-full h-full object-cover animate-fade-in"
-                            referrerPolicy="no-referrer"
-                          />
-                        </div>
-                      )}
-                      <div className="p-6 flex flex-col justify-between flex-grow">
-                        <div>
-                          <span className="text-[10px] font-bold tracking-wider text-brand-wood uppercase bg-brand-paper px-2 py-1 rounded font-sans">
-                            {course.category}
-                          </span>
-                          <h4 className="text-lg font-bold mt-2 font-serif text-brand-ink">{course.title}</h4>
-                          <p className="text-xs text-gray-500 mt-2 line-clamp-2 leading-relaxed font-sans">{course.description}</p>
-                        </div>
-                        <div className="mt-6">
-                          <button
-                            onClick={() => onNavigateToView('cursos-online')}
-                            className="w-full py-2.5 bg-brand-wood hover:bg-brand-clay text-white text-xs font-bold uppercase rounded-full transition-all tracking-wider cursor-pointer font-sans"
-                          >
-                            Acessar Curso
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </div>

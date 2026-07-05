@@ -63,7 +63,6 @@ import { PoliticaDevolucaoPage } from './components/PoliticaDevolucaoPage';
 import { PoliticaFretePage } from './components/PoliticaFretePage';
 import { TermosUsoPage } from './components/TermosUsoPage';
 import { PoliticaPrivacidadePage } from './components/PoliticaPrivacidadePage';
-import CoursesApp from './components/courses/CoursesApp';
 import { Product, Arquivo, EcomProduct, EcomOrder } from './types';
 
 // --- Helpers ---
@@ -147,7 +146,7 @@ export const ensureRobustUrl = (url: string) => {
 
 // --- Components ---
 
-const Navbar = ({ onNavigateToView }: { onNavigateToView: (view: any) => void }) => {
+const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
@@ -198,9 +197,14 @@ const Navbar = ({ onNavigateToView }: { onNavigateToView: (view: any) => void })
   }, []);
 
   const handleLinkClick = (e: React.MouseEvent, href: string) => {
-    if (href === '#online-courses' || href === '#cursos-online') {
+    if (href === '#online-courses') {
       e.preventDefault();
-      onNavigateToView('cursos-online');
+      const isAdmin = currentUser?.email === 'andrewfmlemos@gmail.com';
+      if (ENABLE_COURSES_PUBLIC_ACCESS || isAdmin) {
+        window.open(COURSES_EXTERNAL_URL, '_blank', 'noopener,noreferrer');
+      } else {
+        alert("Acesso restrito. A área de cursos online está em manutenção no momento e o acesso está reservado ao administrador.");
+      }
       setIsMobileMenuOpen(false);
       return;
     }
@@ -1272,7 +1276,7 @@ const AdminDashboard = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [arquivos, setArquivos] = useState<Arquivo[]>([]);
-  const [activeTab, setActiveTab] = useState<'products' | 'leads' | 'arquivos' | 'vendas' | 'blog' | 'cursos'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'leads' | 'arquivos' | 'vendas' | 'blog'>('products');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingArquivo, setIsAddingArquivo] = useState(false);
@@ -1426,20 +1430,7 @@ const AdminDashboard = () => {
       const response = await fetch(`/api/download-zip?token=${encodeURIComponent(token)}`);
       if (!response.ok) {
         const text = await response.text();
-        let errMsg = "Erro de autorização ou falha do servidor.";
-        try {
-          const parsed = JSON.parse(text);
-          if (parsed && parsed.error) {
-            errMsg = parsed.error;
-          } else if (parsed && parsed.message) {
-            errMsg = parsed.message;
-          } else {
-            errMsg = text;
-          }
-        } catch (e) {
-          if (text) errMsg = text;
-        }
-        throw new Error(errMsg);
+        throw new Error(text || "Erro de autorização ou falha do servidor.");
       }
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -1635,12 +1626,6 @@ const AdminDashboard = () => {
             >
               Blog ✍️
             </button>
-            <button 
-              onClick={() => setActiveTab('cursos')}
-              className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-wood", activeTab === 'cursos' ? "text-brand-wood border-b-2 border-brand-wood pb-1" : "text-gray-400")}
-            >
-              Cursos 🎓
-            </button>
           </div>
           <div className="flex gap-4 items-center">
             <button 
@@ -1763,12 +1748,6 @@ const AdminDashboard = () => {
                 className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'blog' ? "bg-brand-paper text-brand-wood font-bold" : "text-gray-600 hover:bg-gray-50")}
               >
                 <span>Blog ✍️</span>
-              </button>
-              <button 
-                onClick={() => { setActiveTab('cursos'); setIsMobileMenuOpen(false); }}
-                className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'cursos' ? "bg-brand-paper text-brand-wood font-bold" : "text-gray-600 hover:bg-gray-50")}
-              >
-                <span>Cursos 🎓</span>
               </button>
               <button 
                 onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
@@ -2401,8 +2380,6 @@ const AdminDashboard = () => {
             </div>
           ) : activeTab === 'vendas' ? (
             <AdminStore />
-          ) : activeTab === 'cursos' ? (
-            <CoursesApp adminOnlyTabMode={true} onNavigateToView={() => {}} />
           ) : (
             <AdminBlogTab />
           )}
@@ -2893,7 +2870,7 @@ const Chatbot = () => {
 };
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade' | 'cursos-online'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade'>('landing');
   const [currentBlogSlug, setCurrentBlogSlug] = useState<string>('');
   const [currentGallerySlug, setCurrentGallerySlug] = useState<string>('');
   const [currentVendasSlug, setCurrentVendasSlug] = useState<string>('');
@@ -2915,8 +2892,7 @@ export default function App() {
     if (path === '/cursos-online' || path === '/cursos-online/') {
       const isAdmin = currentUser?.email === 'andrewfmlemos@gmail.com';
       if (ENABLE_COURSES_PUBLIC_ACCESS || isAdmin) {
-        setCurrentView('cursos-online');
-        window.scrollTo({ top: 0 });
+        window.location.href = COURSES_EXTERNAL_URL;
       } else {
         alert("Acesso restrito. A área de cursos online está em manutenção no momento e o acesso está reservado ao administrador.");
         window.history.replaceState(null, '', '/');
@@ -3050,11 +3026,10 @@ export default function App() {
       alert("Acesso restrito. A plataforma de cursos online está em manutenção no momento e o acesso está reservado ao administrador.");
       window.history.replaceState(null, '', '/');
       setCurrentView('landing');
-    } else if (hash === '#cursos-online') {
+    } else if (hash === '#online-courses') {
       const isAdmin = currentUser?.email === 'andrewfmlemos@gmail.com';
       if (ENABLE_COURSES_PUBLIC_ACCESS || isAdmin) {
-        setCurrentView('cursos-online');
-        window.scrollTo({ top: 0 });
+        window.location.href = COURSES_EXTERNAL_URL;
       } else {
         alert("Acesso restrito. A área de cursos online está em manutenção no momento e o acesso está reservado ao administrador.");
         window.history.replaceState(null, '', '/');
@@ -3085,7 +3060,7 @@ export default function App() {
     };
   }, [handleHashAndPathChange]);
 
-  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade' | 'cursos-online', id?: string) => {
+  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade', id?: string) => {
     if (view === 'checkout-pay' && id) {
       window.location.hash = `#vendas/pay?id=${id}`;
     } else if (view === 'checkout-confirm' && id) {
@@ -3129,10 +3104,6 @@ export default function App() {
       window.history.pushState(null, '', '/politica-privacidade');
       setCurrentView('politica-privacidade');
       window.scrollTo({ top: 0 });
-    } else if (view === 'cursos-online') {
-      window.history.pushState(null, '', '/cursos-online');
-      setCurrentView('cursos-online');
-      window.scrollTo({ top: 0 });
     } else if (view === 'vendas') {
       if (
         window.location.pathname.startsWith('/galeria/') || 
@@ -3141,8 +3112,7 @@ export default function App() {
         window.location.pathname.startsWith('/politica-devolucao') ||
         window.location.pathname.startsWith('/politica-frete') ||
         window.location.pathname.startsWith('/termos-de-uso') ||
-        window.location.pathname.startsWith('/politica-privacidade') ||
-        window.location.pathname.startsWith('/cursos-online')
+        window.location.pathname.startsWith('/politica-privacidade')
       ) {
         window.history.pushState(null, '', '/');
       }
@@ -3170,11 +3140,9 @@ export default function App() {
   return (
     <div className="min-h-screen selection:bg-brand-wood selection:text-white font-sans text-brand-ink antialiased">
       <SEOManager currentView={currentView} blogSlug={currentBlogSlug} gallerySlug={currentGallerySlug} vendasSlug={currentVendasSlug} />
-      {currentView !== 'cursos-online' && <Navbar onNavigateToView={navigateToView} />}
+      <Navbar />
       
-      {currentView === 'cursos-online' ? (
-        <CoursesApp onNavigateToView={navigateToView} />
-      ) : currentView === 'blog' ? (
+      {currentView === 'blog' ? (
         <BlogPage onNavigateToView={navigateToView} />
       ) : currentView === 'blog-post' ? (
         <BlogPostPage slug={currentBlogSlug} onNavigateToView={navigateToView} />
@@ -3224,7 +3192,7 @@ export default function App() {
         </>
       )}
 
-      {currentView !== 'cursos-online' && <Footer />}
+      <Footer />
 
       {/* Modais de Checkout - Não alteram o corpo do site por baixo */}
       <AnimatePresence>

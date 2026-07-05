@@ -5,7 +5,7 @@ import { BlogPost, EcomProduct, Arquivo } from '../types';
 import { getWorkSlug } from './GalleryItemPage';
 
 interface SEOManagerProps {
-  currentView: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade' | 'cursos-online';
+  currentView: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade';
   blogSlug?: string;
   gallerySlug?: string;
   vendasSlug?: string;
@@ -170,12 +170,7 @@ export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug, g
     let description = 'Portfólio de Andrew Lemos, Artista Plástico e Escultor de madeiras nobres. Adquira peças exclusivas ou agende encomendas.';
     let imageUrl = 'https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb';
     let currentUrl = `${origin}/${window.location.hash || ''}`;
-    
-    if (currentView === 'cursos-online') {
-      title = 'Academia de Artes & Entalhe | Andrew Lemos';
-      description = 'Estude entalhe de madeira, escultura e desenho realista com o artista plástico Andrew Lemos. Conteúdo prático, suporte direto e plantão de dúvidas com IA MichelangelIA.';
-      currentUrl = `${origin}/cursos-online`;
-    } else if (currentView === 'galeria-item' && gallerySlug) {
+    if (currentView === 'galeria-item' && gallerySlug) {
       currentUrl = `${origin}/galeria/${gallerySlug}`;
     } else if (currentView === 'vendas-item' && vendasSlug) {
       currentUrl = `${origin}/vendas/${vendasSlug}`;
