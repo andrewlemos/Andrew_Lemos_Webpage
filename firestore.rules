@@ -1,28 +1,47 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // ============================================================================
     // Helper Functions
+    // ============================================================================
     function isAuthenticated() {
       return request.auth != null;
     }
 
     function isAdmin() {
-      return isAuthenticated() && request.auth.token.email == "andrewfmlemos@gmail.com";
+      return isAuthenticated() && request.auth.token != null && "email" in request.auth.token && request.auth.token.email == "andrewfmlemos@gmail.com";
     }
 
+    function isInstructor() {
+      return isAuthenticated() && (isAdmin() || (request.auth.token != null && "email" in request.auth.token && exists(/databases/$(database)/documents/lms_instructors/$(request.auth.token.email))));
+    }
+
+    // Dynamic verification for date/timestamp values
+    function isTimestampOrString(val) {
+      return val == null || val is timestamp || val is string;
+    }
+
+    // Base email check to prevent regex bugs on subdomains/special characters
+    function isValidEmail(email) {
+      return email is string && email.size() > 0 && email.size() < 150;
+    }
+
+    // ============================================================================
+    // Validation Schemas
+    // ============================================================================
     function isValidProduct(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() < 300 &&
              data.affiliateLink is string && data.affiliateLink.matches("^https?://.*") &&
              data.imageUrl is string && data.imageUrl.size() < 500 &&
-             data.createdAt is timestamp &&
+             (!("createdAt" in data) || isTimestampOrString(data.createdAt)) &&
              (!("category" in data) || (data.category is string && data.category.size() < 100)) &&
              (!("order" in data) || (data.order is int));
     }
 
     function isValidLead(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
-             data.createdAt is timestamp;
+             isValidEmail(data.email) &&
+             (!("createdAt" in data) || isTimestampOrString(data.createdAt));
     }
 
     function isValidArquivo(data) {
@@ -68,7 +87,7 @@ service cloud.firestore {
 
     function isValidEcomCustomer(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() < 300 &&
-             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             isValidEmail(data.email) &&
              data.phone is string && data.phone.size() >= 0 && data.phone.size() < 100 &&
              data.cpf is string && data.cpf.size() >= 0 && data.cpf.size() < 50 &&
              data.cep is string && data.cep.size() >= 0 && data.cep.size() < 20 &&
@@ -82,7 +101,7 @@ service cloud.firestore {
     function isValidReview(data) {
       return data.orderId is string && data.orderId.size() >= 0 && data.orderId.size() < 100 &&
              data.customerName is string && data.customerName.size() > 0 && data.customerName.size() < 200 &&
-             data.customerEmail is string && data.customerEmail.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             isValidEmail(data.customerEmail) &&
              data.comment is string && data.comment.size() > 0 && data.comment.size() < 2000 &&
              data.rating is int && data.rating >= 1 && data.rating <= 5 &&
              data.status is string && (data.status == "Pendente" || data.status == "Aprovada" || data.status == "Rejeitada") &&
@@ -96,55 +115,58 @@ service cloud.firestore {
              data.summary is string && data.summary.size() > 0 && data.summary.size() < 2000 &&
              data.imageUrl is string && data.imageUrl.size() < 1000 &&
              data.published is bool &&
-             (!("createdAt" in data) || data.createdAt == null || data.createdAt is timestamp) &&
-             (!("publishedAt" in data) || data.publishedAt == null || data.publishedAt is timestamp) &&
-             (!("updatedAt" in data) || data.updatedAt == null || data.updatedAt is timestamp);
+             (!("createdAt" in data) || isTimestampOrString(data.createdAt)) &&
+             (!("publishedAt" in data) || isTimestampOrString(data.publishedAt)) &&
+             (!("updatedAt" in data) || isTimestampOrString(data.updatedAt));
     }
 
-    // Default deny catch-all
+    // ============================================================================
+    // Catch-all Default Deny
+    // ============================================================================
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Existing Collections
+    // ============================================================================
+    // Collection Definitions & Rules
+    // ============================================================================
+
+    // 1. products
     match /products/{productId} {
       allow read: if true;
       allow create, update: if isAdmin() && isValidProduct(request.resource.data);
       allow delete: if isAdmin();
     }
 
+    // 2. leads
     match /leads/{leadId} {
       allow create: if isValidLead(request.resource.data);
       allow read, update, delete: if isAdmin();
     }
 
+    // 3. arquivos
     match /arquivos/{arquivoId} {
       allow read: if true;
       allow create, update: if isAdmin() && isValidArquivo(request.resource.data);
       allow delete: if isAdmin();
     }
 
-    // E-commerce Collections
+    // 4. ecom_products
     match /ecom_products/{productId} {
-      allow read: if true; // Public catalog viewing
+      allow read: if true;
       allow create, update: if isAdmin() && isValidEcomProduct(request.resource.data);
       allow delete: if isAdmin();
     }
 
+    // 5. ecom_orders
     match /ecom_orders/{orderId} {
-      // Create is allowed for checkout processes (guest or logged-in users)
       allow create: if isValidEcomOrder(request.resource.data);
-      
-      // Anyone can get a single order if they present its non-guessable secure identifier (ORD-xxxxxx), preventing race conditions/errors where the guest order document is not fully initialized.
       allow get: if true;
-                    
       allow list: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      
-      // Admin handles modifications (like setting status, tracking code). Webhook runs with bypass permissions.
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow update, delete: if isAdmin();
     }
 
+    // 6. ecom_customers
     match /ecom_customers/{userId} {
       allow get: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
       allow list: if isAdmin();
@@ -152,47 +174,139 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // 7. ecom_quotes
     match /ecom_quotes/{quoteId} {
       allow create: if true;
       allow read, update, delete: if isAdmin();
     }
 
+    // 8. ecom_settings
     match /ecom_settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
+    // 9. ecom_reviews
     match /ecom_reviews/{reviewId} {
       allow create: if isValidReview(request.resource.data) && request.resource.data.status == "Pendente";
       allow get, list: if isAdmin() || resource.data.status == "Aprovada";
       allow update, delete: if isAdmin();
     }
 
+    // 10. ecom_review_invitations
     match /ecom_review_invitations/{invitationId} {
-      allow get, list: if true;
+      allow get: if true;
+      allow list: if isAdmin();
       allow create: if isAdmin() && 
                     request.resource.data.customerName is string && request.resource.data.customerName.size() > 0 &&
-                    request.resource.data.customerEmail is string && request.resource.data.customerEmail.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+                    isValidEmail(request.resource.data.customerEmail) &&
                     request.resource.data.status is string && (request.resource.data.status == "Pendente" || request.resource.data.status == "Respondida");
       allow update: if (isAdmin() || (request.resource.data.status == "Respondida" && resource.data.status == "Pendente" && request.resource.data.customerName == resource.data.customerName && request.resource.data.customerEmail == resource.data.customerEmail));
       allow delete: if isAdmin();
     }
 
+    // 11. ecom_abandoned_carts
     match /ecom_abandoned_carts/{cartId} {
-      allow create, update: if request.resource.data.customerEmail is string && request.resource.data.customerEmail.size() > 0;
+      allow create, update: if isValidEmail(request.resource.data.customerEmail);
       allow get: if true;
       allow list, delete: if isAdmin();
     }
 
+    // 12. ecom_coupons
     match /ecom_coupons/{couponId} {
       allow get: if true;
       allow create, update, delete, list: if isAdmin();
     }
 
+    // 13. ecom_blog_posts
     match /ecom_blog_posts/{postId} {
       allow list, get: if resource.data.published == true || isAdmin();
       allow create, update: if isAdmin() && isValidBlogPost(request.resource.data);
       allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // LMS Collections
+    // ============================================================================
+
+    // 14. lms_courses
+    match /lms_courses/{courseId} {
+      allow read: if true;
+      allow write: if isAdmin() || isInstructor();
+    }
+
+    // 15. lms_modules
+    match /lms_modules/{moduleId} {
+      allow read: if true;
+      allow write: if isAdmin() || isInstructor();
+    }
+
+    // 16. lms_lessons
+    match /lms_lessons/{lessonId} {
+      allow read: if true;
+      allow write: if isAdmin() || isInstructor();
+    }
+
+    // 24. lms_instructors
+    match /lms_instructors/{instructorEmail} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (isAuthenticated() && request.auth.token != null && "email" in request.auth.token && request.auth.token.email == instructorEmail);
+      allow delete: if isAdmin();
+    }
+
+    // 17. lms_enrollments
+    match /lms_enrollments/{enrollmentId} {
+      allow read: if isAdmin() || isInstructor() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() || isAdmin();
+      allow update, delete: if isAdmin() || isInstructor();
+    }
+
+    // 18. lms_progress
+    match /lms_progress/{progressId} {
+      allow read: if isAdmin() || isInstructor() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || isInstructor() || (isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin() || isInstructor();
+    }
+
+    // 19. lms_comments
+    match /lms_comments/{commentId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid);
+    }
+
+    // 20. lms_messages
+    match /lms_messages/{messageId} {
+      allow read: if isAdmin() || isInstructor() || (isAuthenticated() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid));
+      allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+      allow update, delete: if isAdmin() || isInstructor();
+    }
+
+    // 21. lms_affiliates
+    match /lms_affiliates/{affiliateId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.auth.uid == affiliateId;
+      allow update: if isAdmin() || 
+                    (isAuthenticated() && request.auth.uid == affiliateId) ||
+                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks'])) ||
+                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['salesCount', 'totalCommission']));
+      allow delete: if isAdmin();
+    }
+
+    // 22. lms_certificates
+    match /lms_certificates/{certificateId} {
+      allow read: if true;
+      allow create: if isAuthenticated() || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // 23. lms_notifications
+    match /lms_notifications/{notificationId} {
+      allow read: if true;
+      allow create: if request.resource.data.title is string && request.resource.data.message is string;
+      allow update, delete: if isAdmin();
     }
   }
 }

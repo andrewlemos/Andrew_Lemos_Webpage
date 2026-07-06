@@ -1,0 +1,47 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.email == "andrewfmlemos@gmail.com";
+    }
+
+    // Fallback: Deny everything by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Public Course, Blog, and Product Images/Banners
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Certificates folder (publicly verifiable)
+    match /certificates/{certificateId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isAdmin();
+    }
+
+    // Private lesson materials (PDFs, templates, handouts)
+    match /lessons_materials/{materialId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Student Assignments and Homework upload
+    match /assignments/{studentId}/{assignmentId} {
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == studentId);
+      allow write: if isAuthenticated() && request.auth.uid == studentId;
+    }
+
+    // Private video assets
+    match /videos/{videoId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

@@ -5,7 +5,7 @@ import { BlogPost, EcomProduct, Arquivo } from '../types';
 import { getWorkSlug } from './GalleryItemPage';
 
 interface SEOManagerProps {
-  currentView: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade';
+  currentView: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade' | 'lms-portal';
   blogSlug?: string;
   gallerySlug?: string;
   vendasSlug?: string;

@@ -87,6 +87,7 @@ export const AdminStore = () => {
   const [editStock, setEditStock] = useState('');
   const [editShippingType, setEditShippingType] = useState<'automatic' | 'quote'>('automatic');
   const [editSlug, setEditSlug] = useState('');
+  const [editDigitalPdfUrl, setEditDigitalPdfUrl] = useState('');
 
   useEffect(() => {
     if (editingProduct) {
@@ -102,6 +103,7 @@ export const AdminStore = () => {
       setEditStock(editingProduct.stock !== undefined ? String(editingProduct.stock) : '');
       setEditShippingType(editingProduct.shippingType || 'automatic');
       setEditSlug(editingProduct.slug || '');
+      setEditDigitalPdfUrl(editingProduct.digitalPdfUrl || '');
     }
   }, [editingProduct]);
   
@@ -363,7 +365,8 @@ export const AdminStore = () => {
     length: '',
     stock: '',
     shippingType: 'automatic',
-    slug: ''
+    slug: '',
+    digitalPdfUrl: ''
   });
 
   // Load ecom products and orders from firestore in real time
@@ -480,6 +483,7 @@ export const AdminStore = () => {
         length: parseFloat(formData.length) || 18,
         stock: parseInt(formData.stock, 10) || 1,
         shippingType: formData.shippingType || 'automatic',
+        digitalPdfUrl: formData.digitalPdfUrl.trim(),
         createdAt: new Date().toISOString(),
         slug: formData.slug.trim() || slugify(formData.name)
       };
@@ -498,7 +502,8 @@ export const AdminStore = () => {
         length: '',
         stock: '',
         shippingType: 'automatic',
-        slug: ''
+        slug: '',
+        digitalPdfUrl: ''
       });
     } catch (err: any) {
       console.error("Failed to add ecom product:", err);
@@ -532,6 +537,7 @@ export const AdminStore = () => {
         length: parseFloat(editLength) || 18,
         stock: parseInt(editStock, 10) || 0,
         shippingType: editShippingType || 'automatic',
+        digitalPdfUrl: editDigitalPdfUrl.trim(),
         slug: editSlug.trim() || slugify(editName)
       };
 
@@ -995,6 +1001,7 @@ export const AdminStore = () => {
                       className="w-full bg-white border rounded-xl px-4 py-2.5 text-xs focus:ring-1 focus:ring-brand-wood outline-none font-bold"
                     >
                       <option value="Entalhe/Escultura em Madeira">Entalhe/Escultura em Madeira</option>
+                      <option value="Apostilas & E-books">Apostilas & E-books</option>
                       <option value="Pintura/Acabamento">Pintura/Acabamento</option>
                       <option value="Desenho">Desenho</option>
                       <option value="Pirografia">Pirografia</option>
@@ -1015,6 +1022,23 @@ export const AdminStore = () => {
                     </select>
                   </div>
                 </div>
+
+                {formData.category === 'Apostilas & E-books' && (
+                  <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2 mt-2">
+                    <span className="font-bold text-[10px] text-amber-900 uppercase tracking-wider block">Configuração de Infoproduto 📚</span>
+                    <label className="block text-gray-500 font-bold mb-0.5 text-[10px] uppercase tracking-wider">Link do PDF da Apostila (Visualizador Protegido)</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: https://drive.google.com/file/d/xxxx/preview" 
+                      value={formData.digitalPdfUrl}
+                      onChange={e => setFormData({...formData, digitalPdfUrl: e.target.value})}
+                      className="w-full bg-white border rounded-xl px-4 py-2.5 text-xs focus:ring-1 focus:ring-brand-wood outline-none font-mono text-brand-ink"
+                    />
+                    <p className="text-[9px] text-amber-800 leading-relaxed">
+                      Insira o link de visualização (ex: link do Google Drive configurado como "Qualquer pessoa com o link pode ler"). No portal do cliente, esta apostila será aberta de forma blindada contra downloads e cópias, com marca d'água do e-mail do comprador.
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-3 flex flex-col justify-between">
                   <div>
@@ -2476,6 +2500,7 @@ export const AdminStore = () => {
                         className="w-full bg-slate-50 border border-gray-200/80 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood font-bold text-gray-700"
                       >
                         <option value="Entalhe/Escultura em Madeira">Entalhe/Escultura em Madeira</option>
+                        <option value="Apostilas & E-books">Apostilas & E-books</option>
                         <option value="Pintura/Acabamento">Pintura/Acabamento</option>
                         <option value="Desenho">Desenho</option>
                         <option value="Pirografia">Pirografia</option>
@@ -2496,6 +2521,23 @@ export const AdminStore = () => {
                       </select>
                     </div>
                   </div>
+
+                  {editCategory === 'Apostilas & E-books' && (
+                    <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2 text-left">
+                      <span className="font-bold text-[9.5px] text-amber-900 uppercase tracking-wider block">Configuração de Infoproduto 📚</span>
+                      <label className="block text-gray-500 font-bold mb-0.5 text-[9px] uppercase tracking-wider">Link do PDF da Apostila (Visualizador Protegido)</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ex: https://drive.google.com/file/d/xxxx/preview" 
+                        value={editDigitalPdfUrl}
+                        onChange={e => setEditDigitalPdfUrl(e.target.value)}
+                        className="w-full bg-slate-50 border border-gray-200/80 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-brand-wood font-mono text-[11px] text-brand-ink"
+                      />
+                      <p className="text-[9px] text-amber-800 leading-relaxed">
+                        Insira o link de visualização (ex: link do Google Drive configurado como "Qualquer pessoa com o link pode ler"). No portal do cliente, esta apostila será aberta de forma blindada contra downloads e cópias, com marca d'água do e-mail do comprador.
+                      </p>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[10px]">Imagens Múltiplas (Uma URL por linha)</label>

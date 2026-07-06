@@ -166,6 +166,18 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
   const [couponError, setCouponError] = useState('');
   const [couponSuccess, setCouponSuccess] = useState('');
 
+  // Handle category auto-filtering via custom events
+  useEffect(() => {
+    const handleFilterCategory = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      if (customEvt.detail) {
+        setSelectedCategory(customEvt.detail);
+      }
+    };
+    window.addEventListener('filter-store-category', handleFilterCategory);
+    return () => window.removeEventListener('filter-store-category', handleFilterCategory);
+  }, []);
+
   // Load customer profile if logged in
   useEffect(() => {
     if (!userId) {
@@ -445,6 +457,18 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
     window.dispatchEvent(new Event('cart-updated'));
   }, [cart]);
 
+  const isCartOnlyDigital = cart.length > 0 && cart.every(item => item.category === 'Apostilas & E-books' || item.digitalPdfUrl);
+
+  useEffect(() => {
+    if (isCartOnlyDigital) {
+      setShippingServices([
+        { id: 'digital', name: 'Entrega Digital Imediata', price: 0, delivery_time: 'Imediato', company_name: 'Acesso Digital' }
+      ]);
+      setSelectedShipping({ id: 'digital', name: 'Entrega Digital Imediata', price: 0, delivery_time: 'Imediato', company_name: 'Acesso Digital' });
+      setShippingError('');
+    }
+  }, [isCartOnlyDigital]);
+
   // Fetch e-commerce products in real time
   useEffect(() => {
     const q = query(collection(db, 'ecom_products'), orderBy('createdAt', 'desc'));
@@ -453,10 +477,13 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
         id: doc.id,
         ...doc.data()
       })) as EcomProduct[];
-      setProducts(prods);
+      
+      // Filter out 'Apostilas & E-books' products from physical Storefront
+      const physicalProds = prods.filter(p => p.category !== 'Apostilas & E-books' && !p.digitalPdfUrl);
+      setProducts(physicalProds);
 
-      if (prods.length > 0) {
-        const highestPrice = Math.max(...prods.map(p => p.price));
+      if (physicalProds.length > 0) {
+        const highestPrice = Math.max(...physicalProds.map(p => p.price));
         setMaxPriceInDb(highestPrice);
         setPriceRange(highestPrice); // initialize to highest
       }
@@ -976,7 +1003,7 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                 <p className="text-gray-400 text-sm max-w-sm">Tente redefinir o controle de buscas para preços maiores, outra palavra chave, ou limpe a categoria selecionada.</p>
               </div>
             ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-5xl mx-auto">
                 {filteredProducts.map((p) => {
                   const isOutOfStock = p.stock <= 0;
                   const firstImg = p.images && p.images.length > 0 ? ensureRobustUrl(p.images[0]) : '';
@@ -988,17 +1015,17 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                       {/* Product Card Image Wrapper */}
                       <div 
                         onClick={() => onNavigateToView('vendas-item', getProductSlug(p))}
-                        className="relative aspect-square bg-[#FAFAFA] flex items-center justify-center p-6 min-h-[250px] overflow-hidden cursor-pointer"
+                        className="relative bg-stone-50 w-full overflow-hidden cursor-pointer rounded-t-3xl"
                       >
                         {firstImg ? (
                           <img 
                             src={firstImg} 
                             alt={p.name} 
-                            className="w-full h-full object-contain max-h-[90%] group-hover:scale-105 transition-transform duration-500"
+                            className="w-full h-auto block group-hover:scale-105 transition-transform duration-500 rounded-t-3xl"
                             referrerPolicy="no-referrer"
                           />
                         ) : (
-                          <div className="text-xs text-gray-400 font-mono">Sem Imagem</div>
+                          <div className="text-xs text-stone-400 font-mono flex items-center justify-center w-full h-48">Sem Imagem</div>
                         )}
                         
                         {/* Sold out / Stock Indicator Badges */}
@@ -1162,93 +1189,104 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
 
                       {/* Shipping calculation fields inside checkout Step 1 */}
                       <div className="pt-6 mt-6 border-t border-brand-wood/10 space-y-4">
-                        <div className="flex items-center gap-1.5">
-                          <Truck className="w-4 h-4 text-brand-wood" />
-                          <h4 className="text-sm font-bold text-brand-ink uppercase tracking-wide">
-                            {cart.some(item => item.shippingType === 'quote') ? 'Cotação de Frete Especial' : 'Cálculo de Frete (MelhorEnvio)'}
-                          </h4>
-                        </div>
-
-                        {cart.some(item => item.shippingType === 'quote') && (
-                          <div className="bg-amber-50 border border-amber-200/50 rounded-xl p-3 text-[11px] text-amber-900 leading-relaxed font-sans">
-                            🚚 <strong>Carrinho especial:</strong> O seu carrinho possui obra(s) com <strong>frete sob consulta</strong>. Para esses itens, o frete total de todos os produtos do pedido será cotado detalhadamente pelo mestre após o envio do formulário.
+                        {isCartOnlyDigital ? (
+                          <div className="bg-amber-50/70 border border-amber-200 p-4 rounded-2xl space-y-2 text-left">
+                            <span className="font-bold text-[10px] text-amber-900 uppercase tracking-wider block">Entrega Segura Digital 🛡️</span>
+                            <p className="text-xs text-amber-800 leading-relaxed font-sans">
+                              Este carrinho contém exclusivamente <strong>Apostilas & E-books Digitais</strong>. O envio é 100% gratuito e o acesso será liberado instantaneamente na sua Área do Aluno assim que o pagamento for confirmado.
+                            </p>
                           </div>
-                        )}
-
-                        <div className="flex gap-2">
-                          <input 
-                            type="text" 
-                            placeholder="CEP (Ex: 13630-000)" 
-                            value={shippingCep}
-                            maxLength={9}
-                            onChange={(e) => {
-                              const v = e.target.value.replace(/\D/g, "");
-                              setShippingCep(v);
-                              if (v.length === 8) {
-                                calculateShippingCost(v);
-                              }
-                            }}
-                            className="bg-brand-paper/50 flex-grow border border-brand-wood/10 px-4 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-brand-wood outline-none"
-                          />
-                          <button 
-                            onClick={() => calculateShippingCost(shippingCep)}
-                            disabled={loadingShipping}
-                            className="bg-brand-wood text-white px-5 rounded-xl text-xs font-bold hover:bg-brand-clay transition-all disabled:opacity-50 cursor-pointer"
-                          >
-                            {loadingShipping ? 'Calculando...' : (cart.some(item => item.shippingType === 'quote') ? 'Ok' : 'Consultar')}
-                          </button>
-                        </div>
-
-                        {cart.some(item => item.shippingType === 'quote') && selectedShipping && (
-                          <div className="flex items-center justify-between p-3 border border-emerald-100 rounded-xl bg-emerald-50/50 text-[11px]">
-                            <div className="flex items-center gap-2">
-                              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                              <div>
-                                <div className="font-bold text-emerald-900">Orçamento Solicitado para este CEP</div>
-                                <div className="text-[9px] text-emerald-700">Calculado para o CEP {shippingCep}</div>
-                              </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <Truck className="w-4 h-4 text-brand-wood" />
+                              <h4 className="text-sm font-bold text-brand-ink uppercase tracking-wide">
+                                {cart.some(item => item.shippingType === 'quote') ? 'Cotação de Frete Especial' : 'Cálculo de Frete (MelhorEnvio)'}
+                              </h4>
                             </div>
-                            <span className="font-bold text-emerald-800 text-[10px] bg-emerald-100/70 px-2 py-0.5 rounded shrink-0 uppercase tracking-wider font-mono">Sob Consulta</span>
-                          </div>
-                        )}
 
-                        {shippingError && (
-                          <p className="text-xs text-rose-500 font-semibold flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            {shippingError}
-                          </p>
-                        )}
+                            {cart.some(item => item.shippingType === 'quote') && (
+                              <div className="bg-amber-50 border border-amber-200/50 rounded-xl p-3 text-[11px] text-amber-900 leading-relaxed font-sans">
+                                🚚 <strong>Carrinho especial:</strong> O seu carrinho possui obra(s) com <strong>frete sob consulta</strong>. Para esses itens, o frete total de todos os produtos do pedido será cotado detalhadamente pelo mestre após o envio do formulário.
+                              </div>
+                            )}
 
-                        {shippingServices.length > 0 && (
-                          <div className="space-y-2 max-h-[140px] overflow-y-auto">
-                            {shippingServices.map((srv) => (
-                              <label 
-                                key={srv.id} 
-                                className={`flex items-center justify-between p-3 border rounded-xl cursor-pointer text-xs transition-colors ${
-                                  selectedShipping?.id === srv.id 
-                                    ? 'border-brand-wood bg-brand-paper/30' 
-                                    : 'border-gray-100 hover:border-gray-200 bg-white'
-                                }`}
+                            <div className="flex gap-2">
+                              <input 
+                                type="text" 
+                                placeholder="CEP (Ex: 13630-000)" 
+                                value={shippingCep}
+                                maxLength={9}
+                                onChange={(e) => {
+                                  const v = e.target.value.replace(/\D/g, "");
+                                  setShippingCep(v);
+                                  if (v.length === 8) {
+                                    calculateShippingCost(v);
+                                  }
+                                }}
+                                className="bg-brand-paper/50 flex-grow border border-brand-wood/10 px-4 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-brand-wood outline-none"
+                              />
+                              <button 
+                                onClick={() => calculateShippingCost(shippingCep)}
+                                disabled={loadingShipping}
+                                className="bg-brand-wood text-white px-5 rounded-xl text-xs font-bold hover:bg-brand-clay transition-all disabled:opacity-50 cursor-pointer"
                               >
-                                <div className="flex items-center gap-2.5">
-                                  <input 
-                                    type="radio" 
-                                    name="shipping" 
-                                    checked={selectedShipping?.id === srv.id} 
-                                    onChange={() => setSelectedShipping(srv)} 
-                                    className="accent-brand-wood cursor-pointer"
-                                  />
+                                {loadingShipping ? 'Calculando...' : (cart.some(item => item.shippingType === 'quote') ? 'Ok' : 'Consultar')}
+                              </button>
+                            </div>
+
+                            {cart.some(item => item.shippingType === 'quote') && selectedShipping && (
+                              <div className="flex items-center justify-between p-3 border border-emerald-100 rounded-xl bg-emerald-50/50 text-[11px]">
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                                   <div>
-                                    <div className="font-bold text-brand-ink">{srv.name}</div>
-                                    <div className="text-[10px] text-gray-400">Prazo: {srv.delivery_time} dias úteis</div>
+                                    <div className="font-bold text-emerald-900">Orçamento Solicitado para este CEP</div>
+                                    <div className="text-[9px] text-emerald-700">Calculado para o CEP {shippingCep}</div>
                                   </div>
                                 </div>
-                                <span className="font-bold text-brand-wood text-sm">
-                                  R$ {srv.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </span>
-                              </label>
-                            ))}
-                          </div>
+                                <span className="font-bold text-emerald-800 text-[10px] bg-emerald-100/70 px-2 py-0.5 rounded shrink-0 uppercase tracking-wider font-mono">Sob Consulta</span>
+                              </div>
+                            )}
+
+                            {shippingError && (
+                              <p className="text-xs text-rose-500 font-semibold flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3" />
+                                {shippingError}
+                              </p>
+                            )}
+
+                            {shippingServices.length > 0 && (
+                              <div className="space-y-2 max-h-[140px] overflow-y-auto">
+                                {shippingServices.map((srv) => (
+                                  <label 
+                                    key={srv.id} 
+                                    className={`flex items-center justify-between p-3 border rounded-xl cursor-pointer text-xs transition-colors ${
+                                      selectedShipping?.id === srv.id 
+                                        ? 'border-brand-wood bg-brand-paper/30' 
+                                        : 'border-gray-100 hover:border-gray-200 bg-white'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <input 
+                                        type="radio" 
+                                        name="shipping" 
+                                        checked={selectedShipping?.id === srv.id} 
+                                        onChange={() => setSelectedShipping(srv)} 
+                                        className="accent-brand-wood cursor-pointer"
+                                      />
+                                      <div>
+                                        <div className="font-bold text-brand-ink">{srv.name}</div>
+                                        <div className="text-[10px] text-gray-400">Prazo: {srv.delivery_time} dias úteis</div>
+                                      </div>
+                                    </div>
+                                    <span className="font-bold text-brand-wood text-sm">
+                                      R$ {srv.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

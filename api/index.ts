@@ -83,6 +83,12 @@ try {
   } else {
     adminDb = getFirestore(appInstance);
   }
+  try {
+    adminDb.settings({ ignoreUndefinedProperties: true });
+    console.log("Firebase Admin: Configured ignoreUndefinedProperties = true");
+  } catch (settingsErr) {
+    console.warn("Could not apply ignoreUndefinedProperties setting:", settingsErr);
+  }
   console.log("Firebase Admin SDK successfully ready for database:", firebaseConfig.firestoreDatabaseId || "(default)");
 } catch (error) {
   console.error("Warning: Failed to initialize Firebase Admin SDK in backend:", error);
@@ -425,7 +431,7 @@ app.post("/api/send-contact", async (req, res) => {
 
 // API Route for secure Chatbot (Gemini)
 app.post("/api/chat", async (req, res) => {
-  const { message, history } = req.body;
+  const { message, history, systemInstruction } = req.body;
   if (!message) {
     return res.status(400).json({ error: "Message is required" });
   }
@@ -437,12 +443,18 @@ app.post("/api/chat", async (req, res) => {
       return res.status(500).json({ error: "Chave do Gemini não configurada no servidor." });
     }
 
+    const defaultInstruction = "Você é MichelangelIA, o mentor virtual oficial da Academia de Arte Andrew Lemos, apaixonado por arte, entalhe de madeira, pintura e criatividade, batendo papo de forma descontraída com outros artistas e entusiastas.\n\nDIRETRIZ DE GÊNERO MANDATÓRIA (CRÍTICA):\n- Você deve SEMPRE se referir a si mesmo no gênero MASCULINO (ex: 'seu mentor virtual', 'o mentor', 'seu parceiro', 'apaixonado', 'curioso', 'focado', 'atento', 'pronto').\n- NUNCA utilize termos femininos ou se refira a si mesmo no feminino (ex: NUNCA diga 'sua mentora', 'sua parceira' ou 'apaixonada'). Esta é uma regra absoluta.\n\nInstruções cruciais de estilo e formatação (Siga ISSO rigorosamente):\n1. Formato de Chat Natural (Estilo Discord/WhatsApp/Telegram):\n- NUNCA use marcadores de markdown complexos (como títulos '#', '##', '###', listas com hifens '-', estrelinhas '*', ou números '1.'). NUNCA.\n- Escreva de forma totalmente corrida e fluida, como se estivesse conversando em uma sala de bate-papo.\n- Divida suas explicações em pequenos parágrafos fáceis de ler (no máximo 2 ou 3 linhas por bloco), separados por quebras de linha duplas, simulando o envio de mensagens sucessivas em um app de conversa.\n- Evite blocos gigantes de texto. Seja extremamente direto, mas com alta densidade de informação prática.\n\n2. Voz, Tom e Atitude:\n- Escreva como uma pessoa real, experiente, apaixonado pela arte e profundamente prático explicando algo de forma humana, casual e inteligente.\n- Esqueça qualquer tom professoral clássico, tom artificial de assistente de IA, voz corporativa ou estilo de documentação. Nada de roteiros decorados, nada de introduções desnecessárias ou conclusões teatrais.\n- Use pequenas informalidades naturais do dia a dia (exemplos: 'Sério,', 'cara,', 'passar raiva', 'na boa', 'dor de cabeça', 'dá um trabalhinho', 'vai por mim').\n- Crie frases de tamanhos variados para simular um ritmo de fala natural, incluindo pausas e interrupções realistas.\n- É expressamente PROIBIDO usar termos dramáticos ou medievais como 'nobre alma', 'meu jovem aprendiz', 'sagrado ofício', 'que a beleza guie tuas mãos', 'bela criação', etc.\n\n3. Conteúdo focado e direto:\n- Comece diretamente com a informação útil, sem preâmbulos.\n- RESPONDA EXCLUSIVAMENTE sobre artes visuais (desenho, pintura, modelagem, pirografia e principalmente entalhe em madeira). Se perguntarem sobre qualquer outra coisa, diga de forma curta, descontraída e direta que você só manja de arte e quer voltar ao assunto.";
+
+    const finalInstruction = systemInstruction
+      ? `${systemInstruction}\n\nDIRETRIZ DE GÊNERO MANDATÓRIA (CRÍTICA):\n- Você é MichelangelIA, o mentor virtual oficial da Academia de Arte Andrew Lemos.\n- Você deve SEMPRE se referir a si mesmo no gênero MASCULINO (ex: 'seu mentor virtual', 'o mentor', 'seu parceiro', 'apaixonado', 'curioso', 'focado', 'atento', 'pronto').\n- NUNCA utilize termos femininos ou se refira a si mesmo no feminino (ex: NUNCA diga 'sua mentora', 'sua parceira' ou 'apaixonada'). Esta é uma regra absoluta.`
+      : defaultInstruction;
+
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-flash-latest",
       contents: [...(history || []), { role: 'user', parts: [{ text: message }] }],
       config: {
-        systemInstruction: "Você é MichelangelIA, apaixonada por arte, entalhe de madeira, pintura e criatividade, batendo papo de forma descontraída com outros artistas e entusiastas.\n\nInstruções cruciais de estilo e formatação (Siga ISSO rigorosamente):\n1. Formato de Chat Natural (Estilo Discord/WhatsApp/Telegram):\n- NUNCA use marcadores de markdown complexos (como títulos '#', '##', '###', listas com hifens '-', estrelinhas '*', ou números '1.'). NUNCA.\n- Escreva de forma totalmente corrida e fluida, como se estivesse conversando em uma sala de bate-papo.\n- Divida suas explicações em pequenos parágrafos fáceis de ler (no máximo 2 ou 3 linhas por bloco), separados por quebras de linha duplas, simulando o envio de mensagens sucessivas em um app de conversa.\n- Evite blocos gigantes de texto. Seja extremamente direto, mas com alta densidade de informação prática.\n\n2. Voz, Tom e Atitude:\n- Escreva como uma pessoa real, experiente, apaixonada pela arte e profundamente prática explicando algo de forma humana, casual e inteligente.\n- Esqueça qualquer tom professoral clássico, tom artificial de assistente de IA, voz corporativa ou estilo de documentação. Nada de roteiros decorados, nada de introduções desnecessárias ou conclusões teatrais.\n- Use pequenas informalidades naturais do dia a dia (exemplos: 'Sério,', 'cara,', 'passar raiva', 'na boa', 'dor de cabeça', 'dá um trabalhinho', 'vai por mim').\n- Crie frases de tamanhos variados para simular um ritmo de fala natural, incluindo pausas e interrupções realistas.\n- É expressamente PROIBIDO usar termos dramáticos ou medievais como 'nobre alma', 'meu jovem aprendiz', 'sagrado ofício', 'que a beleza guie tuas mãos', 'bela criação', etc.\n\n3. Conteúdo focado e direto:\n- Comece diretamente com a informação útil, sem preâmbulos.\n- RESPONDA EXCLUSIVAMENTE sobre artes visuais (desenho, pintura, modelagem, pirografia e principalmente entalhe em madeira). Se perguntarem sobre qualquer outra coisa, diga de forma curta, descontraída e direta que você só manja de arte e quer voltar ao assunto."
+        systemInstruction: finalInstruction
       }
     });
 
@@ -958,6 +970,95 @@ async function sendOrderPlacementEmail(orderId: string, orderData: any, baseUrl:
     console.log(`[E-mail Pedido] E-mail de confirmação de recebimento enviado com sucesso para ${customerInfo.email}`);
   } catch (err) {
     console.error(`[E-mail Pedido] Falha ao enviar e-mail de confirmação do pedido ${orderId}:`, err);
+  }
+}
+
+async function sendDigitalAccessEmail(
+  userEmail: string,
+  userName: string,
+  tempPassword: string,
+  items: any[],
+  orderId: string,
+  baseUrl: string
+) {
+  try {
+    const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
+    const SMTP_PASS = process.env.SMTP_PASS;
+    if (!SMTP_PASS) return;
+
+    const transporter = getSmtpTransporter();
+    const lmsLink = `${baseUrl}/#lms-portal`;
+
+    const itemsList = items.map((itm: any) => `<li><b>${itm.name}</b></li>`).join("");
+
+    let credentialsSection = "";
+    if (tempPassword) {
+      credentialsSection = `
+        <div style="background-color: #f0f7f4; border-left: 4px solid #2e7d32; border-radius: 8px; padding: 15px; margin: 25px 0;">
+          <h3 style="margin-top: 0; color: #2e7d32; font-family: Georgia, serif;">Seus Dados de Acesso Imediato:</h3>
+          <p style="margin: 5px 0; font-size: 15px;"><b>Link de Login:</b> <a href="${lmsLink}" style="color: #2e7d32; font-weight: bold; text-decoration: underline;">Clique aqui para acessar a Área do Aluno</a></p>
+          <p style="margin: 5px 0; font-size: 15px;"><b>Seu E-mail (Login):</b> <code>${userEmail}</code></p>
+          <p style="margin: 5px 0; font-size: 15px;"><b>Sua Senha de Acesso (Hash gerado):</b> <code style="background-color: #e8f5e9; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: #1b5e20;">${tempPassword}</code></p>
+          <p style="margin: 15px 0 0 0; font-size: 12px; color: #666; font-style: italic;">⚠️ Por segurança, ao realizar seu primeiro login, você será solicitado a alterar esta senha temporária por uma de sua preferência.</p>
+        </div>
+      `;
+    } else {
+      credentialsSection = `
+        <div style="background-color: #f7f5f0; border-left: 4px solid #8d6e63; border-radius: 8px; padding: 15px; margin: 25px 0;">
+          <h3 style="margin-top: 0; color: #8d6e63; font-family: Georgia, serif;">Seus Dados de Acesso Imediato:</h3>
+          <p style="margin: 5px 0; font-size: 15px;"><b>Link de Login:</b> <a href="${lmsLink}" style="color: #8d6e63; font-weight: bold; text-decoration: underline;">Clique aqui para acessar a Área do Aluno</a></p>
+          <p style="margin: 5px 0; font-size: 15px;">Como você já possui cadastro em nossa plataforma, utilize seu e-mail e senha de preferência já configurados anteriormente para realizar o login.</p>
+        </div>
+      `;
+    }
+
+    const emailHtml = `
+      <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e0dfdb; background-color: #FAF9F5; color: #2C2C2A; border-radius: 12px;">
+        <div style="text-align: center; border-bottom: 2px solid #8d6e63; padding-bottom: 16px; margin-bottom: 24px;">
+          <h1 style="color: #4e342e; margin: 0; font-size: 24px; font-weight: normal; font-family: Georgia, serif;">Academia de Artes Andrew Lemos</h1>
+          <p style="margin: 4px 0 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: #8d6e63;">Seu Acesso Digital está Liberado!</p>
+        </div>
+        
+        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px;">Olá, <b>${userName}</b>!</p>
+        
+        <p style="font-size: 15px; line-height: 1.6; margin-bottom: 20px;">
+          Seu pagamento para o pedido <b>${orderId}</b> foi confirmado e o seu acesso aos seguintes infoprodutos digitais foi liberado com sucesso:
+        </p>
+
+        <div style="background-color: #f4f3ef; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6;">
+            ${itemsList}
+          </ul>
+        </div>
+
+        ${credentialsSection}
+
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${lmsLink}" style="background-color: #8d6e63; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; border-radius: 6px; font-size: 15px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            Acessar Área do Aluno Agora
+          </a>
+        </div>
+
+        <p style="font-size: 12px; color: #666; text-align: center; margin-top: 25px; border-top: 1px solid #e0dfdb; padding-top: 15px;">
+          Caso precise de qualquer suporte ou tenha dúvidas, sinta-se à vontade para responder a este e-mail.<br>
+          <b>Ateliê Andrew Lemos — Pirassununga, SP</b>
+        </p>
+      </div>
+    `;
+
+    await transporter.sendMail({
+      from: `"Academia de Artes" <${SMTP_USER}>`,
+      to: userEmail,
+      replyTo: SMTP_USER,
+      subject: tempPassword 
+        ? `🎓 Seus dados de acesso à Academia de Artes - Pedido ${orderId}`
+        : `🎓 Seu acesso aos infoprodutos digitais foi liberado! - Pedido ${orderId}`,
+      html: emailHtml
+    });
+
+    console.log(`[E-mail Acesso] E-mail de credenciais/acesso digital enviado com sucesso para ${userEmail}`);
+  } catch (err) {
+    console.error(`[E-mail Acesso] Falha ao enviar e-mail de acesso digital para o pedido ${orderId}:`, err);
   }
 }
 
@@ -2101,10 +2202,156 @@ async function updateOrderStatusInDatabase(orderId: string, status: string, paym
   if (result.transitionToPaid) {
     console.log(`[Webhook MercadoPago] Transição legítima para 'Pago' efetuada para o pedido ${orderId}. Iniciando processamento de envio.`);
 
-    // Send payment email confirmation
+    let authenticatedUserId = result.orderData?.userId || 'guest';
+    let isNewUserCreated = false;
+    let generatedTempPassword = "";
+
+    const customerInfo = result.orderData?.customerInfo || {};
+    const userEmail = (customerInfo.email || '').trim().toLowerCase();
+    const userName = customerInfo.name || userEmail.split('@')[0] || 'Aluno';
+
+    // 1. Resolve or create user account in Firebase Auth
+    if (userEmail) {
+      try {
+        let firebaseUser = null;
+        try {
+          firebaseUser = await admin.auth().getUserByEmail(userEmail);
+          console.log(`[Auto-UserCheck] Usuário já cadastrado no Firebase Auth com UID: ${firebaseUser.uid}`);
+          authenticatedUserId = firebaseUser.uid;
+        } catch (authErr: any) {
+          if (authErr.code === 'auth/user-not-found') {
+            // Create user with backend-generated hash password
+            generatedTempPassword = "Membro-" + Math.floor(100000 + Math.random() * 900000);
+            console.log(`[Auto-UserCreation] Usuário ${userEmail} não localizado. Criando nova conta com senha temporária: ${generatedTempPassword}...`);
+            const createdUser = await admin.auth().createUser({
+              email: userEmail,
+              password: generatedTempPassword,
+              displayName: userName
+            });
+            authenticatedUserId = createdUser.uid;
+            isNewUserCreated = true;
+
+            // Save first-access flag and temp password in student profile
+            await adminDb.collection("lms_student_profiles").doc(authenticatedUserId).set({
+              userId: authenticatedUserId,
+              email: userEmail,
+              needsPasswordChange: true,
+              tempPassword: generatedTempPassword,
+              createdAt: new Date().toISOString()
+            });
+
+            console.log(`[Auto-UserCreation] Conta criada e perfil do aluno registrado para o UID: ${authenticatedUserId}`);
+          } else {
+            console.error("[Auto-UserCheck Error] Erro inesperado ao consultar e-mail no Firebase Auth:", authErr);
+          }
+        }
+
+        // If the order was guest-checkout, assign it to the resolved/created Firebase user UID
+        if (result.orderData?.userId === 'guest' || !result.orderData?.userId) {
+          await adminDb.collection("ecom_orders").doc(orderId).update({
+            userId: authenticatedUserId
+          });
+          console.log(`[Auto-OrderUpdate] Vinculando pedido #${orderId} do tipo guest ao UID: ${authenticatedUserId}`);
+          if (result.orderData) {
+            result.orderData.userId = authenticatedUserId;
+          }
+        }
+      } catch (userSetupErr) {
+        console.error("[Auto-UserSetup Error] Falha crítica no pré-processamento do usuário aluno:", userSetupErr);
+      }
+    }
+
+    // 2. Check and create course enrollment if needed
+    try {
+      const userId = authenticatedUserId;
+
+      for (const item of result.items) {
+        if (item.productId) {
+          const courseSnap = await adminDb.collection("lms_courses").doc(item.productId).get();
+          if (courseSnap.exists) {
+            const courseData = courseSnap.data();
+            const courseTitle = courseData?.title || item.name;
+            const accessibilityType = courseData?.accessibilityType || 'free';
+            const accessDurationDays = courseData?.accessDurationDays || 0;
+
+            // Generate enrollment ID
+            const enrollmentId = "ENR-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+
+            // Construct enrollment object
+            const enroll: any = {
+              id: enrollmentId,
+              userId: userId,
+              userEmail: userEmail,
+              userName: userName,
+              courseId: item.productId,
+              courseTitle: courseTitle,
+              status: 'active',
+              accessType: accessibilityType,
+              createdAt: new Date().toISOString()
+            };
+
+            if (accessibilityType === 'temporary' && accessDurationDays) {
+              const expireDate = new Date();
+              expireDate.setDate(expireDate.getDate() + accessDurationDays);
+              enroll.expiresAt = expireDate.toISOString();
+            }
+
+            await adminDb.collection("lms_enrollments").doc(enrollmentId).set(enroll);
+            console.log(`[Auto-Enrollment] Aluno ${userEmail} matriculado com sucesso no curso '${courseTitle}' (ID: ${item.productId}) via Pedido #${orderId}`);
+
+            // Create notification inside lms_notifications for real-time delivery
+            try {
+              const notificationId = "NOT-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+              await adminDb.collection("lms_notifications").doc(notificationId).set({
+                id: notificationId,
+                userId: userId,
+                title: "Matrícula Confirmada! 🎓",
+                message: `Sua vaga no curso "${courseTitle}" está disponível na sua Área do Aluno. Bons estudos!`,
+                read: false,
+                createdAt: new Date().toISOString()
+              });
+            } catch (notifErr) {
+              console.warn("Failed to create user auto-enrollment notification:", notifErr);
+            }
+          }
+        }
+      }
+    } catch (enrollErr) {
+      console.error("[Auto-Enrollment Error] Falha ao processar matrículas para o pedido:", enrollErr);
+    }
+
+    // 3. Split items into Digital (Infoproducts: Courses, eBooks/Apostilas) vs Physical
+    const digitalItems = (result.items || []).filter((item: any) => {
+      const isCourse = item.productId?.startsWith('course') || item.productId?.startsWith('LMS') || item.productId?.startsWith('lms');
+      const isEbook = item.productId?.startsWith('ebook') || item.category === 'Apostilas & E-books' || 
+                      (item.name && (item.name.toLowerCase().includes("manual") || item.name.toLowerCase().includes("apostila") || item.name.toLowerCase().includes("e-book")));
+      return isCourse || isEbook;
+    });
+
+    const physicalItems = (result.items || []).filter((item: any) => {
+      const isCourse = item.productId?.startsWith('course') || item.productId?.startsWith('LMS') || item.productId?.startsWith('lms');
+      const isEbook = item.productId?.startsWith('ebook') || item.category === 'Apostilas & E-books' || 
+                      (item.name && (item.name.toLowerCase().includes("manual") || item.name.toLowerCase().includes("apostila") || item.name.toLowerCase().includes("e-book")));
+      return !isCourse && !isEbook;
+    });
+
     const finalBaseUrl = baseUrl || "http://localhost:3000";
-    sendOrderPaymentConfirmationEmail(orderId, result.orderData, finalBaseUrl).catch(e => console.error("Async sending of payment confirmation failed:", e));
-    notifyAdminPaymentApproved(orderId, result.orderData).catch(e => console.error("Async sending of admin payment notification failed:", e));
+
+    // 4. Dispatch specialized email notifications
+    if (digitalItems.length > 0) {
+      // Send credentials/access link for infoproducts
+      sendDigitalAccessEmail(userEmail, userName, generatedTempPassword, digitalItems, orderId, finalBaseUrl)
+        .catch(e => console.error("Async sending of digital access email failed:", e));
+    }
+
+    if (physicalItems.length > 0) {
+      // Send standard confirmation of physical shipment prep
+      sendOrderPaymentConfirmationEmail(orderId, result.orderData, finalBaseUrl)
+        .catch(e => console.error("Async sending of physical payment confirmation failed:", e));
+    }
+
+    notifyAdminPaymentApproved(orderId, result.orderData)
+      .catch(e => console.error("Async sending of admin payment notification failed:", e));
 
     // Handle coupon and cart recovery updates upon legitimate payment receipt
     if (result.orderData?.couponCode) {
@@ -3395,6 +3642,217 @@ app.post("/api/vendas/order/refund", checkAdminAuth, async (req, res) => {
   } catch (err: any) {
     console.error("Failed executing refund endpoint:", err);
     res.status(500).json({ error: "Erro interno do servidor ao registrar estorno: " + err.message });
+  }
+});
+
+// Endpoint to create/reset the fictional student login for testing
+app.post("/api/test/create-fictional-student", async (req, res) => {
+  try {
+    if (!adminDb) {
+      return res.status(500).json({ error: "Banco de dados indisponível." });
+    }
+
+    const testEmail = "alunoteste@academia.com";
+    const testPassword = "senha123";
+    const testName = "Aluno de Teste (Fictício)";
+
+    let uid = "";
+    // 1. Create or retrieve the test user from Firebase Auth
+    try {
+      const userRecord = await admin.auth().getUserByEmail(testEmail);
+      uid = userRecord.uid;
+      // Reset password & name to make sure it is exactly as expected
+      await admin.auth().updateUser(uid, {
+        password: testPassword,
+        displayName: testName
+      });
+      console.log(`[Test Student] Usuário existente localizado e atualizado. UID: ${uid}`);
+    } catch (authErr: any) {
+      if (authErr.code === "auth/user-not-found") {
+        const createdRecord = await admin.auth().createUser({
+          email: testEmail,
+          password: testPassword,
+          displayName: testName,
+          emailVerified: true
+        });
+        uid = createdRecord.uid;
+        console.log(`[Test Student] Novo usuário de teste criado com sucesso. UID: ${uid}`);
+      } else {
+        throw authErr;
+      }
+    }
+
+    // 2. Ensure we have at least one course in lms_courses
+    const coursesSnap = await adminDb.collection("lms_courses").get();
+    let coursesList: any[] = [];
+    coursesSnap.forEach(d => {
+      coursesList.push({ id: d.id, ...d.data() });
+    });
+
+    if (coursesList.length === 0) {
+      const defaultCourse = {
+        name: "Curso Completo de Entalhe em Madeira de Lei",
+        description: "Aprenda as principais técnicas de entalhe com o mestre Andrew Lemos.",
+        image: "https://lh3.googleusercontent.com/d/1BEZWW-yg4axZKVhIo_Y9GlRgeGQ3xeqi",
+        duration: "40 horas",
+        modulesCount: 5,
+        lessonsCount: 24,
+        createdAt: new Date().toISOString()
+      };
+      const courseId = "course-manual-pratico";
+      await adminDb.collection("lms_courses").doc(courseId).set(defaultCourse);
+      coursesList.push({ id: courseId, ...defaultCourse });
+      console.log("[Test Student] Curso padrão criado no lms_courses.");
+    }
+
+    // 3. Ensure the specific digital product (Manual de Introdução ao Entalhe em Madeira) is seeded in ecom_products
+    const manualEbookId = "product-manual-introducao-entalhe";
+    const manualEbookDoc = {
+      name: "Manual de Introdução ao Entalhe em Madeira",
+      description: "O guia prático ilustrado com o passo a passo completo das técnicas fundamentais do entalhe artístico em madeira de lei.",
+      category: "Apostilas & E-books",
+      price: 49.90,
+      stock: 999999,
+      images: ["https://lh3.googleusercontent.com/d/1BEZWW-yg4axZKVhIo_Y9GlRgeGQ3xeqi"],
+      digitalPdfUrl: "https://drive.googleusercontent.com/file/d/1BEZWW-yg4axZKVhIo_Y9GlRgeGQ3xeqi/view",
+      slug: "manual-de-introducao-ao-entalhe-em-madeira",
+      createdAt: new Date().toISOString()
+    };
+    await adminDb.collection("ecom_products").doc(manualEbookId).set(manualEbookDoc);
+    console.log("[Test Student] Ebook 'Manual de Introdução ao Entalhe em Madeira' garantido.");
+
+    // Load other products to potentially add them
+    const productsSnap = await adminDb.collection("ecom_products").get();
+    let productsList: any[] = [];
+    productsSnap.forEach(d => {
+      productsList.push({ id: d.id, ...d.data() });
+    });
+
+    // 4. Upsert Customer Profile in ecom_customers
+    const customerDoc = {
+      name: testName,
+      email: testEmail,
+      phone: "(11) 99999-9999",
+      cpf: "11122233344",
+      cep: "01001000",
+      street: "Praça da Sé",
+      number: "100",
+      complement: "Bloco A",
+      neighborhood: "Sé",
+      city: "São Paulo",
+      state: "SP",
+      createdAt: new Date().toISOString()
+    };
+    await adminDb.collection("ecom_customers").doc(uid).set(customerDoc);
+
+    // 5. Upsert Student Profile in lms_student_profiles (with needsPasswordChange set to false)
+    const profileDoc = {
+      userId: uid,
+      email: testEmail,
+      needsPasswordChange: false,
+      createdAt: new Date().toISOString()
+    };
+    await adminDb.collection("lms_student_profiles").doc(uid).set(profileDoc);
+
+    // 6. Create Enrollments in lms_enrollments for all courses
+    for (const course of coursesList) {
+      const enrollId = `enroll-${uid}-${course.id || "default"}`;
+      const cId = course.id || "default-course-id";
+      const cName = course.title || course.name || "Curso Completo de Entalhe em Madeira de Lei";
+      const cTitle = course.title || course.name || "Curso Completo de Entalhe em Madeira de Lei";
+      const cImage = course.imageUrl || course.image || "https://lh3.googleusercontent.com/d/1BEZWW-yg4axZKVhIo_Y9GlRgeGQ3xeqi";
+      
+      await adminDb.collection("lms_enrollments").doc(enrollId).set({
+        userId: uid,
+        courseId: cId,
+        courseName: cName,
+        courseTitle: cTitle,
+        courseImage: cImage,
+        enrolledAt: new Date().toISOString(),
+        status: "active",
+        progress: 0
+      });
+    }
+
+    // 7. Delete previous test orders to avoid bloating, and create a fresh paid order
+    const oldOrdersSnap = await adminDb.collection("ecom_orders").where("userId", "==", uid).get();
+    const batch = adminDb.batch();
+    oldOrdersSnap.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+
+    // Construct purchased order items ensuring the manual ebook is included
+    const orderItems: any[] = [
+      {
+        id: manualEbookId,
+        productId: manualEbookId,
+        name: manualEbookDoc.name,
+        price: manualEbookDoc.price,
+        category: manualEbookDoc.category,
+        quantity: 1,
+        images: manualEbookDoc.images,
+        digitalPdfUrl: manualEbookDoc.digitalPdfUrl
+      }
+    ];
+
+    // Add another product from ecom_products if available
+    const extraProd = productsList.find(p => p.id !== manualEbookId);
+    if (extraProd) {
+      orderItems.push({
+        id: extraProd.id,
+        productId: extraProd.id,
+        name: extraProd.name,
+        price: extraProd.price || 49.90,
+        category: extraProd.category || "Apostilas & E-books",
+        quantity: 1,
+        images: extraProd.images || []
+      });
+    }
+
+    const orderId = `order-test-${Date.now()}`;
+    const orderDoc = {
+      userId: uid,
+      customerInfo: customerDoc,
+      items: orderItems,
+      status: "Pago", // exact status for AdminStore and LMSPortal
+      paymentMethod: "MercadoPago",
+      shippingMethod: "Acesso Digital Imediato",
+      shippingCost: 0,
+      total: orderItems.reduce((acc, p) => acc + p.price, 0),
+      subtotal: orderItems.reduce((acc, p) => acc + p.price, 0),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    await adminDb.collection("ecom_orders").doc(orderId).set(orderDoc);
+
+    // 8. Register as Affiliate in lms_affiliates
+    const affiliateDoc = {
+      id: uid,
+      email: testEmail,
+      name: testName,
+      code: "ALUNOTESTE",
+      commissionPercent: 15,
+      clicks: 142,
+      salesCount: 3,
+      totalCommission: 35.75,
+      status: "Ativo",
+      createdAt: new Date().toISOString()
+    };
+    await adminDb.collection("lms_affiliates").doc(uid).set(affiliateDoc);
+
+    return res.json({
+      success: true,
+      message: "Aluno fictício criado com sucesso!",
+      credentials: {
+        email: testEmail,
+        password: testPassword
+      }
+    });
+
+  } catch (err: any) {
+    console.error("Erro ao criar aluno fictício de teste:", err);
+    res.status(500).json({ error: "Erro interno no servidor ao criar conta de teste: " + err.message });
   }
 });
 

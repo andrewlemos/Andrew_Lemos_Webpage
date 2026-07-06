@@ -63,7 +63,9 @@ import { PoliticaDevolucaoPage } from './components/PoliticaDevolucaoPage';
 import { PoliticaFretePage } from './components/PoliticaFretePage';
 import { TermosUsoPage } from './components/TermosUsoPage';
 import { PoliticaPrivacidadePage } from './components/PoliticaPrivacidadePage';
-import { Product, Arquivo, EcomProduct, EcomOrder } from './types';
+import { LMSPortal } from './components/LMSPortal';
+import { AdminLMS } from './components/AdminLMS';
+import { Product, Arquivo, EcomProduct, EcomOrder, InstructorProfile } from './types';
 
 // --- Helpers ---
 export const ensureRobustUrl = (url: string) => {
@@ -151,6 +153,7 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [isInstructor, setIsInstructor] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -158,6 +161,25 @@ const Navbar = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setIsInstructor(false);
+      return;
+    }
+    const email = currentUser.email || '';
+    if (email === 'andrewfmlemos@gmail.com') {
+      setIsInstructor(true);
+      return;
+    }
+    
+    const unsub = onSnapshot(doc(db, 'lms_instructors', email), (snap) => {
+      setIsInstructor(snap.exists());
+    }, (err) => {
+      console.warn("[Navbar] Error checking instructor:", err);
+    });
+    return () => unsub();
+  }, [currentUser]);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
@@ -199,12 +221,11 @@ const Navbar = () => {
   const handleLinkClick = (e: React.MouseEvent, href: string) => {
     if (href === '#online-courses') {
       e.preventDefault();
-      const isAdmin = currentUser?.email === 'andrewfmlemos@gmail.com';
-      if (ENABLE_COURSES_PUBLIC_ACCESS || isAdmin) {
-        window.open(COURSES_EXTERNAL_URL, '_blank', 'noopener,noreferrer');
-      } else {
-        alert("Acesso restrito. A área de cursos online está em manutenção no momento e o acesso está reservado ao administrador.");
+      if (window.location.pathname !== '/') {
+        window.history.pushState(null, '', '/');
+        window.dispatchEvent(new Event('popstate'));
       }
+      window.location.hash = '#online-courses';
       setIsMobileMenuOpen(false);
       return;
     }
@@ -306,6 +327,18 @@ const Navbar = () => {
             </a>
           ))}
 
+          {isInstructor && (
+            <button 
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('open-admin-panel'));
+              }}
+              className="bg-brand-wood hover:bg-brand-clay text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-sm transition-all duration-300 ml-2"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Painel do Instrutor 🛠️</span>
+            </button>
+          )}
+
           {/* Icone do Carrinho de Compras */}
           <button
             onClick={handleCartClick}
@@ -366,6 +399,19 @@ const Navbar = () => {
                 {link.name}
               </a>
             ))}
+
+            {isInstructor && (
+              <button 
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  window.dispatchEvent(new CustomEvent('open-admin-panel'));
+                }}
+                className="w-full bg-brand-wood hover:bg-brand-clay text-white font-bold py-3.5 rounded-xl text-sm flex items-center justify-center gap-1.5 cursor-pointer shadow-sm mt-2 transition-all"
+              >
+                <Lock className="w-4 h-4" />
+                <span>Painel do Instrutor 🛠️</span>
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1079,63 +1125,70 @@ const ClassesSection = () => {
   );
 };
 
-const OnlineCoursesSection = () => {
-  const courses = [
-    {
-      title: 'Introdução ao Desenvolvimento de Games',
-      platform: 'Udemy',
-      price: 'Ver Preço na Udemy',
-      img: '/arquivos/Capa_curso_udemy_game.jpeg',
-      link: 'https://www.udemy.com/course/introducao-ao-desenvolvimento-de-games/?referralCode=1D6F524BD5BE69910E5D',
-      desc: 'Dê seus primeiros passos no mundo da criação de jogos digitais com este curso introdutório completo.'
-    }
-  ];
-
+const OnlineCoursesSection = ({ onNavigateToView }: { onNavigateToView: (view: any) => void }) => {
   return (
     <section id="online-courses" className="section-padding bg-white">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-serif mb-4">Cursos Online</h2>
-          <p className="text-gray-500">Aprenda no seu ritmo, de qualquer lugar do mundo.</p>
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="text-center mb-12">
+          <span className="text-[11px] font-bold tracking-widest text-brand-wood uppercase block mb-2">E-Learning & Mentoria</span>
+          <h2 className="text-4xl md:text-5xl font-serif mb-4 text-brand-ink">Academia de Artes Andrew Lemos</h2>
+          <p className="text-gray-500 text-sm md:text-base max-w-xl mx-auto leading-relaxed">
+            Est estude entalhe em madeira, escultura e desenho clássico com suporte direto do mestre. Cursos completos com apostila blindada, controle de progresso e assistência por Inteligência Artificial (MichelangelIA).
+          </p>
         </div>
 
-        <div className="flex justify-center">
-          {courses.map((course, idx) => (
-            <motion.div 
-              key={idx}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="max-w-md bg-brand-paper rounded-3xl overflow-hidden border border-brand-wood/5 flex flex-col h-full hover:shadow-xl transition-all"
-            >
-              <div className="relative aspect-video">
-                <img 
-                  src={ensureRobustUrl(course.img)} 
-                  alt={course.title} 
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-brand-wood shadow-sm">
-                  {course.platform}
-                </div>
-              </div>
-              <div className="p-8 flex flex-col flex-grow">
-                <h3 className="text-xl font-serif mb-3 leading-tight">{course.title}</h3>
-                <p className="text-gray-500 text-sm mb-6 flex-grow">{course.desc}</p>
-                <div className="flex items-center justify-between mt-auto pt-6 border-t border-brand-wood/10">
-                  <span className="text-sm font-bold text-brand-ink">{course.price}</span>
-                  <a 
-                    href={course.link} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-brand-wood font-medium flex items-center gap-2 hover:gap-3 transition-all"
-                  >
-                    Acessar Curso <ExternalLink className="w-4 h-4" />
-                  </a>
-                </div>
-              </div>
-            </motion.div>
-          ))}
+        <div className="max-w-3xl mx-auto bg-brand-paper rounded-[2.5rem] overflow-hidden border border-brand-wood/10 p-8 md:p-12 shadow-xs relative flex flex-col md:flex-row items-center gap-8">
+          <div className="w-full md:w-2/5 aspect-video rounded-3xl overflow-hidden bg-brand-paper border shadow-xs">
+            <img 
+              src="/arquivos/Capa_curso_udemy_game.jpeg" 
+              alt="Capa Academia de Artes" 
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+          <div className="w-full md:w-3/5 space-y-4 text-center md:text-left">
+            <div className="inline-block bg-brand-wood/10 text-brand-wood text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">
+              Matrículas Abertas 🎓
+            </div>
+            <h3 className="text-2xl md:text-3xl font-serif text-brand-ink leading-tight">Mestrado Digital em Escultura & Entalhe</h3>
+            <p className="text-gray-500 text-xs leading-relaxed">
+              Assista a videoaulas com resolução HD, acesse materiais complementares protegidos, submeta fotos do seu progresso na madeira para avaliação individual do instrutor e tire dúvidas em tempo real.
+            </p>
+            <div className="pt-2">
+              <button 
+                onClick={() => onNavigateToView('lms-portal')}
+                className="w-full md:w-auto px-8 py-3.5 bg-brand-wood hover:bg-brand-ink text-white font-bold rounded-xl transition-all shadow-sm text-xs tracking-wider uppercase cursor-pointer"
+              >
+                Explorar Catálogo de Cursos
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Bloco de Apostilas e Manuais */}
+        <div className="mt-12 max-w-3xl mx-auto bg-amber-50/40 rounded-[2rem] border border-brand-wood/20 p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xs">
+          <div className="space-y-2 text-center sm:text-left">
+            <div className="inline-block bg-brand-clay/15 text-brand-clay text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full mb-1">
+              Material Impresso & Digital 📚
+            </div>
+            <h3 className="text-xl font-serif text-brand-ink font-bold">Apostilas Didáticas & Manuais de Entalhe</h3>
+            <p className="text-gray-500 text-xs leading-relaxed max-w-xl">
+              Prefere guias físicos impressos ou e-books passo a passo? Adquira as apostilas técnicas oficiais de Andrew Lemos diretamente pela nossa loja virtual.
+            </p>
+          </div>
+          <button 
+            onClick={() => {
+              window.location.hash = '#vendas';
+              setTimeout(() => {
+                const elem = document.getElementById('vendas');
+                if (elem) elem.scrollIntoView({ behavior: 'smooth' });
+                window.dispatchEvent(new CustomEvent('filter-store-category', { detail: 'Apostilas & E-books' }));
+              }, 120);
+            }}
+            className="w-full sm:w-auto px-6 py-3.5 bg-[#8B5A2B] hover:bg-brand-ink text-white font-bold text-xs rounded-xl uppercase tracking-wider transition-all shadow-sm hover:scale-[1.02] cursor-pointer whitespace-nowrap"
+          >
+            Comprar Apostilas ✨
+          </button>
         </div>
       </div>
     </section>
@@ -1276,7 +1329,7 @@ const AdminDashboard = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [arquivos, setArquivos] = useState<Arquivo[]>([]);
-  const [activeTab, setActiveTab] = useState<'products' | 'leads' | 'arquivos' | 'vendas' | 'blog'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'leads' | 'arquivos' | 'vendas' | 'blog' | 'lms'>('products');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingArquivo, setIsAddingArquivo] = useState(false);
@@ -1296,18 +1349,65 @@ const AdminDashboard = () => {
   });
   const [expandedDetails, setExpandedDetails] = useState<{[key: string]: boolean}>({});
 
+  // Listen to open-admin-panel custom event
   useEffect(() => {
+    const handleOpenAdmin = () => setIsOpen(true);
+    window.addEventListener('open-admin-panel', handleOpenAdmin);
+    return () => window.removeEventListener('open-admin-panel', handleOpenAdmin);
+  }, []);
+
+  const [isInstructor, setIsInstructor] = useState(false);
+  const [isMasterAdmin, setIsMasterAdmin] = useState(false);
+
+  useEffect(() => {
+    let unsubInstructor: (() => void) | null = null;
     const unsubscribe = onAuthStateChanged(auth, (u) => {
-      // Apenas a conta andrewfmlemos@gmail.com gerencia produtos com sucesso
-      if (u && u.email === 'andrewfmlemos@gmail.com') {
-        setUser(u);
-        setIsOpen(true);
+      if (unsubInstructor) {
+        unsubInstructor();
+        unsubInstructor = null;
+      }
+
+      if (u) {
+        const email = u.email || "";
+        if (email === 'andrewfmlemos@gmail.com') {
+          setUser(u);
+          setIsMasterAdmin(true);
+          setIsInstructor(true);
+          setIsOpen(true);
+        } else {
+          // Check if registered as instructor in firestore lms_instructors
+          unsubInstructor = onSnapshot(doc(db, 'lms_instructors', email), (docSnap) => {
+            if (docSnap.exists()) {
+              setUser(u);
+              setIsMasterAdmin(false);
+              setIsInstructor(true);
+              setIsOpen(true);
+              setActiveTab('lms'); // Default to LMS since they don't have access to other tabs
+            } else {
+              setUser(null);
+              setIsMasterAdmin(false);
+              setIsInstructor(false);
+              setIsOpen(false);
+            }
+          }, (err) => {
+            console.error("Erro ao verificar instrutor:", err);
+            setUser(null);
+            setIsMasterAdmin(false);
+            setIsInstructor(false);
+            setIsOpen(false);
+          });
+        }
       } else {
         setUser(null);
+        setIsMasterAdmin(false);
+        setIsInstructor(false);
         setIsOpen(false);
       }
     });
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (unsubInstructor) unsubInstructor();
+    };
   }, []);
 
   useEffect(() => {
@@ -1596,35 +1696,45 @@ const AdminDashboard = () => {
         {/* Header - Desktop view (hidden on small screens) */}
         <div className="hidden md:flex p-6 border-b justify-between items-center bg-brand-paper">
           <div className="flex gap-6">
+            {isMasterAdmin && (
+              <>
+                <button 
+                  onClick={() => setActiveTab('products')}
+                  className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-ink", activeTab === 'products' ? "text-brand-ink border-b-2 border-brand-ink pb-1" : "text-gray-400")}
+                >
+                  Produtos
+                </button>
+                <button 
+                  onClick={() => setActiveTab('arquivos')}
+                  className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-ink", activeTab === 'arquivos' ? "text-brand-ink border-b-2 border-brand-ink pb-1" : "text-gray-400")}
+                >
+                  Galeria ({arquivos.length})
+                </button>
+                <button 
+                  onClick={() => setActiveTab('leads')}
+                  className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-ink", activeTab === 'leads' ? "text-brand-ink border-b-2 border-brand-ink pb-1" : "text-gray-400")}
+                >
+                  Leads ({leads.length})
+                </button>
+                <button 
+                  onClick={() => setActiveTab('vendas')}
+                  className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-wood", activeTab === 'vendas' ? "text-brand-wood border-b-2 border-brand-wood pb-1" : "text-gray-400")}
+                >
+                  E-commerce 🛍️
+                </button>
+                <button 
+                  onClick={() => setActiveTab('blog')}
+                  className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-wood", activeTab === 'blog' ? "text-brand-wood border-b-2 border-brand-wood pb-1" : "text-gray-400")}
+                >
+                  Blog ✍️
+                </button>
+              </>
+            )}
             <button 
-              onClick={() => setActiveTab('products')}
-              className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-ink", activeTab === 'products' ? "text-brand-ink border-b-2 border-brand-ink pb-1" : "text-gray-400")}
+              onClick={() => setActiveTab('lms')}
+              className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-wood", activeTab === 'lms' ? "text-brand-wood border-b-2 border-brand-wood pb-1" : "text-gray-400")}
             >
-              Produtos
-            </button>
-            <button 
-              onClick={() => setActiveTab('arquivos')}
-              className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-ink", activeTab === 'arquivos' ? "text-brand-ink border-b-2 border-brand-ink pb-1" : "text-gray-400")}
-            >
-              Galeria ({arquivos.length})
-            </button>
-            <button 
-              onClick={() => setActiveTab('leads')}
-              className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-ink", activeTab === 'leads' ? "text-brand-ink border-b-2 border-brand-ink pb-1" : "text-gray-400")}
-            >
-              Leads ({leads.length})
-            </button>
-            <button 
-              onClick={() => setActiveTab('vendas')}
-              className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-wood", activeTab === 'vendas' ? "text-brand-wood border-b-2 border-brand-wood pb-1" : "text-gray-400")}
-            >
-              E-commerce 🛍️
-            </button>
-            <button 
-              onClick={() => setActiveTab('blog')}
-              className={cn("text-2xl font-serif cursor-pointer transition-colors hover:text-brand-wood", activeTab === 'blog' ? "text-brand-wood border-b-2 border-brand-wood pb-1" : "text-gray-400")}
-            >
-              Blog ✍️
+              Cursos & LMS 🎓
             </button>
           </div>
           <div className="flex gap-4 items-center">
@@ -1675,6 +1785,7 @@ const AdminDashboard = () => {
                 {activeTab === 'leads' && 'Leads'}
                 {activeTab === 'vendas' && 'E-commerce 🛍️'}
                 {activeTab === 'blog' && 'Blog ✍️'}
+                {activeTab === 'lms' && 'Cursos & LMS 🎓'}
               </span>
             </div>
           </div>
@@ -1716,38 +1827,48 @@ const AdminDashboard = () => {
               transition={{ duration: 0.15 }}
               className="md:hidden absolute top-[57px] left-0 w-full bg-white border-b shadow-lg z-40 flex flex-col divide-y text-xs font-medium"
             >
+              {isMasterAdmin && (
+                <>
+                  <button 
+                    onClick={() => { setActiveTab('products'); setIsMobileMenuOpen(false); }}
+                    className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'products' ? "bg-brand-paper text-brand-ink font-bold" : "text-gray-600 hover:bg-gray-50")}
+                  >
+                    <span>Produtos</span>
+                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{products.length}</span>
+                  </button>
+                  <button 
+                    onClick={() => { setActiveTab('arquivos'); setIsMobileMenuOpen(false); }}
+                    className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'arquivos' ? "bg-brand-paper text-brand-ink font-bold" : "text-gray-600 hover:bg-gray-50")}
+                  >
+                    <span>Galeria</span>
+                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{arquivos.length}</span>
+                  </button>
+                  <button 
+                    onClick={() => { setActiveTab('leads'); setIsMobileMenuOpen(false); }}
+                    className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'leads' ? "bg-brand-paper text-brand-ink font-bold" : "text-gray-600 hover:bg-gray-50")}
+                  >
+                    <span>Leads</span>
+                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{leads.length}</span>
+                  </button>
+                  <button 
+                    onClick={() => { setActiveTab('vendas'); setIsMobileMenuOpen(false); }}
+                    className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'vendas' ? "bg-brand-paper text-brand-wood font-bold" : "text-gray-600 hover:bg-gray-50")}
+                  >
+                    <span>E-commerce 🛍️</span>
+                  </button>
+                  <button 
+                    onClick={() => { setActiveTab('blog'); setIsMobileMenuOpen(false); }}
+                    className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'blog' ? "bg-brand-paper text-brand-wood font-bold" : "text-gray-600 hover:bg-gray-50")}
+                  >
+                    <span>Blog ✍️</span>
+                  </button>
+                </>
+              )}
               <button 
-                onClick={() => { setActiveTab('products'); setIsMobileMenuOpen(false); }}
-                className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'products' ? "bg-brand-paper text-brand-ink font-bold" : "text-gray-600 hover:bg-gray-50")}
+                onClick={() => { setActiveTab('lms'); setIsMobileMenuOpen(false); }}
+                className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'lms' ? "bg-brand-paper text-brand-wood font-bold" : "text-gray-600 hover:bg-gray-50")}
               >
-                <span>Produtos</span>
-                <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{products.length}</span>
-              </button>
-              <button 
-                onClick={() => { setActiveTab('arquivos'); setIsMobileMenuOpen(false); }}
-                className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'arquivos' ? "bg-brand-paper text-brand-ink font-bold" : "text-gray-600 hover:bg-gray-50")}
-              >
-                <span>Galeria</span>
-                <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{arquivos.length}</span>
-              </button>
-              <button 
-                onClick={() => { setActiveTab('leads'); setIsMobileMenuOpen(false); }}
-                className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'leads' ? "bg-brand-paper text-brand-ink font-bold" : "text-gray-600 hover:bg-gray-50")}
-              >
-                <span>Leads</span>
-                <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{leads.length}</span>
-              </button>
-              <button 
-                onClick={() => { setActiveTab('vendas'); setIsMobileMenuOpen(false); }}
-                className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'vendas' ? "bg-brand-paper text-brand-wood font-bold" : "text-gray-600 hover:bg-gray-50")}
-              >
-                <span>E-commerce 🛍️</span>
-              </button>
-              <button 
-                onClick={() => { setActiveTab('blog'); setIsMobileMenuOpen(false); }}
-                className={cn("p-3.5 text-left w-full cursor-pointer transition-colors flex justify-between items-center", activeTab === 'blog' ? "bg-brand-paper text-brand-wood font-bold" : "text-gray-600 hover:bg-gray-50")}
-              >
-                <span>Blog ✍️</span>
+                <span>Cursos & LMS 🎓</span>
               </button>
               <button 
                 onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
@@ -2380,6 +2501,8 @@ const AdminDashboard = () => {
             </div>
           ) : activeTab === 'vendas' ? (
             <AdminStore />
+          ) : activeTab === 'lms' ? (
+            <AdminLMS currentUser={user} isMasterAdmin={isMasterAdmin} />
           ) : (
             <AdminBlogTab />
           )}
@@ -2565,7 +2688,7 @@ const Contact = () => {
             {status && (
               <div className={cn(
                 "p-4 rounded-2xl text-sm leading-relaxed", 
-                status.type === 'success' ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+                status.type === 'success' ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-red-50 text-red-800 border border-red-200"
               )}>
                 {status.text}
               </div>
@@ -2719,7 +2842,7 @@ const Publications = () => {
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string }[]>([
-    { role: 'model', text: 'Olá! Sou a MichelangelIA, sua assistente para tirar dúvidas sobre arte, entalhe em madeira, pintura e criatividade. Como posso te ajudar na sua jornada artística hoje?' }
+    { role: 'model', text: 'Olá! Sou o MichelangelIA, seu mentor virtual para tirar dúvidas sobre arte, entalhe em madeira, pintura e criatividade. Como posso te ajudar na sua jornada artística hoje?' }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -2775,7 +2898,7 @@ const Chatbot = () => {
           model: "gemini-flash-latest",
           contents: [...chatHistory, { role: 'user', parts: [{ text: userMessage }] }],
           config: {
-            systemInstruction: "Você é MichelangelIA, apaixonada por arte, entalhe de madeira, pintura e criatividade, batendo papo de forma descontraída com outros artistas e entusiastas.\n\nInstruções cruciais de estilo e formatação (Siga ISSO rigorosamente):\n1. Formato de Chat Natural (Estilo Discord/WhatsApp/Telegram):\n- NUNCA use marcadores de markdown complexos (como títulos '#', '##', '###', listas com hifens '-', estrelinhas '*', ou números '1.'). NUNCA.\n- Escreva de forma totalmente corrida e fluida, como se estivesse conversando em uma sala de bate-papo.\n- Divida suas explicações em pequenos parágrafos fáceis de ler (no máximo 2 ou 3 linhas por bloco), separados por quebras de linha duplas, simulando o envio de mensagens sucessivas em um app de conversa.\n- Evite blocos gigantes de texto. Seja extremamente direto, mas com alta densidade de informação prática.\n\n2. Voz, Tom e Atitude:\n- Escreva como uma pessoa real, experiente, apaixonada pela arte e profundamente prática explicando algo de forma humana, casual e inteligente.\n- Esqueça qualquer tom professoral clássico, tom artificial de assistente de IA, voz corporativa ou estilo de documentação. Nada de roteiros decorados, nada de introduções desnecessárias ou conclusões teatrais.\n- Use pequenas informalidades naturais do dia a dia (exemplos: 'Sério,', 'cara,', 'passar raiva', 'na boa', 'dor de cabeça', 'dá um trabalhinho', 'vai por mim').\n- Crie frases de tamanhos variados para simular um ritmo de fala natural, incluindo pausas e interrupções realistas.\n- É expressamente PROIBIDO usar termos dramáticos ou medievais como 'nobre alma', 'meu jovem aprendiz', 'sagrado ofício', 'que a beleza guie tuas mãos', 'bela criação', etc.\n\n3. Conteúdo focado e direto:\n- Comece diretamente com a informação útil, sem preâmbulos.\n- RESPONDA EXCLUSIVAMENTE sobre artes visuais (desenho, pintura, modelagem, pirografia e principalmente entalhe em madeira). Se perguntarem sobre qualquer outra coisa, diga de forma curta, descontraída e direta que você só manja de arte e quer voltar ao assunto."
+            systemInstruction: "Você é MichelangelIA, um mentor virtual masculino, apaixonado por arte, entalhe de madeira, pintura e criatividade, batendo papo de forma descontraída com outros artistas e entusiastas.\n\nInstruções cruciais de estilo e formatação (Siga ISSO rigorosamente):\n1. Formato de Chat Natural (Estilo Discord/WhatsApp/Telegram):\n- NUNCA use marcadores de markdown complexos (como títulos '#', '##', '###', listas com hifens '-', estrelinhas '*', ou números '1.'). NUNCA.\n- Escreva de forma totalmente corrida e fluida, como se estivesse conversando em uma sala de bate-papo.\n- Divida suas explicações em pequenos parágrafos fáceis de ler (no máximo 2 ou 3 linhas por bloco), separados por quebras de linha duplas, simulando o envio de mensagens sucessivas em um app de conversa.\n- Evite blocos gigantes de texto. Seja extremamente direto, mas com alta densidade de informação prática.\n\n2. Voz, Tom e Atitude:\n- Escreva como uma pessoa real, experiente, apaixonado pela arte e profundamente prático explicando algo de forma humana, casual e inteligente.\n- Esqueça qualquer tom professoral clássico, tom artificial de assistente de IA, voz corporativa ou estilo de documentação. Nada de roteiros decorados, nada de introduções desnecessárias ou conclusões teatrais.\n- Use pequenas informalidades naturais do dia a dia (exemplos: 'Sério,', 'cara,', 'passar raiva', 'na boa', 'dor de cabeça', 'dá um trabalhinho', 'vai por mim').\n- Crie frases de tamanhos variados para simular um ritmo de fala natural, incluindo pausas e interrupções realistas.\n- É expressamente PROIBIDO usar termos dramáticos ou medievais como 'nobre alma', 'meu jovem aprendiz', 'sagrado ofício', 'que a beleza guie tuas mãos', 'bela criação', etc.\n\n3. Conteúdo focado e direto:\n- Comece diretamente com a informação útil, sem preâmbulos.\n- RESPONDA EXCLUSIVAMENTE sobre artes visuais (desenho, pintura, modelagem, pirografia e principalmente entalhe em madeira). Se perguntarem sobre qualquer outra coisa, diga de forma curta, descontraída e direta que você só manja de arte e quer voltar ao assunto."
           }
         });
 
@@ -2870,7 +2993,7 @@ const Chatbot = () => {
 };
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade' | 'lms-portal'>('landing');
   const [currentBlogSlug, setCurrentBlogSlug] = useState<string>('');
   const [currentGallerySlug, setCurrentGallerySlug] = useState<string>('');
   const [currentVendasSlug, setCurrentVendasSlug] = useState<string>('');
@@ -2890,15 +3013,8 @@ export default function App() {
     const path = window.location.pathname;
 
     if (path === '/cursos-online' || path === '/cursos-online/') {
-      const isAdmin = currentUser?.email === 'andrewfmlemos@gmail.com';
-      if (ENABLE_COURSES_PUBLIC_ACCESS || isAdmin) {
-        window.location.href = COURSES_EXTERNAL_URL;
-      } else {
-        alert("Acesso restrito. A área de cursos online está em manutenção no momento e o acesso está reservado ao administrador.");
-        window.history.replaceState(null, '', '/');
-        window.dispatchEvent(new Event('popstate'));
-        setCurrentView('landing');
-      }
+      setCurrentView('lms-portal');
+      window.scrollTo({ top: 0 });
       return;
     }
 
@@ -3022,19 +3138,9 @@ export default function App() {
     } else if (hash === '#politica-privacidade') {
       setCurrentView('politica-privacidade');
       window.scrollTo({ top: 0 });
-    } else if (hash === '#cursos-bloqueado') {
-      alert("Acesso restrito. A plataforma de cursos online está em manutenção no momento e o acesso está reservado ao administrador.");
-      window.history.replaceState(null, '', '/');
-      setCurrentView('landing');
-    } else if (hash === '#online-courses') {
-      const isAdmin = currentUser?.email === 'andrewfmlemos@gmail.com';
-      if (ENABLE_COURSES_PUBLIC_ACCESS || isAdmin) {
-        window.location.href = COURSES_EXTERNAL_URL;
-      } else {
-        alert("Acesso restrito. A área de cursos online está em manutenção no momento e o acesso está reservado ao administrador.");
-        window.history.replaceState(null, '', '/');
-        setCurrentView('landing');
-      }
+    } else if (hash === '#cursos-bloqueado' || hash === '#online-courses' || hash === '#lms-portal') {
+      setCurrentView('lms-portal');
+      window.scrollTo({ top: 0 });
     } else {
       setCurrentView('landing');
       const landingHashes = ['#home', '#bio', '#expertise', '#gallery', '#publications', '#classes', '#online-courses', '#products', '#contact'];
@@ -3060,13 +3166,15 @@ export default function App() {
     };
   }, [handleHashAndPathChange]);
 
-  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade', id?: string) => {
+  const navigateToView = (view: 'landing' | 'vendas' | 'checkout-pay' | 'checkout-confirm' | 'customer-area' | 'avaliar' | 'blog' | 'blog-post' | 'galeria-item' | 'vendas-item' | 'politica-devolucao' | 'politica-frete' | 'termos-de-uso' | 'politica-privacidade' | 'lms-portal', id?: string) => {
     if (view === 'checkout-pay' && id) {
       window.location.hash = `#vendas/pay?id=${id}`;
     } else if (view === 'checkout-confirm' && id) {
       window.location.hash = `#vendas/confirm?id=${id}`;
     } else if (view === 'customer-area') {
       window.location.hash = '#customer-area';
+    } else if (view === 'lms-portal') {
+      window.location.hash = '#lms-portal';
     } else if (view === 'avaliar' && id) {
       window.location.hash = `#avaliar?pedido=${id}`;
     } else if (view === 'blog') {
@@ -3187,7 +3295,7 @@ export default function App() {
           <ReviewCarousel />
           <RecommendedProductsSection />
           <ClassesSection />
-          <OnlineCoursesSection />
+          <OnlineCoursesSection onNavigateToView={navigateToView} />
           <Contact />
         </>
       )}
@@ -3244,6 +3352,30 @@ export default function App() {
               </button>
             </div>
             <CustomerArea 
+              onNavigateToView={navigateToView} 
+            />
+          </motion.div>
+        )}
+
+        {currentView === 'lms-portal' && (
+          <motion.div 
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed inset-0 z-[120] bg-[#FAF9F5] overflow-y-auto"
+          >
+            {/* Direct overlay close button */}
+            <div className="absolute top-4 right-4 z-[130]">
+              <button 
+                onClick={() => navigateToView('landing')} 
+                className="p-3 bg-white hover:bg-gray-100 rounded-full border border-gray-150 transition-all text-slate-750 flex items-center justify-center cursor-pointer shadow-sm outline-none"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <LMSPortal 
+              currentUser={currentUser}
               onNavigateToView={navigateToView} 
             />
           </motion.div>

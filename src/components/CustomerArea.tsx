@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   auth, 
   db,
@@ -44,9 +44,11 @@ import {
   Eye, 
   EyeOff, 
   Grid,
-  Info
+  Info,
+  BookOpen,
+  FileText
 } from 'lucide-react';
-import { EcomOrder, EcomCustomer } from '../types';
+import { EcomOrder, EcomCustomer, EcomProduct } from '../types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -102,13 +104,16 @@ interface CustomerAreaProps {
 
 export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, initialEmail = '' }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isInstructor, setIsInstructor] = useState(false);
   const [profile, setProfile] = useState<EcomCustomer | null>(null);
   const [orders, setOrders] = useState<EcomOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [products, setProducts] = useState<EcomProduct[]>([]);
+  const [selectedEbook, setSelectedEbook] = useState<EcomProduct | null>(null);
   
   // Tab states
-  const [activeTab, setActiveTab] = useState<'orders' | 'profile'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'ebooks'>('orders');
 
   // Login & Register Form fields
   const [isRegisterMode, setIsRegisterMode] = useState(false);
@@ -156,6 +161,26 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
     return () => unsubscribe();
   }, []);
 
+  // Monitor if the logged-in user is an instructor in real-time
+  useEffect(() => {
+    if (!currentUser) {
+      setIsInstructor(false);
+      return;
+    }
+    const email = currentUser.email || '';
+    if (email === 'andrewfmlemos@gmail.com') {
+      setIsInstructor(true);
+      return;
+    }
+
+    const unsub = onSnapshot(doc(db, 'lms_instructors', email), (snap) => {
+      setIsInstructor(snap.exists());
+    }, (err) => {
+      console.warn("[CustomerArea] Error checking instructor:", err);
+    });
+    return () => unsub();
+  }, [currentUser]);
+
   // Monitor orders for current logged-in customer in real-time
   useEffect(() => {
     if (!currentUser) return;
@@ -181,6 +206,32 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
 
     return () => unsubscribe();
   }, [currentUser]);
+
+  // Load products in real-time to match bought IDs
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'ecom_products'), (snap) => {
+      setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })) as EcomProduct[]);
+    });
+    return () => unsub();
+  }, []);
+
+  const purchasedApostilas = useMemo(() => {
+    // Only search in completed or paid orders
+    const paidOrders = orders.filter(o => ['Pago', 'Separação', 'Enviado', 'Entregue'].includes(o.status));
+    
+    const purchasedProductIds = new Set<string>();
+    paidOrders.forEach(o => {
+      if (o.items) {
+        o.items.forEach(item => {
+          if (item.productId) {
+            purchasedProductIds.add(item.productId);
+          }
+        });
+      }
+    });
+
+    return products.filter(p => purchasedProductIds.has(p.id || '') && (p.category === 'Apostilas & E-books' || p.digitalPdfUrl));
+  }, [orders, products]);
 
   const loadCustomerProfile = async (uid: string) => {
     try {
@@ -880,8 +931,20 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
             </div>
           </div>
           
-          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-            <div className="text-xs bg-amber-50 text-amber-800 px-3 py-1.5 rounded-full border border-amber-200.5 flex items-center gap-1.5">
+          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end flex-wrap">
+            {isInstructor && (
+              <button
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('open-admin-panel'));
+                }}
+                className="text-xs text-white bg-brand-wood hover:bg-brand-clay px-4 py-2.5 rounded-2xl flex items-center gap-1.5 transition-all font-bold cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Painel do Instrutor 🛠️</span>
+              </button>
+            )}
+
+            <div className="text-xs bg-amber-50 text-amber-800 px-3 py-1.5 rounded-full border border-amber-200/50 flex items-center gap-1.5">
               <span>● Área de Autoatendimento</span>
             </div>
             <button
@@ -917,6 +980,17 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
           >
             <MapPin className="w-4 h-4" />
             <span>Dados da Entrega</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('ebooks')}
+            className={`px-5 py-3 text-xs font-bold tracking-wider uppercase transition-all flex items-center gap-2 border-b-2 outline-none cursor-pointer ${
+              activeTab === 'ebooks' 
+                ? 'border-brand-wood text-brand-wood' 
+                : 'border-transparent text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Minhas Apostilas ({purchasedApostilas.length})</span>
           </button>
         </div>
 
@@ -1325,6 +1399,148 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
                   )}
                 </button>
               </form>
+            </div>
+          )}
+
+          {/* EBOOKS TAB */}
+          {activeTab === 'ebooks' && (
+            <div className="space-y-6 text-left">
+              <div className="bg-gradient-to-br from-brand-ink/90 to-brand-wood/30 p-6 rounded-3xl text-white shadow-md select-none">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <span className="text-[9px] bg-amber-500/20 text-amber-200 border border-amber-500/30 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
+                      Leitor Seguro Integrado 🛡️
+                    </span>
+                    <h3 className="font-serif font-bold text-xl mt-2 text-brand-paper">Biblioteca de Apostilas & E-books</h3>
+                    <p className="text-gray-300 text-xs mt-1 leading-relaxed max-w-xl font-sans">
+                      Abaixo estão listadas as suas apostilas compradas individualmente. Para sua segurança e proteção dos direitos autorais, o conteúdo é aberto de forma blindada contra cópias e downloads.
+                    </p>
+                  </div>
+                  <div className="text-right text-[11px] text-gray-300 font-mono">
+                    Usuário: <span className="text-brand-paper underline font-semibold">{currentUser?.email}</span>
+                  </div>
+                </div>
+              </div>
+
+              {purchasedApostilas.length === 0 ? (
+                <div className="text-center p-12 bg-white border border-gray-150 rounded-3xl">
+                  <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <h4 className="font-serif font-bold text-base text-brand-ink mb-1">Nenhuma apostila ou e-book encontrado</h4>
+                  <p className="text-xs text-gray-400 max-w-sm mx-auto leading-relaxed mb-6 font-sans">
+                    Você ainda não possui apostilas adquiridas individualmente. Visite nossa loja virtual para adquirir os manuais de técnicas avançadas de entalhe e pirografia!
+                  </p>
+                  <button
+                    onClick={() => {
+                      onNavigateToView('vendas');
+                    }}
+                    className="text-xs bg-brand-wood hover:bg-brand-clay text-white px-5 py-3 rounded-full font-bold transition-all cursor-pointer shadow-sm outline-none"
+                  >
+                    Ir para a Loja Virtual 🎨
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  {/* Left Column: List of purchased ebooks */}
+                  <div className="lg:col-span-4 space-y-3.5">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Apostilas Adquiridas</span>
+                    <div className="space-y-3">
+                      {purchasedApostilas.map((ebook) => {
+                        const isCurrent = selectedEbook?.id === ebook.id;
+                        return (
+                          <div 
+                            key={ebook.id}
+                            onClick={() => setSelectedEbook(ebook)}
+                            className={`p-4 rounded-2xl border transition-all cursor-pointer text-left flex gap-3.5 items-center ${
+                              isCurrent 
+                                ? 'bg-amber-50/50 border-amber-300 shadow-sm ring-1 ring-amber-200' 
+                                : 'bg-white border-gray-150 hover:bg-gray-50/70 hover:border-gray-300'
+                            }`}
+                          >
+                            <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0 text-brand-wood">
+                              <BookOpen className="w-6 h-6" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-serif font-bold text-brand-ink text-sm truncate leading-snug">{ebook.name}</h4>
+                              <p className="text-xs text-gray-400 mt-0.5 font-medium font-sans">Infoproduto Digital</p>
+                              <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full mt-2 inline-block">
+                                Acesso Vitalício
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Secure Viewer */}
+                  <div className="lg:col-span-8">
+                    {selectedEbook ? (
+                      <div className="bg-white border border-gray-150 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                        <div className="flex justify-between items-center border-b pb-4">
+                          <div>
+                            <span className="text-[10px] text-brand-wood font-mono uppercase tracking-widest font-bold">Leitura de Infoproduto</span>
+                            <h4 className="font-serif font-bold text-brand-ink text-base mt-0.5">{selectedEbook.name}</h4>
+                          </div>
+                          
+                          {selectedEbook.digitalPdfUrl && (selectedEbook.digitalPdfUrl.startsWith('http') || selectedEbook.digitalPdfUrl.startsWith('/')) && (
+                            <a 
+                              href={selectedEbook.digitalPdfUrl.includes('drive.google.com') && !selectedEbook.digitalPdfUrl.includes('/preview') ? selectedEbook.digitalPdfUrl.replace('/view?usp=sharing', '/preview').replace('/view', '/preview') : selectedEbook.digitalPdfUrl}
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-[10px] bg-brand-wood text-white hover:bg-brand-ink px-3 py-2 rounded-xl font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm select-none"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" /> Tela Inteira
+                            </a>
+                          )}
+                        </div>
+
+                        {selectedEbook.digitalPdfUrl ? (
+                          <div className="w-full border rounded-2xl bg-slate-50 relative overflow-hidden select-none" onContextMenu={e => e.preventDefault()}>
+                            {/* Watermark overlay */}
+                            <div className="absolute inset-0 bg-transparent flex items-center justify-center rotate-12 select-none pointer-events-none z-10 opacity-5">
+                              <div className="text-sm md:text-base font-bold font-serif text-brand-wood text-center max-w-xs leading-relaxed">
+                                {currentUser?.email || 'ALUNO'} - Academia de Arte Andrew Lemos - www.andrewlemos.com
+                              </div>
+                            </div>
+
+                            <iframe 
+                              src={selectedEbook.digitalPdfUrl.includes('drive.google.com') && !selectedEbook.digitalPdfUrl.includes('/preview') ? selectedEbook.digitalPdfUrl.replace('/view?usp=sharing', '/preview').replace('/view', '/preview') : selectedEbook.digitalPdfUrl} 
+                              className="w-full h-[550px] border-0" 
+                              title={selectedEbook.name}
+                              referrerPolicy="no-referrer"
+                            />
+                            
+                            <div className="bg-amber-50 p-3 text-center border-t text-[10px] text-amber-900 flex items-center justify-center gap-2 font-sans">
+                              <span>🔒 Conteúdo protegido contra downloads e cópias para proteção de direitos autorais.</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="border border-dashed rounded-3xl p-12 text-center space-y-4">
+                            <FileText className="w-16 h-16 text-brand-wood/30 mx-auto" />
+                            <h4 className="font-serif font-bold text-lg text-brand-ink">Apostila em Preparação Digital</h4>
+                            <p className="text-xs text-gray-400 max-w-sm mx-auto leading-relaxed font-sans">
+                              O link digital para esta apostila está sendo indexado pelo professor. Em breve você terá acesso completo no leitor blindado!
+                            </p>
+                          </div>
+                        )}
+                        
+                        <div className="bg-gray-50/50 rounded-2xl p-4 border border-gray-150">
+                          <h5 className="text-xs font-bold text-brand-ink">Sobre este Infoproduto:</h5>
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed font-sans">{selectedEbook.description}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white border border-gray-150 rounded-3xl p-12 text-center h-[350px] flex flex-col justify-center items-center">
+                        <BookOpen className="w-12 h-12 text-amber-200 mb-3 animate-bounce" />
+                        <h4 className="font-serif font-bold text-base text-brand-ink">Selecione uma apostila para ler</h4>
+                        <p className="text-xs text-gray-400 max-w-xs leading-relaxed mt-1 font-sans">
+                          Escolha uma de suas apostilas adquiridas no painel ao lado para carregar o visualizador seguro instantaneamente.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -38,6 +38,7 @@ export interface EcomProduct {
   stock: number;
   price: number;
   shippingType?: 'automatic' | 'quote';
+  digitalPdfUrl?: string; // secure digital PDF URL for infoproduct eBooks/handouts
   createdAt?: any;
   slug?: string;
 }
@@ -227,5 +228,169 @@ export interface BlogPost {
   createdAt: any;
   updatedAt?: any;
 }
+
+// ============================================================================
+// LMS (E-learning Platform) Module Types
+// ============================================================================
+
+export interface Course {
+  id?: string;
+  title: string;
+  description: string;
+  shortDescription?: string;
+  imageUrl: string;
+  professor: string;
+  category: string;
+  price: number;
+  status: 'Ativo' | 'Em breve' | 'Inativo';
+  slug: string;
+  metaTitle?: string;
+  metaDescription?: string;
+  duration?: number; // in hours
+  hasCertificate: boolean;
+  accessibilityType: 'lifetime' | 'subscription' | 'temporary';
+  accessDurationDays?: number; // for temporary access
+  instructorEmail?: string; // email of the course instructor
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface InstructorProfile {
+  id?: string; // document id (typically email or uid)
+  email: string;
+  name: string;
+  photoUrl: string;
+  bio: string;
+  createdAt?: any;
+}
+
+export interface CourseModule {
+  id?: string;
+  courseId: string;
+  title: string;
+  description: string;
+  order: number;
+}
+
+export interface LessonMaterial {
+  name: string;
+  url: string;
+  type: 'pdf' | 'image' | 'link';
+}
+
+export interface Lesson {
+  id?: string;
+  courseId: string;
+  moduleId: string;
+  title: string;
+  description: string;
+  videoUrl: string; // Embed/streaming URL (e.g., YouTube, Vimeo)
+  order: number;
+  materials: LessonMaterial[];
+  createdAt?: any;
+}
+
+export interface Enrollment {
+  id?: string;
+  userId: string;
+  userEmail: string;
+  userName?: string;
+  courseId: string;
+  courseTitle: string;
+  status: 'active' | 'expired' | 'canceled' | 'dropout';
+  accessType: 'lifetime' | 'subscription' | 'temporary';
+  expiresAt?: any; // Timestamp or ISO string
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface StudentProgress {
+  id?: string; // composite key or auto
+  userId: string;
+  courseId: string;
+  lessonId: string;
+  completed: boolean;
+  timeWatched?: number; // in seconds
+  updatedAt: any;
+}
+
+export interface LessonCommentReply {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  text: string;
+  createdAt: any;
+  isAdmin?: boolean;
+}
+
+export interface LessonComment {
+  id?: string;
+  lessonId: string;
+  courseId: string;
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  text: string;
+  moderated: boolean;
+  replies?: LessonCommentReply[];
+  createdAt: any;
+}
+
+export interface SupportMessage {
+  id?: string;
+  senderId: string;
+  senderName: string;
+  senderEmail: string;
+  receiverId: string; // 'admin' or specific userId
+  courseId?: string;
+  courseTitle?: string;
+  subject: string;
+  content: string;
+  imageUrl?: string; // student's artwork submission
+  read: boolean;
+  createdAt: any;
+}
+
+export interface AffiliateProfile {
+  id: string; // Matches auth userId
+  email: string;
+  name: string;
+  code: string; // Referral tracking code
+  commissionPercent: number;
+  clicks: number;
+  salesCount: number;
+  totalCommission: number;
+  status: 'Pendente' | 'Ativo' | 'Inativo';
+  createdAt: any;
+}
+
+export interface AffiliateClick {
+  id?: string;
+  affiliateId: string;
+  ip?: string;
+  createdAt: any;
+}
+
+export interface CourseCertificate {
+  id: string; // Unique validation code
+  userId: string;
+  userName: string;
+  userEmail: string;
+  courseId: string;
+  courseTitle: string;
+  issuedAt: any;
+}
+
+export interface SystemNotification {
+  id?: string;
+  title: string;
+  message: string;
+  target: 'all' | 'course';
+  courseId?: string;
+  courseTitle?: string;
+  createdAt: any;
+}
+
 
 
