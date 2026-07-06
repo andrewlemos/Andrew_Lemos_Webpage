@@ -542,54 +542,66 @@ export const CourseLandingPage: React.FC<CourseLandingPageProps> = ({
           </div>
 
           <div className="grid lg:grid-cols-12 gap-8 items-start relative">
-            {/* Left summary details card */}
-            <div className="lg:col-span-5 bg-[#1C1B18]/40 border border-stone-800 rounded-3xl p-6 space-y-4">
-              <h3 className="font-serif text-lg font-bold text-white">Resumo do Pedido</h3>
-              
-              <div className="space-y-3 pt-2">
-                <div className="flex gap-3">
-                  <div className="w-12 h-12 bg-stone-900 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center p-1 border border-stone-800">
-                    <img src={ensureRobustUrl(course.imageUrl)} className="max-w-full max-h-full object-contain" alt="" />
+            {/* Left summary details card column */}
+            <div className="lg:col-span-5 space-y-4">
+              <div className="bg-[#1C1B18]/40 border border-stone-800 rounded-3xl p-6 space-y-4">
+                <h3 className="font-serif text-lg font-bold text-white">Resumo do Pedido</h3>
+                
+                <div className="space-y-3 pt-2">
+                  <div className="flex gap-3">
+                    <div className="w-12 h-12 bg-stone-900 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center p-1 border border-stone-800">
+                      <img src={ensureRobustUrl(course.imageUrl)} className="max-w-full max-h-full object-contain" alt="" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold leading-snug line-clamp-2 text-stone-100">{course.title}</h4>
+                      <span className="text-[10px] text-stone-500 block">{course.category}</span>
+                    </div>
                   </div>
+                </div>
+
+                <div className="border-t border-stone-800 pt-4 space-y-2 text-xs">
+                  <div className="flex justify-between text-stone-400">
+                    <span>Carga horária</span>
+                    <span className="text-stone-200">{course.duration || 10}h de aulas</span>
+                  </div>
+                  <div className="flex justify-between text-stone-400">
+                    <span>Plataforma</span>
+                    <span className="text-stone-200">Área do Aluno Premium</span>
+                  </div>
+                  <div className="flex justify-between text-stone-400">
+                    <span>Suporte Técnico</span>
+                    <span className="text-stone-200">Avaliação de fotos inclusa</span>
+                  </div>
+                  <div className="flex justify-between text-stone-400">
+                    <span>Taxas / Frete</span>
+                    <span className="text-emerald-400 font-semibold">R$ 0,00 (Digital)</span>
+                  </div>
+                </div>
+
+                <div className="border-t border-stone-800 pt-4 flex justify-between items-end">
                   <div>
-                    <h4 className="text-xs font-bold leading-snug line-clamp-2 text-stone-100">{course.title}</h4>
-                    <span className="text-[10px] text-stone-500 block">{course.category}</span>
+                    <span className="text-[10px] text-stone-500 block uppercase font-bold">Total a Pagar</span>
+                    <span className="text-2xl font-bold font-mono text-[#D4AF37]">R$ {course.price.toFixed(2)}</span>
+                  </div>
+                  <div className="text-[9px] text-stone-500 text-right max-w-[120px] leading-relaxed">
+                    Acesso imediato e vitalício. Sem mensalidades.
                   </div>
                 </div>
-              </div>
 
-              <div className="border-t border-stone-800 pt-4 space-y-2 text-xs">
-                <div className="flex justify-between text-stone-400">
-                  <span>Carga horária</span>
-                  <span className="text-stone-200">{course.duration || 10}h de aulas</span>
-                </div>
-                <div className="flex justify-between text-stone-400">
-                  <span>Plataforma</span>
-                  <span className="text-stone-200">Área do Aluno Premium</span>
-                </div>
-                <div className="flex justify-between text-stone-400">
-                  <span>Suporte Técnico</span>
-                  <span className="text-stone-200">Avaliação de fotos inclusa</span>
-                </div>
-                <div className="flex justify-between text-stone-400">
-                  <span>Taxas / Frete</span>
-                  <span className="text-emerald-400 font-semibold">R$ 0,00 (Digital)</span>
+                <div className="bg-[#1A1916]/40 p-3.5 rounded-2xl border border-stone-800/80 flex items-center gap-3 text-[10px] text-stone-400 leading-normal">
+                  <ShieldCheck className="w-8 h-8 text-emerald-500 flex-shrink-0" />
+                  <span>Garantia de 7 dias protegida. Compre com segurança total.</span>
                 </div>
               </div>
 
-              <div className="border-t border-stone-800 pt-4 flex justify-between items-end">
-                <div>
-                  <span className="text-[10px] text-stone-500 block uppercase font-bold">Total a Pagar</span>
-                  <span className="text-2xl font-bold font-mono text-[#D4AF37]">R$ {course.price.toFixed(2)}</span>
-                </div>
-                <div className="text-[9px] text-stone-500 text-right max-w-[120px] leading-relaxed">
-                  Acesso imediato e vitalício. Sem mensalidades.
-                </div>
-              </div>
-
-              <div className="bg-[#1A1916]/40 p-3.5 rounded-2xl border border-stone-800/80 flex items-center gap-3 text-[10px] text-stone-400 leading-normal">
-                <ShieldCheck className="w-8 h-8 text-emerald-500 flex-shrink-0" />
-                <span>Garantia de 7 dias protegida. Compre com segurança total.</span>
+              {/* Security/Guarantee Seal */}
+              <div className="flex flex-col items-center justify-center p-4 bg-[#1C1B18]/25 border border-stone-800/60 rounded-3xl">
+                <img 
+                  src={ensureRobustUrl("https://drive.google.com/file/d/1lATMsJonpoCfn-Z3v2TYCJvhAHb0WLTr/view?usp=sharing")} 
+                  alt="Selo de Garantia de 7 dias" 
+                  className="max-h-56 object-contain w-auto mx-auto rounded-xl"
+                  referrerPolicy="no-referrer"
+                />
               </div>
             </div>
 
@@ -999,7 +1011,7 @@ export const CourseLandingPage: React.FC<CourseLandingPageProps> = ({
                         disabled={checkoutProcessing}
                         className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2 hover:scale-[1.01]"
                       >
-                        {checkoutProcessing ? 'Processando...' : `Cadastrar e Pagar R$ ${course.price.toFixed(2)} 🚀`}
+                        {checkoutProcessing ? 'Processando...' : 'Matricular Agora 🚀'}
                       </button>
                     </form>
                   )}

@@ -62,6 +62,10 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ currentUser, isMasterAdmin =
   const [activeAdminTab, setActiveAdminTab] = useState<'content' | 'enrollments' | 'messages' | 'comments' | 'affiliates' | 'reports' | 'notifications' | 'instructors' | 'ebooks'>('content');
   const [contentSubTab, setContentSubTab] = useState<'courses' | 'syllabus'>('courses');
   const [showCourseForm, setShowCourseForm] = useState(false);
+  const [isSavingCourse, setIsSavingCourse] = useState(false);
+  const [isSavingEbook, setIsSavingEbook] = useState(false);
+  const [isSavingModule, setIsSavingModule] = useState(false);
+  const [isSavingLesson, setIsSavingLesson] = useState(false);
   
   // Database States
   const [courses, setCourses] = useState<Course[]>([]);
@@ -267,8 +271,10 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ currentUser, isMasterAdmin =
   // Course CRUD Operations
   const handleSaveCourse = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingCourse) return;
     if (!courseForm.title || !courseForm.slug) return;
 
+    setIsSavingCourse(true);
     try {
       const courseId = editingCourse?.id || "curso-" + Math.random().toString(36).substr(2, 6);
       const docPayload: Course = {
@@ -311,6 +317,8 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ currentUser, isMasterAdmin =
       alert("Curso salvo com sucesso!");
     } catch (err: any) {
       alert("Erro ao salvar curso: " + err.message);
+    } finally {
+      setIsSavingCourse(false);
     }
   };
 
@@ -326,11 +334,13 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ currentUser, isMasterAdmin =
   // eBooks / Apostilas CRUD Operations
   const handleSaveEbook = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingEbook) return;
     if (!ebookForm.name || !ebookForm.digitalPdfUrl) {
       alert("Por favor, preencha o Nome e o Link do PDF da Apostila.");
       return;
     }
 
+    setIsSavingEbook(true);
     try {
       const ebookId = editingEbook?.id || "ebook-" + Math.random().toString(36).substr(2, 6);
       const computedSlug = (ebookForm.slug || '').trim() || ebookForm.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
@@ -368,6 +378,8 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ currentUser, isMasterAdmin =
       alert("Apostila/E-book salvo com sucesso!");
     } catch (err: any) {
       alert("Erro ao salvar apostila: " + err.message);
+    } finally {
+      setIsSavingEbook(false);
     }
   };
 
@@ -384,8 +396,10 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ currentUser, isMasterAdmin =
   // Module CRUD
   const handleAddModule = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingModule) return;
     if (!selectedCourseForStructure || !moduleForm.title) return;
 
+    setIsSavingModule(true);
     try {
       const modId = "mod-" + Math.random().toString(36).substr(2, 6);
       const mod: CourseModule = {
@@ -400,6 +414,8 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ currentUser, isMasterAdmin =
       alert("Módulo adicionado com sucesso!");
     } catch (err: any) {
       alert("Erro ao adicionar módulo: " + err.message);
+    } finally {
+      setIsSavingModule(false);
     }
   };
 
@@ -421,8 +437,10 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ currentUser, isMasterAdmin =
 
   const handleAddLesson = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingLesson) return;
     if (!selectedCourseForStructure || !selectedModuleForStructure || !lessonForm.title) return;
 
+    setIsSavingLesson(true);
     try {
       const lesId = "les-" + Math.random().toString(36).substr(2, 6);
       const les: Lesson = {
@@ -442,6 +460,8 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ currentUser, isMasterAdmin =
       alert("Aula adicionada com sucesso!");
     } catch (err: any) {
       alert("Erro ao salvar aula: " + err.message);
+    } finally {
+      setIsSavingLesson(false);
     }
   };
 

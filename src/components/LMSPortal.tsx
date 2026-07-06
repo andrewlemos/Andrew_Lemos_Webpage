@@ -3100,23 +3100,7 @@ DIRETRIZES DE ATENDIMENTO E CONTEXTO DO MENTOR:
               Entrar com o Google
             </button>
 
-            {/* Fictional Student Access Button for testing */}
-            <div className="mt-6 pt-5 border-t border-dashed border-gray-100">
-              <div className="bg-brand-wood/5 border border-brand-wood/10 rounded-2xl p-4 text-center">
-                <span className="text-[10px] text-brand-wood font-extrabold uppercase tracking-widest block mb-2">🧪 Ambiente de Testes</span>
-                <p className="text-[10px] text-gray-500 leading-normal mb-3">
-                  Instancie um Aluno Fictício com curso on-line, apostila digital adquirida e cadastro de afiliado ativo para testar todas as páginas do sistema.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleAccessTestStudent}
-                  disabled={authLoading}
-                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <Sparkles className="w-3.5 h-3.5" /> Acessar como Aluno de Teste
-                </button>
-              </div>
-            </div>
+
 
             {/* Registration toggle */}
             <div className="mt-6 text-center">
