@@ -44,7 +44,7 @@
   ],
   "functions": {
     "api/index.ts": {
-      "excludeFiles": "public/**"
+      "includeFiles": "dist/index.html"
     }
   }
 }
