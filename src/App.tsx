@@ -3008,6 +3008,50 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const forceScrollToTop = () => {
+      // Reset standard window viewport
+      window.scrollTo(0, 0);
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+
+      // Reset any scrollable container in the entire DOM
+      const allElements = document.querySelectorAll("*");
+      allElements.forEach((el) => {
+        if (el.scrollTop > 0) {
+          el.scrollTop = 0;
+        }
+      });
+    };
+
+    // Reset standard scroll instantly
+    forceScrollToTop();
+
+    // Run slightly delayed ticks to override any browser-level layout shifts/image renders
+    const timerInstant = setTimeout(() => {
+      forceScrollToTop();
+    }, 10);
+
+    const timerQuick = setTimeout(() => {
+      forceScrollToTop();
+    }, 50);
+
+    const timerDelayed = setTimeout(() => {
+      forceScrollToTop();
+    }, 150);
+
+    const timerSlow = setTimeout(() => {
+      forceScrollToTop();
+    }, 300);
+
+    return () => {
+      clearTimeout(timerInstant);
+      clearTimeout(timerQuick);
+      clearTimeout(timerDelayed);
+      clearTimeout(timerSlow);
+    };
+  }, [currentView, currentBlogSlug, currentGallerySlug, currentVendasSlug]);
+
   const handleHashAndPathChange = useCallback(() => {
     const hash = window.location.hash;
     const path = window.location.pathname;
@@ -3295,7 +3339,6 @@ export default function App() {
           <ReviewCarousel />
           <RecommendedProductsSection />
           <ClassesSection />
-          <OnlineCoursesSection onNavigateToView={navigateToView} />
           <Contact />
         </>
       )}

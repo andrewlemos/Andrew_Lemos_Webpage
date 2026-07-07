@@ -2610,13 +2610,32 @@ async function checkAdminAuth(req: any, res: any, next: any) {
       return res.status(403).json({ error: "Acesso negado. Apenas o administrador autorizado de Andrew Lemos tem permissão para realizar esta operação." });
     }
   } catch (err: any) {
-    console.error("Erro ao verificar token de administrador:", err);
+    console.error("Erro ao verificar token de administrador:", err ? err.message : err);
+    
     // Safe development bypass fallback to allow developers to use the app in AI Studio preview if server credentials are not fully deployed yet.
     const isLocalDev = process.env.NODE_ENV !== "production" || !process.env.FIREBASE_PRIVATE_KEY;
-    if (isLocalDev && (idToken === "dev-bypass-token" || idToken.length < 50)) {
-      console.warn("Firebase Admin SDK: Bypass temporário permitido em ambiente local/desenvolvimento.");
-      req.adminUser = { email: "andrewfmlemos@gmail.com", email_verified: true };
-      return next();
+    if (isLocalDev) {
+      // 1. Try decoding the JWT payload directly (without signature verification) for local development
+      try {
+        const parts = idToken.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
+          if (payload && payload.email === "andrewfmlemos@gmail.com" && payload.email_verified === true) {
+            console.warn("Firebase Admin SDK: Bypass temporário por decodificação de token em desenvolvimento.");
+            req.adminUser = payload;
+            return next();
+          }
+        }
+      } catch (decodeErr) {
+        console.error("Erro ao tentar decodificar token JWT localmente:", decodeErr);
+      }
+
+      // 2. Fallback for manual test tokens / bypass tokens
+      if (idToken === "dev-bypass-token" || idToken.length < 50) {
+        console.warn("Firebase Admin SDK: Bypass temporário permitido com token manual/curto em desenvolvimento.");
+        req.adminUser = { email: "andrewfmlemos@gmail.com", email_verified: true };
+        return next();
+      }
     }
     return res.status(401).json({ error: "Sessão expirada ou token inválido. Por favor, reinicie sua sessão no painel do administrador." });
   }

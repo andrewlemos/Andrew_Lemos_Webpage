@@ -237,6 +237,39 @@ export const LMSPortal: React.FC<LMSPortalProps> = ({ currentUser, onNavigateToV
     }
   }, [currentUser]);
 
+  // Reset scroll to top on any view or subpage state transitions inside LMSPortal
+  useEffect(() => {
+    const forceScrollToTop = () => {
+      // Reset window viewport
+      window.scrollTo(0, 0);
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+
+      // Reset any scrollable container in the entire DOM
+      const allElements = document.querySelectorAll("*");
+      allElements.forEach((el) => {
+        if (el.scrollTop > 0) {
+          el.scrollTop = 0;
+        }
+      });
+    };
+
+    forceScrollToTop();
+
+    // Staggered intervals to handle late rendering layouts and image asset loads
+    const timerInstant = setTimeout(forceScrollToTop, 10);
+    const timerQuick = setTimeout(forceScrollToTop, 50);
+    const timerDelayed = setTimeout(forceScrollToTop, 150);
+    const timerSlow = setTimeout(forceScrollToTop, 300);
+
+    return () => {
+      clearTimeout(timerInstant);
+      clearTimeout(timerQuick);
+      clearTimeout(timerDelayed);
+      clearTimeout(timerSlow);
+    };
+  }, [activeSubTab, viewingCourseDetail, selectedCourse, activeLesson, activeReadingEbook, classroomTab]);
+
   const trackAffiliateClick = async (code: string) => {
     const sessionKey = `lms_tracked_click_${code}`;
     if (sessionStorage.getItem(sessionKey)) return;

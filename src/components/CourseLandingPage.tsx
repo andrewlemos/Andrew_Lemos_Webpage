@@ -48,6 +48,38 @@ export const CourseLandingPage: React.FC<CourseLandingPageProps> = ({
   lessons
 }) => {
   const [activeAccordion, setActiveAccordion] = useState<string | null>(null);
+
+  // Aggressive scroll reset to top on mount or course change
+  useEffect(() => {
+    const forceScrollToTop = () => {
+      window.scrollTo(0, 0);
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+
+      // Find any element with scrollbars and reset its scrollTop
+      const allElements = document.querySelectorAll("*");
+      allElements.forEach((el) => {
+        if (el.scrollTop > 0) {
+          el.scrollTop = 0;
+        }
+      });
+    };
+
+    forceScrollToTop();
+
+    // Use multiple delayed triggers to bypass late browser paint/layout adjustments
+    const timer1 = setTimeout(forceScrollToTop, 10);
+    const timer2 = setTimeout(forceScrollToTop, 50);
+    const timer3 = setTimeout(forceScrollToTop, 150);
+    const timer4 = setTimeout(forceScrollToTop, 300);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      clearTimeout(timer4);
+    };
+  }, [course.id]);
   
   // Checkout & Auth form states
   const [authTab, setAuthTab] = useState<'register' | 'login'>('register');

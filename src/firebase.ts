@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup as firebaseSignInWithPopup, signOut } from 'firebase/auth';
 import { initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, updateDoc, setDoc, getDoc, where, or, and, limit, getDocs, getDocsFromServer } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -10,6 +10,35 @@ export const db = initializeFirestore(app, {
   useFetchStreams: false,
 } as any, firebaseConfig.firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
+
+// Safe signInWithPopup wrapper to prevent concurrent calls which trigger Firebase Auth's
+// "INTERNAL ASSERTION FAILED: Pending promise was never set" error.
+let activeSignInPromise: Promise<any> | null = null;
+
+const signInWithPopup = async (authInstance: any, provider: any) => {
+  if (activeSignInPromise) {
+    console.warn("[Safe Auth] Uma tentativa de login com Google já está em andamento. Ignorando chamada duplicada.");
+    return activeSignInPromise;
+  }
+
+  activeSignInPromise = (async () => {
+    try {
+      return await firebaseSignInWithPopup(authInstance, provider);
+    } catch (error: any) {
+      if (error?.message?.includes("INTERNAL ASSERTION FAILED") || error?.message?.includes("Pending promise was never set")) {
+        console.error("[Safe Auth] Erro interno do Firebase interceptado com sucesso.");
+      }
+      throw error;
+    } finally {
+      // Short delay before allowing another authentication attempt
+      setTimeout(() => {
+        activeSignInPromise = null;
+      }, 1500);
+    }
+  })();
+
+  return activeSignInPromise;
+};
 
 export enum OperationType {
   CREATE = 'create',
