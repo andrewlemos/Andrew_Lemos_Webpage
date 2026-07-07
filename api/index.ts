@@ -1,5 +1,5 @@
 import express from "express";
-import logicApp from "../server/server-logic";
+import logicApp from "../server/server-logic.js";
 
 const app = express();
 

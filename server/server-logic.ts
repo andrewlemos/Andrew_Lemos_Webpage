@@ -8,7 +8,7 @@ import crypto from "crypto";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import AdmZip from "adm-zip";
-import { ENABLE_COURSES_PUBLIC_ACCESS, COURSES_EXTERNAL_URL } from "../src/config/coursesConfig";
+import { ENABLE_COURSES_PUBLIC_ACCESS, COURSES_EXTERNAL_URL } from "../src/config/coursesConfig.js";
 
 dotenv.config();
 
