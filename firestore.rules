@@ -136,6 +136,11 @@ service cloud.firestore {
              (!("status" in data) || data.status is string);
     }
 
+    function isValidStudentProfile(data) {
+      return (!("needsPasswordChange" in data) || data.needsPasswordChange is bool) &&
+             (!("passwordChangedAt" in data) || data.passwordChangedAt is string);
+    }
+
     // ============================================================================
     // Catch-all Default Deny
     // ============================================================================
@@ -263,7 +268,7 @@ service cloud.firestore {
       allow write: if isAdmin() || isInstructor();
     }
 
-    // 24. lms_instructors
+    // 17. lms_instructors
     match /lms_instructors/{instructorEmail} {
       allow read: if true;
       allow create: if isAdmin();
@@ -271,14 +276,14 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // 17. lms_enrollments
+    // 18. lms_enrollments
     match /lms_enrollments/{enrollmentId} {
       allow read: if isAdmin() || isInstructor() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow create: if isAuthenticated() || isAdmin();
+      allow create: if isAdmin() || (isAuthenticated() && request.resource.data.userId == request.auth.uid);
       allow update, delete: if isAdmin() || isInstructor();
     }
 
-    // 18. lms_progress
+    // 19. lms_progress
     match /lms_progress/{progressId} {
       allow read: if isAdmin() || isInstructor() || (isAuthenticated() && resource.data.userId == request.auth.uid);
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
@@ -286,21 +291,21 @@ service cloud.firestore {
       allow delete: if isAdmin() || isInstructor();
     }
 
-    // 19. lms_comments
+    // 20. lms_comments
     match /lms_comments/{commentId} {
       allow read: if true;
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid);
     }
 
-    // 20. lms_messages
+    // 21. lms_messages
     match /lms_messages/{messageId} {
       allow read: if isAdmin() || isInstructor() || (isAuthenticated() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid));
       allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
       allow update, delete: if isAdmin() || isInstructor();
     }
 
-    // 21. lms_affiliates
+    // 22. lms_affiliates
     match /lms_affiliates/{affiliateId} {
       allow read: if true;
       allow create: if isAuthenticated() && request.auth.uid == affiliateId;
@@ -311,31 +316,38 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // 22. lms_certificates
+    // 23. lms_certificates
     match /lms_certificates/{certificateId} {
       allow read: if true;
-      allow create: if isAuthenticated() || isAdmin();
+      allow create: if isAdmin() || (isAuthenticated() && request.resource.data.userId == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
-    // 23. lms_notifications
+    // 24. lms_notifications
     match /lms_notifications/{notificationId} {
       allow read: if true;
-      allow create: if request.resource.data.title is string && request.resource.data.message is string;
+      allow create: if (isAuthenticated() || isAdmin()) && request.resource.data.title is string && request.resource.data.message is string;
       allow update, delete: if isAdmin();
     }
 
-    // 24. lms_settings
+    // 25. lms_settings
     match /lms_settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin() || isInstructor();
     }
 
-    // 25. lms_commissions
+    // 26. lms_commissions
     match /lms_commissions/{commissionId} {
       allow create: if isAuthenticated() && isValidCommission(request.resource.data);
       allow read: if isAdmin() || isInstructor() || (isAuthenticated() && resource.data.affiliateId == request.auth.uid);
       allow update: if isAdmin() || isInstructor();
+      allow delete: if isAdmin();
+    }
+
+    // 27. lms_student_profiles
+    match /lms_student_profiles/{userId} {
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+      allow create, update: if (isAdmin() || (isAuthenticated() && request.auth.uid == userId)) && isValidStudentProfile(request.resource.data);
       allow delete: if isAdmin();
     }
   }
