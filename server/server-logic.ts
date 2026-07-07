@@ -4455,6 +4455,13 @@ app.get("/blog/:slug", async (req, res) => {
       }
     }
 
+    // Dynamic content-type based on image URL extension
+    let imageType = "image/jpeg";
+    const imgLower = imageUrl.toLowerCase();
+    if (imgLower.endsWith('.png')) imageType = "image/png";
+    else if (imgLower.endsWith('.webp')) imageType = "image/webp";
+    else if (imgLower.endsWith('.gif')) imageType = "image/gif";
+
     // Read index.html compiled assets safely
     let indexPath = path.join(process.cwd(), 'dist', 'index.html');
     if (!fs.existsSync(indexPath)) {
@@ -4462,17 +4469,41 @@ app.get("/blog/:slug", async (req, res) => {
     }
 
     if (!fs.existsSync(indexPath)) {
-      return res.status(404).send("Template index.html não localizado.");
+      // Return a dynamic, visually identical HTML shell to guarantee sitemaps, bots, and shares function perfectly
+      console.warn("Template index.html not found, rendering fallback dynamic HTML shell.");
+      res.header("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(`<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="${url}" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:image:secure_url" content="${imageUrl}" />
+    <meta property="og:image:type" content="${imageType}" />
+    <meta property="og:image:alt" content="${title}" />
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="${url}" />
+    <meta property="twitter:title" content="${title}" />
+    <meta property="twitter:description" content="${description}" />
+    <meta property="twitter:image" content="${imageUrl}" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Automatically redirect to homepage where React router loads immediately
+      window.location.href = "/";
+    </script>
+  </body>
+</html>`);
     }
 
     let html = fs.readFileSync(indexPath, 'utf8');
-
-    // Dynamic content-type based on image URL extension
-    let imageType = "image/jpeg";
-    const imgLower = imageUrl.toLowerCase();
-    if (imgLower.endsWith('.png')) imageType = "image/png";
-    else if (imgLower.endsWith('.webp')) imageType = "image/webp";
-    else if (imgLower.endsWith('.gif')) imageType = "image/gif";
 
     // Secure replacements using function callback to avoid native JavaScript "$" regex replacement substitution bug
     html = html.replace(/<title>.*?<\/title>/gi, () => `<title>${title}</title>`);
@@ -4498,13 +4529,32 @@ app.get("/blog/:slug", async (req, res) => {
     res.header("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(html);
 
-  } catch (err) {
+  } catch (err: any) {
     console.error("SEO blogger exception:", err);
-    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
-    if (!fs.existsSync(indexPath)) {
-      indexPath = path.join(process.cwd(), 'index.html');
-    }
-    return res.sendFile(indexPath);
+    
+    // Diagnostic Fallback: Render full stack trace and message directly to the screen to eliminate "FUNCTION_INVOCATION_FAILED" black box errors
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.status(500).send(`<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Erro Interno - Ateliê Andrew Lemos</title>
+    <style>
+      body { font-family: sans-serif; padding: 40px; background: #f9f9f9; color: #333; }
+      h1 { color: #d9534f; }
+      pre { background: #eee; padding: 20px; border-radius: 4px; overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>Ocorreu um erro no servidor (SEO Interceptor)</h1>
+    <p>Se você é o proprietário, verifique os detalhes abaixo para corrigir a configuração do projeto:</p>
+    <pre>Erro: ${err?.message || String(err)}</pre>
+    <pre>Stack: ${err?.stack || "Sem stack trace"}</pre>
+    <hr />
+    <p>Tentar carregar o site mesmo assim:</p>
+    <a href="/">Ir para a página inicial</a>
+  </body>
+</html>`);
   }
 });
 
@@ -4564,23 +4614,55 @@ app.get("/galeria/:slug", async (req, res) => {
       }
     }
 
-    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
-    if (!fs.existsSync(indexPath)) {
-      indexPath = path.join(process.cwd(), 'index.html');
-    }
-
-    if (!fs.existsSync(indexPath)) {
-      return res.status(404).send("Template index.html não localizado.");
-    }
-
-    let html = fs.readFileSync(indexPath, 'utf8');
-
     // Dynamic content-type based on image URL extension
     let imageType = "image/jpeg";
     const imgLower = imageUrl.toLowerCase();
     if (imgLower.endsWith('.png')) imageType = "image/png";
     else if (imgLower.endsWith('.webp')) imageType = "image/webp";
     else if (imgLower.endsWith('.gif')) imageType = "image/gif";
+
+    // Read index.html compiled assets safely
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+
+    if (!fs.existsSync(indexPath)) {
+      // Return a dynamic, visually identical HTML shell to guarantee sitemaps, bots, and shares function perfectly
+      console.warn("Template index.html not found, rendering fallback dynamic HTML shell.");
+      res.header("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(`<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="${url}" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:image:secure_url" content="${imageUrl}" />
+    <meta property="og:image:type" content="${imageType}" />
+    <meta property="og:image:alt" content="${title}" />
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="${url}" />
+    <meta property="twitter:title" content="${title}" />
+    <meta property="twitter:description" content="${description}" />
+    <meta property="twitter:image" content="${imageUrl}" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Automatically redirect to homepage where React router loads immediately
+      window.location.href = "/";
+    </script>
+  </body>
+</html>`);
+    }
+
+    let html = fs.readFileSync(indexPath, 'utf8');
 
     html = html.replace(/<title>.*?<\/title>/gi, () => `<title>${title}</title>`);
     html = html.replace(/<meta\s+name="description"\s+content=".*?"\s*\/?>/gi, () => `<meta name="description" content="${description}" />`);
@@ -4602,13 +4684,32 @@ app.get("/galeria/:slug", async (req, res) => {
 
     res.header("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(html);
-  } catch (err) {
+  } catch (err: any) {
     console.error("SEO gallery exception:", err);
-    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
-    if (!fs.existsSync(indexPath)) {
-      indexPath = path.join(process.cwd(), 'index.html');
-    }
-    return res.sendFile(indexPath);
+    
+    // Diagnostic Fallback: Render full stack trace and message directly to the screen to eliminate "FUNCTION_INVOCATION_FAILED" black box errors
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.status(500).send(`<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Erro Interno - Ateliê Andrew Lemos</title>
+    <style>
+      body { font-family: sans-serif; padding: 40px; background: #f9f9f9; color: #333; }
+      h1 { color: #d9534f; }
+      pre { background: #eee; padding: 20px; border-radius: 4px; overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>Ocorreu um erro no servidor (SEO Interceptor)</h1>
+    <p>Se você é o proprietário, verifique os detalhes abaixo para corrigir a configuração do projeto:</p>
+    <pre>Erro: ${err?.message || String(err)}</pre>
+    <pre>Stack: ${err?.stack || "Sem stack trace"}</pre>
+    <hr />
+    <p>Tentar carregar o site mesmo assim:</p>
+    <a href="/">Ir para a página inicial</a>
+  </body>
+</html>`);
   }
 });
 
@@ -4667,23 +4768,55 @@ app.get("/vendas/:slug", async (req, res) => {
       }
     }
 
-    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
-    if (!fs.existsSync(indexPath)) {
-      indexPath = path.join(process.cwd(), 'index.html');
-    }
-
-    if (!fs.existsSync(indexPath)) {
-      return res.status(404).send("Template index.html não localizado.");
-    }
-
-    let html = fs.readFileSync(indexPath, 'utf8');
-
     // Dynamic content-type based on image URL extension
     let imageType = "image/jpeg";
     const imgLower = imageUrl.toLowerCase();
     if (imgLower.endsWith('.png')) imageType = "image/png";
     else if (imgLower.endsWith('.webp')) imageType = "image/webp";
     else if (imgLower.endsWith('.gif')) imageType = "image/gif";
+
+    // Read index.html compiled assets safely
+    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      indexPath = path.join(process.cwd(), 'index.html');
+    }
+
+    if (!fs.existsSync(indexPath)) {
+      // Return a dynamic, visually identical HTML shell to guarantee sitemaps, bots, and shares function perfectly
+      console.warn("Template index.html not found, rendering fallback dynamic HTML shell.");
+      res.header("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(`<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="${url}" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:image:secure_url" content="${imageUrl}" />
+    <meta property="og:image:type" content="${imageType}" />
+    <meta property="og:image:alt" content="${title}" />
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="${url}" />
+    <meta property="twitter:title" content="${title}" />
+    <meta property="twitter:description" content="${description}" />
+    <meta property="twitter:image" content="${imageUrl}" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Automatically redirect to homepage where React router loads immediately
+      window.location.href = "/";
+    </script>
+  </body>
+</html>`);
+    }
+
+    let html = fs.readFileSync(indexPath, 'utf8');
 
     html = html.replace(/<title>.*?<\/title>/gi, () => `<title>${title}</title>`);
     html = html.replace(/<meta\s+name="description"\s+content=".*?"\s*\/?>/gi, () => `<meta name="description" content="${description}" />`);
@@ -4705,13 +4838,32 @@ app.get("/vendas/:slug", async (req, res) => {
 
     res.header("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(html);
-  } catch (err) {
+  } catch (err: any) {
     console.error("SEO ecommerce exception:", err);
-    let indexPath = path.join(process.cwd(), 'dist', 'index.html');
-    if (!fs.existsSync(indexPath)) {
-      indexPath = path.join(process.cwd(), 'index.html');
-    }
-    return res.sendFile(indexPath);
+    
+    // Diagnostic Fallback: Render full stack trace and message directly to the screen to eliminate "FUNCTION_INVOCATION_FAILED" black box errors
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.status(500).send(`<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Erro Interno - Ateliê Andrew Lemos</title>
+    <style>
+      body { font-family: sans-serif; padding: 40px; background: #f9f9f9; color: #333; }
+      h1 { color: #d9534f; }
+      pre { background: #eee; padding: 20px; border-radius: 4px; overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>Ocorreu um erro no servidor (SEO Interceptor)</h1>
+    <p>Se você é o proprietário, verifique os detalhes abaixo para corrigir a configuração do projeto:</p>
+    <pre>Erro: ${err?.message || String(err)}</pre>
+    <pre>Stack: ${err?.stack || "Sem stack trace"}</pre>
+    <hr />
+    <p>Tentar carregar o site mesmo assim:</p>
+    <a href="/">Ir para a página inicial</a>
+  </body>
+</html>`);
   }
 });
 
