@@ -120,6 +120,22 @@ service cloud.firestore {
              (!("updatedAt" in data) || isTimestampOrString(data.updatedAt));
     }
 
+    function isValidCommission(data) {
+      return data.id is string &&
+             data.affiliateId is string &&
+             data.affiliateCode is string &&
+             data.affiliateName is string &&
+             data.buyerEmail is string &&
+             (data.price is int || data.price is float) &&
+             (data.commissionPercent is int || data.commissionPercent is float) &&
+             (data.commissionAmount is int || data.commissionAmount is float) &&
+             data.enrollmentId is string &&
+             data.courseId is string &&
+             data.courseTitle is string &&
+             (!("createdAt" in data) || isTimestampOrString(data.createdAt)) &&
+             (!("status" in data) || data.status is string);
+    }
+
     // ============================================================================
     // Catch-all Default Deny
     // ============================================================================
@@ -307,6 +323,20 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.resource.data.title is string && request.resource.data.message is string;
       allow update, delete: if isAdmin();
+    }
+
+    // 24. lms_settings
+    match /lms_settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin() || isInstructor();
+    }
+
+    // 25. lms_commissions
+    match /lms_commissions/{commissionId} {
+      allow create: if isAuthenticated() && isValidCommission(request.resource.data);
+      allow read: if isAdmin() || isInstructor() || (isAuthenticated() && resource.data.affiliateId == request.auth.uid);
+      allow update: if isAdmin() || isInstructor();
+      allow delete: if isAdmin();
     }
   }
 }
