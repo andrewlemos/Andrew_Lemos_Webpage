@@ -2583,13 +2583,20 @@ app.post("/api/vendas/webhook-pagseguro", async (req, res) => {
 });
 
 // 4. Melhor Envio Webhook Endpoint
+app.get("/api/vendas/webhook-melhorenvio", (req, res) => {
+  return res.status(200).json({ status: "ok", message: "Endpoint do Webhook Melhor Envio está ativo e pronto para receber notificações." });
+});
+
 app.post("/api/vendas/webhook-melhorenvio", async (req, res) => {
   const payload = req.body;
   console.log("[Webhook Melhor Envio] Conteúdo recebido:", JSON.stringify(payload));
 
-  const { event, data } = payload;
+  const { event, data } = payload || {};
+  
+  // Tratar requisições de teste/ping para validação de URL do Melhor Envio
   if (!event || !data || !data.id) {
-    return res.status(400).json({ error: "Payload inválido. Event, data e data.id são obrigatórios." });
+    console.log("[Webhook Melhor Envio] Recebida requisição de ping ou payload incompleto. Retornando 200 OK para validação.");
+    return res.status(200).json({ status: "ping_ok", message: "Endpoint validado com sucesso. Aguardando eventos reais." });
   }
 
   // 1. Authenticity verification (X-ME-Signature)
