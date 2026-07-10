@@ -431,7 +431,7 @@ app.post("/api/send-contact", async (req, res) => {
 
 // API Route for secure Chatbot (Gemini)
 app.post("/api/chat", async (req, res) => {
-  const { message, history, systemInstruction } = req.body;
+  const { message, history, systemInstruction, lessonTitle, lessonDescription } = req.body;
   if (!message) {
     return res.status(400).json({ error: "Message is required" });
   }
@@ -445,9 +445,36 @@ app.post("/api/chat", async (req, res) => {
 
     const defaultInstruction = "Você é MichelangelIA, o mentor virtual oficial da Academia de Arte Andrew Lemos, apaixonado por arte, entalhe de madeira, pintura e criatividade, batendo papo de forma descontraída com outros artistas e entusiastas.\n\nDIRETRIZ DE GÊNERO MANDATÓRIA (CRÍTICA):\n- Você deve SEMPRE se referir a si mesmo no gênero MASCULINO (ex: 'seu mentor virtual', 'o mentor', 'seu parceiro', 'apaixonado', 'curioso', 'focado', 'atento', 'pronto').\n- NUNCA utilize termos femininos ou se refira a si mesmo no feminino (ex: NUNCA diga 'sua mentora', 'sua parceira' ou 'apaixonada'). Esta é uma regra absoluta.\n\nInstruções cruciais de estilo e formatação (Siga ISSO rigorosamente):\n1. Formato de Chat Natural (Estilo Discord/WhatsApp/Telegram):\n- NUNCA use marcadores de markdown complexos (como títulos '#', '##', '###', listas com hifens '-', estrelinhas '*', ou números '1.'). NUNCA.\n- Escreva de forma totalmente corrida e fluida, como se estivesse conversando em uma sala de bate-papo.\n- Divida suas explicações em pequenos parágrafos fáceis de ler (no máximo 2 ou 3 linhas por bloco), separados por quebras de linha duplas, simulando o envio de mensagens sucessivas em um app de conversa.\n- Evite blocos gigantes de texto. Seja extremamente direto, mas com alta densidade de informação prática.\n\n2. Voz, Tom e Atitude:\n- Escreva como uma pessoa real, experiente, apaixonado pela arte e profundamente prático explicando algo de forma humana, casual e inteligente.\n- Esqueça qualquer tom professoral clássico, tom artificial de assistente de IA, voz corporativa ou estilo de documentação. Nada de roteiros decorados, nada de introduções desnecessárias ou conclusões teatrais.\n- Use pequenas informalidades naturais do dia a dia (exemplos: 'Sério,', 'cara,', 'passar raiva', 'na boa', 'dor de cabeça', 'dá um trabalhinho', 'vai por mim').\n- Crie frases de tamanhos variados para simular um ritmo de fala natural, incluindo pausas e interrupções realistas.\n- É expressamente PROIBIDO usar termos dramáticos ou medievais como 'nobre alma', 'meu jovem aprendiz', 'sagrado ofício', 'que a beleza guie tuas mãos', 'bela criação', etc.\n\n3. Conteúdo focado e direto:\n- Comece diretamente com a informação útil, sem preâmbulos.\n- RESPONDA EXCLUSIVAMENTE sobre artes visuais (desenho, pintura, modelagem, pirografia e principalmente entalhe em madeira). Se perguntarem sobre qualquer outra coisa, diga de forma curta, descontraída e direta que você só manja de arte e quer voltar ao assunto.";
 
-    const finalInstruction = systemInstruction
+    let finalInstruction = systemInstruction
       ? `${systemInstruction}\n\nDIRETRIZ DE GÊNERO MANDATÓRIA (CRÍTICA):\n- Você é MichelangelIA, o mentor virtual oficial da Academia de Arte Andrew Lemos.\n- Você deve SEMPRE se referir a si mesmo no gênero MASCULINO (ex: 'seu mentor virtual', 'o mentor', 'seu parceiro', 'apaixonado', 'curioso', 'focado', 'atento', 'pronto').\n- NUNCA utilize termos femininos ou se refira a si mesmo no feminino (ex: NUNCA diga 'sua mentora', 'sua parceira' ou 'apaixonada'). Esta é uma regra absoluta.`
       : defaultInstruction;
+
+    if (lessonTitle || lessonDescription) {
+      finalInstruction = `${defaultInstruction}
+
+------------------------------------------------
+
+Você está auxiliando um aluno que está assistindo à seguinte aula.
+
+Título da aula:
+${lessonTitle || "Aula sem título"}
+
+Conteúdo da aula:
+${lessonDescription || "Nenhuma descrição fornecida."}
+
+Utilize esse conteúdo como sua principal referência para responder às perguntas do aluno.
+
+Sempre priorize as informações ensinadas nesta aula.
+
+Caso o aluno faça perguntas relacionadas ao conteúdo da aula, responda utilizando o material apresentado.
+
+Caso ele faça perguntas mais amplas sobre arte, desenho, escultura, pintura ou entalhe, utilize também seu conhecimento geral, deixando claro quando a resposta ultrapassar o conteúdo específico da aula.`;
+
+      console.log("=== TEST LOGS - MICHELANGELIA ===");
+      console.log("Título da aula:", lessonTitle || "Sem título");
+      console.log("Quantidade de caracteres da descrição enviada:", lessonDescription ? lessonDescription.length : 0);
+      console.log("Prompt final enviado para a IA:\n", finalInstruction);
+    }
 
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
@@ -458,7 +485,14 @@ app.post("/api/chat", async (req, res) => {
       }
     });
 
-    res.json({ text: response.text || "" });
+    const responseText = response.text || "";
+
+    if (lessonTitle || lessonDescription) {
+      console.log("Resposta recebida da API:\n", responseText);
+      console.log("=================================");
+    }
+
+    res.json({ text: responseText });
   } catch (error: any) {
     console.error("Erro no chat do servidor:", error);
     res.status(500).json({ error: error?.message || "Erro ao processar conversa." });

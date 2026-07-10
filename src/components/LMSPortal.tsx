@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { GoogleGenAI } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { 
@@ -1117,7 +1118,9 @@ DIRETRIZES DE ATENDIMENTO E CONTEXTO DO MENTOR:
         body: JSON.stringify({
           message: queryText,
           systemInstruction: systemInstructions,
-          history: historyPayload
+          history: historyPayload,
+          lessonTitle: activeLesson?.title,
+          lessonDescription: activeLesson?.description
         })
       });
 
@@ -1136,11 +1139,17 @@ DIRETRIZES DE ATENDIMENTO E CONTEXTO DO MENTOR:
         const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
         if (!apiKey) throw new Error("Chave Gemini ausente no ambiente do cliente.");
 
-        // We load the GoogleGenAI dynamic library directly or run mock model responses
-        // Let's implement an elegant conversational simulation or a clean generative response if sdk available
-        const responseText = `Como seu mentor virtual na aula "${activeLesson?.title}", recomendo praticar a pegada precisa do formão reto em 45 graus. Certifique-se de afiar bem a goiva no strop de couro curtido com pasta verde antes de rebaixar este relevo de Cedro Rosa. O cedro rosa se comporta muito bem a cortes a favor da fibra! Ficou com alguma dúvida de como fazer isso de forma prática?`;
-        assistantResponse = responseText;
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await ai.models.generateContent({
+          model: "gemini-flash-latest",
+          contents: [...historyPayload, { role: 'user', parts: [{ text: queryText }] }],
+          config: {
+            systemInstruction: systemInstructions
+          }
+        });
+        assistantResponse = response.text || "Desculpe, não consegui gerar uma resposta. Por favor, tente novamente.";
       } catch (clientErr) {
+        console.error("Erro no MichelangelIA (Client-side fallback):", clientErr);
         assistantResponse = "Hum, não consegui me conectar aos servidores do MichelangelIA neste instante. Mas continue esculpindo com calma e segurança! Que tal tentar enviar sua pergunta novamente em alguns segundos?";
       }
     }
