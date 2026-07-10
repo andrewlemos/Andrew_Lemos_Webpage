@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ensureRobustUrl } from '../App';
 
 interface MarkdownRendererProps {
@@ -31,6 +32,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   return (
     <div className={`markdown-body ${className}`}>
       <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
         components={{
           h1: ({node, ...props}) => (
             <h1 className={isChat 
@@ -100,6 +102,35 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               />
               {alt && <span className="text-[10px] text-gray-400 mt-1 italic font-sans">{alt}</span>}
             </div>
+          ),
+          // Clean table wrappers and styling
+          table: ({node, ...props}) => (
+            <div className={`overflow-x-auto my-6 border rounded-xl shadow-sm ${
+              isDark ? 'border-stone-800 bg-stone-950/20' : 'border-stone-200 bg-white'
+            }`}>
+              <table className="w-full border-collapse text-left text-xs sm:text-sm" {...props} />
+            </div>
+          ),
+          thead: ({node, ...props}) => (
+            <thead className={isDark ? 'bg-stone-900/80' : 'bg-stone-100/80'} {...props} />
+          ),
+          tbody: ({node, ...props}) => <tbody {...props} />,
+          tr: ({node, ...props}) => (
+            <tr className={`border-b transition-colors ${
+              isDark 
+                ? 'border-stone-900 hover:bg-stone-900/30 odd:bg-stone-950/40 even:bg-stone-900/10' 
+                : 'border-stone-200 hover:bg-stone-50/50 odd:bg-white even:bg-stone-50/30'
+            }`} {...props} />
+          ),
+          th: ({node, ...props}) => (
+            <th className={`px-4 py-3 font-semibold font-serif border-b ${
+              isDark ? 'text-stone-100 border-stone-800' : 'text-neutral-800 border-stone-200'
+            }`} {...props} />
+          ),
+          td: ({node, ...props}) => (
+            <td className={`px-4 py-3 align-top leading-relaxed ${
+              isDark ? 'text-stone-300' : 'text-gray-700'
+            }`} {...props} />
           )
         }}
       >
