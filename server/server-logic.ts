@@ -703,6 +703,22 @@ async function sendTelegramNotification(text: string) {
 // Helper to notify admin via E-mail and Telegram when a new order is created
 async function notifyAdminNewOrder(orderId: string, orderData: any) {
   try {
+    if (adminDb) {
+      const orderRef = adminDb.collection("ecom_orders").doc(orderId);
+      const orderSnap = await orderRef.get();
+      if (orderSnap.exists) {
+        const freshData = orderSnap.data() || {};
+        if (freshData.adminNewOrderNotified === true) {
+          console.log(`[Notificação Admin Novo Pedido] Admin já notificado anteriormente para o pedido ${orderId}. Cancelando envio.`);
+          return;
+        }
+      }
+      await orderRef.update({
+        adminNewOrderNotified: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
     const adminEmail = "andrewfmlemos@gmail.com";
     const customerInfo = orderData?.customerInfo || {};
     const items = orderData?.items || [];
@@ -808,6 +824,22 @@ async function notifyAdminNewOrder(orderId: string, orderData: any) {
 // Helper to notify admin via E-mail and Telegram when a payment is approved
 async function notifyAdminPaymentApproved(orderId: string, orderData: any) {
   try {
+    if (adminDb) {
+      const orderRef = adminDb.collection("ecom_orders").doc(orderId);
+      const orderSnap = await orderRef.get();
+      if (orderSnap.exists) {
+        const freshData = orderSnap.data() || {};
+        if (freshData.adminPaymentApprovedNotified === true) {
+          console.log(`[Notificação Admin Pagamento] Admin já notificado anteriormente de pagamento aprovado para o pedido ${orderId}. Cancelando envio.`);
+          return;
+        }
+      }
+      await orderRef.update({
+        adminPaymentApprovedNotified: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
     const adminEmail = "andrewfmlemos@gmail.com";
     const customerInfo = orderData?.customerInfo || {};
     const items = orderData?.items || [];
@@ -896,6 +928,22 @@ async function notifyAdminPaymentApproved(orderId: string, orderData: any) {
 // Helper to send order placement confirmation email
 async function sendOrderPlacementEmail(orderId: string, orderData: any, baseUrl: string) {
   try {
+    if (adminDb) {
+      const orderRef = adminDb.collection("ecom_orders").doc(orderId);
+      const orderSnap = await orderRef.get();
+      if (orderSnap.exists) {
+        const freshData = orderSnap.data() || {};
+        if (freshData.orderPlacementEmailSent === true) {
+          console.log(`[E-mail Pedido] E-mail de recebimento já enviado anteriormente para o pedido ${orderId}. Cancelando envio para evitar duplicidade.`);
+          return;
+        }
+      }
+      await orderRef.update({
+        orderPlacementEmailSent: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
     const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
     const SMTP_PASS = process.env.SMTP_PASS;
     if (!SMTP_PASS) {
@@ -982,6 +1030,22 @@ async function sendDigitalAccessEmail(
   baseUrl: string
 ) {
   try {
+    if (adminDb && orderId) {
+      const orderRef = adminDb.collection("ecom_orders").doc(orderId);
+      const orderSnap = await orderRef.get();
+      if (orderSnap.exists) {
+        const freshData = orderSnap.data() || {};
+        if (freshData.digitalAccessEmailSent === true) {
+          console.log(`[E-mail Acesso] E-mail de acesso digital já enviado anteriormente para o pedido ${orderId}. Cancelando envio para evitar duplicidade.`);
+          return;
+        }
+      }
+      await orderRef.update({
+        digitalAccessEmailSent: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
     const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
     const SMTP_PASS = process.env.SMTP_PASS;
     if (!SMTP_PASS) return;
@@ -1065,6 +1129,22 @@ async function sendDigitalAccessEmail(
 // Helper to send payment confirmation email
 async function sendOrderPaymentConfirmationEmail(orderId: string, orderData: any, baseUrl: string) {
   try {
+    if (adminDb) {
+      const orderRef = adminDb.collection("ecom_orders").doc(orderId);
+      const orderSnap = await orderRef.get();
+      if (orderSnap.exists) {
+        const freshData = orderSnap.data() || {};
+        if (freshData.paymentConfirmationEmailSent === true) {
+          console.log(`[E-mail Pagamento] E-mail de confirmação de pagamento já enviado anteriormente para o pedido ${orderId}. Cancelando envio para evitar duplicidade.`);
+          return;
+        }
+      }
+      await orderRef.update({
+        paymentConfirmationEmailSent: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
     const SMTP_USER = process.env.SMTP_USER || "andrewfmlemos@gmail.com";
     const SMTP_PASS = process.env.SMTP_PASS;
     if (!SMTP_PASS) return;
@@ -1108,6 +1188,23 @@ async function sendOrderPaymentConfirmationEmail(orderId: string, orderData: any
 // Helper to send Delivered thank you and review request email
 async function sendDeliveredReviewRequestEmail(orderId: string, orderData: any, baseUrl: string) {
   try {
+    if (adminDb) {
+      const orderRef = adminDb.collection("ecom_orders").doc(orderId);
+      const orderSnap = await orderRef.get();
+      if (orderSnap.exists) {
+        const freshData = orderSnap.data() || {};
+        if (freshData.reviewEmailSent === true || freshData.deliveredReviewEmailSent === true) {
+          console.log(`[E-mail Avaliação] E-mail de agradecimento e avaliação já enviado anteriormente para o pedido ${orderId}. Cancelando envio para evitar duplicidade.`);
+          return;
+        }
+      }
+      await orderRef.update({
+        reviewEmailSent: true,
+        deliveredReviewEmailSent: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
     const customerInfo = orderData.customerInfo;
     if (!customerInfo || !customerInfo.email) {
       console.warn(`[E-mail Avaliação] Cancelando envio: e-mail do destinatário ausente para o pedido ${orderId}`);
@@ -1427,7 +1524,6 @@ async function executeCartsRecoverySweep(baseUrl: string) {
       // 1. Process 24-hour reminder
       if (lastActiveDate <= limit24h && lastActiveDate > limit48h && !hasSent24h) {
         console.log(`[Recuperação de Carrinho] Enviando lembrete de 24h para ${email}...`);
-        await sendRecoveryEmail(email, name, formattedItems, total, 'msg_24h', null, baseUrl).catch(e => console.error(e));
         
         sentMessages.push({
           type: "msg_24h",
@@ -1439,6 +1535,8 @@ async function executeCartsRecoverySweep(baseUrl: string) {
           sentMessages,
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
+
+        await sendRecoveryEmail(email, name, formattedItems, total, 'msg_24h', null, baseUrl).catch(e => console.error(e));
         processedCount++;
       }
       
@@ -1460,8 +1558,6 @@ async function executeCartsRecoverySweep(baseUrl: string) {
           createdAt: now.toISOString()
         });
 
-        await sendRecoveryEmail(email, name, formattedItems, total, 'msg_48h', couponCode, baseUrl).catch(e => console.error(e));
-
         sentMessages.push({
           type: "msg_48h",
           sentAt: now.toISOString(),
@@ -1473,6 +1569,8 @@ async function executeCartsRecoverySweep(baseUrl: string) {
           sentMessages,
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
+
+        await sendRecoveryEmail(email, name, formattedItems, total, 'msg_48h', couponCode, baseUrl).catch(e => console.error(e));
         processedCount++;
       }
 
@@ -1480,8 +1578,6 @@ async function executeCartsRecoverySweep(baseUrl: string) {
       else if (lastActiveDate <= limit72h && !hasSent72h) {
         console.log(`[Recuperação de Carrinho] Enviando aviso final de 72h para ${email}...`);
         const activeCoupon = cart.couponCode || null;
-
-        await sendRecoveryEmail(email, name, formattedItems, total, 'msg_72h', activeCoupon, baseUrl).catch(e => console.error(e));
 
         sentMessages.push({
           type: "msg_72h",
@@ -1494,6 +1590,8 @@ async function executeCartsRecoverySweep(baseUrl: string) {
           sentMessages,
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
+
+        await sendRecoveryEmail(email, name, formattedItems, total, 'msg_72h', activeCoupon, baseUrl).catch(e => console.error(e));
         processedCount++;
       }
     }
@@ -1532,6 +1630,12 @@ app.post("/api/vendas/abandoned-carts/manual-send", async (req, res) => {
     const total = cartData.total || 0;
     const sentMessages = cartData.sentMessages || [];
 
+    // Prevent duplicate sending for manual trigger
+    const hasAlreadySent = sentMessages.some((m: any) => m.type === step);
+    if (hasAlreadySent) {
+      return res.json({ success: true, message: `E-mail de recuperação (${step}) já foi enviado anteriormente para este carrinho.` });
+    }
+
     const host = req.get("host") || "localhost:3000";
     const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") ? "http" : "https";
     const baseUrl = `${protocol}://${host}`;
@@ -1557,9 +1661,7 @@ app.post("/api/vendas/abandoned-carts/manual-send", async (req, res) => {
       });
     }
 
-    await sendRecoveryEmail(email, name, formattedItems, total, step, couponCode, baseUrl);
-
-    // Save to historical logs
+    // Save to historical logs pre-emptively to prevent concurrency duplicates
     sentMessages.push({
       type: step,
       sentAt: new Date().toISOString(),
@@ -1581,6 +1683,8 @@ app.post("/api/vendas/abandoned-carts/manual-send", async (req, res) => {
     }
 
     await cartRef.update(updateObj);
+
+    await sendRecoveryEmail(email, name, formattedItems, total, step, couponCode, baseUrl);
 
     return res.json({ success: true, message: `E-mail de recuperação (${step === 'msg_24h' ? 'Lembrete' : step === 'msg_48h' ? 'Cupom OFF' : 'Última chance'}) enviado com sucesso!` });
   } catch (err: any) {
@@ -4091,6 +4195,79 @@ function backendGetProductSlug(prod: any): string {
   return prod.id || "";
 }
 
+function isBot(userAgent: string): boolean {
+  if (!userAgent) return false;
+  const lower = userAgent.toLowerCase();
+  const bots = [
+    "facebookexternalhit",
+    "whatsapp",
+    "telegrambot",
+    "twitterbot",
+    "linkedinbot",
+    "discordbot",
+    "slackbot",
+    "googlebot",
+    "bingbot",
+    "crawler",
+    "spider",
+    "pinterest"
+  ];
+  return bots.some(bot => lower.includes(bot));
+}
+
+function backendInjectMetaTags(html: string, options: {
+  title: string;
+  description: string;
+  url: string;
+  imageUrl: string;
+  imageType: string;
+}): string {
+  const { title, description, url, imageUrl, imageType } = options;
+
+  let cleanedHtml = html;
+  // Remove existing title
+  cleanedHtml = cleanedHtml.replace(/<title>.*?<\/title>/gi, "");
+  // Remove existing description
+  cleanedHtml = cleanedHtml.replace(/<meta\\s+[^>]*?name="description"[^>]*?>/gi, "");
+  cleanedHtml = cleanedHtml.replace(/<meta\\s+[^>]*?name='description'[^>]*?>/gi, "");
+  cleanedHtml = cleanedHtml.replace(/<meta\s+[^>]*?name="description"[^>]*?>/gi, "");
+  cleanedHtml = cleanedHtml.replace(/<meta\s+[^>]*?name='description'[^>]*?>/gi, "");
+  // Remove existing og: tags
+  cleanedHtml = cleanedHtml.replace(/<meta\s+[^>]*?property="og:[^"]+"[^>]*?>/gi, "");
+  cleanedHtml = cleanedHtml.replace(/<meta\s+[^>]*?property='og:[^']+'[^>]*?>/gi, "");
+  // Remove existing twitter: tags
+  cleanedHtml = cleanedHtml.replace(/<meta\s+[^>]*?property="twitter:[^"]+"[^>]*?>/gi, "");
+  cleanedHtml = cleanedHtml.replace(/<meta\s+[^>]*?property='twitter:[^']+'[^>]*?>/gi, "");
+  cleanedHtml = cleanedHtml.replace(/<meta\s+[^>]*?name="twitter:[^"]+"[^>]*?>/gi, "");
+  cleanedHtml = cleanedHtml.replace(/<meta\s+[^>]*?name='twitter:[^']+'[^>]*?>/gi, "");
+
+  const newMetaTags = `
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    
+    <!-- Open Graph (Facebook, WhatsApp, Slack, Telegram, LinkedIn) -->
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="${url}" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:image:secure_url" content="${imageUrl}" />
+    <meta property="og:image:type" content="${imageType}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="${title}" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="${url}" />
+    <meta name="twitter:title" content="${title}" />
+    <meta name="twitter:description" content="${description}" />
+    <meta name="twitter:image" content="${imageUrl}" />
+  `;
+
+  return cleanedHtml.replace(/<head>/i, () => `<head>${newMetaTags}`);
+}
+
 app.get(["/sitemap.xml", "/api/sitemap.xml"], async (req, res) => {
   const host = req.get("host") || "andrewlemos.com.br";
   const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
@@ -4362,6 +4539,10 @@ Sitemap: ${baseUrl}/sitemap.xml
 // --- Server-Side SEO & Open Graph Interceptors for Blog Articles ---
 app.get("/blog/:slug", async (req, res) => {
   const { slug } = req.params;
+  const userAgent = req.get("User-Agent") || "";
+  const isBotUser = isBot(userAgent);
+
+  console.log(`[SEO-INTERCEPTOR-BOT-CHECK] Route: /blog/${slug}, User-Agent: ${userAgent}, isBot: ${isBotUser}`);
 
   try {
     const host = req.get("host") || "andrewlemos.com.br";
@@ -4471,7 +4652,8 @@ app.get("/blog/:slug", async (req, res) => {
     if (!fs.existsSync(indexPath)) {
       // Return a dynamic, visually identical HTML shell to guarantee sitemaps, bots, and shares function perfectly
       console.warn("Template index.html not found, rendering fallback dynamic HTML shell.");
-      res.header("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "public,max-age=300");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.status(200).send(`<!doctype html>
 <html lang="pt-BR">
   <head>
@@ -4505,28 +4687,17 @@ app.get("/blog/:slug", async (req, res) => {
 
     let html = fs.readFileSync(indexPath, 'utf8');
 
-    // Secure replacements using function callback to avoid native JavaScript "$" regex replacement substitution bug
-    html = html.replace(/<title>.*?<\/title>/gi, () => `<title>${title}</title>`);
-    
-    // Secure meta tag adjustments
-    html = html.replace(/<meta\s+name="description"\s+content=".*?"\s*\/?>/gi, () => `<meta name="description" content="${description}" />`);
-    
-    html = html.replace(/<meta\s+property="og:type"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:type" content="article" />`);
-    html = html.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:url" content="${url}" />`);
-    html = html.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:title" content="${title}" />`);
-    html = html.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:description" content="${description}" />`);
-    html = html.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:image" content="${imageUrl}" />`);
-    html = html.replace(/<meta\s+property="og:image:secure_url"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:image:secure_url" content="${imageUrl}" />`);
-    html = html.replace(/<meta\s+property="og:image:alt"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:image:alt" content="${title}" />`);
-    html = html.replace(/<meta\s+property="og:image:type"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:image:type" content="${imageType}" />`);
-    
-    html = html.replace(/<meta\s+property="twitter:card"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:card" content="summary_large_image" />`);
-    html = html.replace(/<meta\s+property="twitter:url"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:url" content="${url}" />`);
-    html = html.replace(/<meta\s+property="twitter:title"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:title" content="${title}" />`);
-    html = html.replace(/<meta\s+property="twitter:description"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:description" content="${description}" />`);
-    html = html.replace(/<meta\s+property="twitter:image"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:image" content="${imageUrl}" />`);
+    // Securely inject fresh and perfectly matched metadata tags
+    html = backendInjectMetaTags(html, {
+      title,
+      description,
+      url,
+      imageUrl,
+      imageType
+    });
 
-    res.header("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public,max-age=300");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(html);
 
   } catch (err: any) {
@@ -4561,6 +4732,10 @@ app.get("/blog/:slug", async (req, res) => {
 // --- Server-Side SEO & Open Graph Interceptors for Gallery Works ---
 app.get("/galeria/:slug", async (req, res) => {
   const { slug } = req.params;
+  const userAgent = req.get("User-Agent") || "";
+  const isBotUser = isBot(userAgent);
+
+  console.log(`[SEO-INTERCEPTOR-BOT-CHECK] Route: /galeria/${slug}, User-Agent: ${userAgent}, isBot: ${isBotUser}`);
 
   try {
     const host = req.get("host") || "andrewlemos.com.br";
@@ -4630,7 +4805,8 @@ app.get("/galeria/:slug", async (req, res) => {
     if (!fs.existsSync(indexPath)) {
       // Return a dynamic, visually identical HTML shell to guarantee sitemaps, bots, and shares function perfectly
       console.warn("Template index.html not found, rendering fallback dynamic HTML shell.");
-      res.header("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "public,max-age=300");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.status(200).send(`<!doctype html>
 <html lang="pt-BR">
   <head>
@@ -4664,25 +4840,17 @@ app.get("/galeria/:slug", async (req, res) => {
 
     let html = fs.readFileSync(indexPath, 'utf8');
 
-    html = html.replace(/<title>.*?<\/title>/gi, () => `<title>${title}</title>`);
-    html = html.replace(/<meta\s+name="description"\s+content=".*?"\s*\/?>/gi, () => `<meta name="description" content="${description}" />`);
-    
-    html = html.replace(/<meta\s+property="og:type"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:type" content="article" />`);
-    html = html.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:url" content="${url}" />`);
-    html = html.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:title" content="${title}" />`);
-    html = html.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:description" content="${description}" />`);
-    html = html.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:image" content="${imageUrl}" />`);
-    html = html.replace(/<meta\s+property="og:image:secure_url"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:image:secure_url" content="${imageUrl}" />`);
-    html = html.replace(/<meta\s+property="og:image:alt"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:image:alt" content="${title}" />`);
-    html = html.replace(/<meta\s+property="og:image:type"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:image:type" content="${imageType}" />`);
-    
-    html = html.replace(/<meta\s+property="twitter:card"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:card" content="summary_large_image" />`);
-    html = html.replace(/<meta\s+property="twitter:url"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:url" content="${url}" />`);
-    html = html.replace(/<meta\s+property="twitter:title"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:title" content="${title}" />`);
-    html = html.replace(/<meta\s+property="twitter:description"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:description" content="${description}" />`);
-    html = html.replace(/<meta\s+property="twitter:image"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:image" content="${imageUrl}" />`);
+    // Securely inject fresh and perfectly matched metadata tags
+    html = backendInjectMetaTags(html, {
+      title,
+      description,
+      url,
+      imageUrl,
+      imageType
+    });
 
-    res.header("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public,max-age=300");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(html);
   } catch (err: any) {
     console.error("SEO gallery exception:", err);
@@ -4716,6 +4884,10 @@ app.get("/galeria/:slug", async (req, res) => {
 // --- Server-Side SEO & Open Graph Interceptors for Ecommerce Products ---
 app.get("/vendas/:slug", async (req, res) => {
   const { slug } = req.params;
+  const userAgent = req.get("User-Agent") || "";
+  const isBotUser = isBot(userAgent);
+
+  console.log(`[SEO-INTERCEPTOR-BOT-CHECK] Route: /vendas/${slug}, User-Agent: ${userAgent}, isBot: ${isBotUser}`);
 
   try {
     const host = req.get("host") || "andrewlemos.com.br";
@@ -4784,7 +4956,8 @@ app.get("/vendas/:slug", async (req, res) => {
     if (!fs.existsSync(indexPath)) {
       // Return a dynamic, visually identical HTML shell to guarantee sitemaps, bots, and shares function perfectly
       console.warn("Template index.html not found, rendering fallback dynamic HTML shell.");
-      res.header("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "public,max-age=300");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.status(200).send(`<!doctype html>
 <html lang="pt-BR">
   <head>
@@ -4818,25 +4991,17 @@ app.get("/vendas/:slug", async (req, res) => {
 
     let html = fs.readFileSync(indexPath, 'utf8');
 
-    html = html.replace(/<title>.*?<\/title>/gi, () => `<title>${title}</title>`);
-    html = html.replace(/<meta\s+name="description"\s+content=".*?"\s*\/?>/gi, () => `<meta name="description" content="${description}" />`);
-    
-    html = html.replace(/<meta\s+property="og:type"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:type" content="article" />`);
-    html = html.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:url" content="${url}" />`);
-    html = html.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:title" content="${title}" />`);
-    html = html.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:description" content="${description}" />`);
-    html = html.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:image" content="${imageUrl}" />`);
-    html = html.replace(/<meta\s+property="og:image:secure_url"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:image:secure_url" content="${imageUrl}" />`);
-    html = html.replace(/<meta\s+property="og:image:alt"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:image:alt" content="${title}" />`);
-    html = html.replace(/<meta\s+property="og:image:type"\s+content=".*?"\s*\/?>/gi, () => `<meta property="og:image:type" content="${imageType}" />`);
-    
-    html = html.replace(/<meta\s+property="twitter:card"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:card" content="summary_large_image" />`);
-    html = html.replace(/<meta\s+property="twitter:url"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:url" content="${url}" />`);
-    html = html.replace(/<meta\s+property="twitter:title"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:title" content="${title}" />`);
-    html = html.replace(/<meta\s+property="twitter:description"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:description" content="${description}" />`);
-    html = html.replace(/<meta\s+property="twitter:image"\s+content=".*?"\s*\/?>/gi, () => `<meta property="twitter:image" content="${imageUrl}" />`);
+    // Securely inject fresh and perfectly matched metadata tags
+    html = backendInjectMetaTags(html, {
+      title,
+      description,
+      url,
+      imageUrl,
+      imageType
+    });
 
-    res.header("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public,max-age=300");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(html);
   } catch (err: any) {
     console.error("SEO ecommerce exception:", err);
