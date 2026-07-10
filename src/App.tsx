@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { cn } from './lib/utils';
+import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { 
   auth, 
   db, 
@@ -2946,7 +2947,7 @@ const Chatbot = () => {
                     "max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed shadow-sm",
                     m.role === 'user' ? "bg-brand-wood text-white rounded-tr-none" : "bg-white text-gray-700 rounded-tl-none border border-brand-wood/5"
                   )}>
-                    {m.text}
+                    <MarkdownRenderer content={m.text} variant="chat" />
                   </div>
                 </div>
               ))}

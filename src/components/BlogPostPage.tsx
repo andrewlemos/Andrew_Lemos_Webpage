@@ -4,7 +4,7 @@ import { where, limit } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { BlogPost } from '../types';
 import { Calendar, ArrowLeft, ArrowRight, Share2, Clock, BookOpen, ChevronRight, Home } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from './MarkdownRenderer';
 import { motion } from 'motion/react';
 import { ensureRobustUrl } from '../App';
 
@@ -205,34 +205,8 @@ export const BlogPostPage: React.FC<BlogPostPageProps> = ({ slug, onNavigateToVi
               </p>
 
               {/* RENDERED MARKDOWN CONTENT */}
-              <div className="markdown-body border-t border-brand-wood/5 pt-8 prose max-w-none text-brand-ink">
-                <ReactMarkdown
-                  components={{
-                    h1: ({node, ...props}) => <h1 className="text-2xl sm:text-3xl font-serif text-brand-ink mt-8 mb-4 font-bold border-b pb-2" {...props} />,
-                    h2: ({node, ...props}) => <h2 className="text-xl sm:text-2xl font-serif text-brand-ink mt-6 mb-3 font-semibold" {...props} />,
-                    h3: ({node, ...props}) => <h3 className="text-lg font-serif text-brand-ink mt-4 mb-2 font-medium" {...props} />,
-                    p: ({node, ...props}) => <p className="text-gray-600 leading-relaxed text-sm sm:text-base mb-6 font-normal" {...props} />,
-                    ul: ({node, ...props}) => <ul className="list-disc pl-5 mt-2 mb-6 text-gray-600 text-sm sm:text-base space-y-2" {...props} />,
-                    ol: ({node, ...props}) => <ol className="list-decimal pl-5 mt-2 mb-6 text-gray-600 text-sm sm:text-base space-y-2" {...props} />,
-                    li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
-                    blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-brand-wood/30 italic pl-4 py-1 my-6 bg-brand-paper rounded text-gray-650" {...props} />,
-                    a: ({node, ...props}) => <a className="text-brand-wood hover:underline font-semibold" {...props} />,
-                    img: ({node, src, alt, ...props}) => (
-                      <div className="my-8 flex flex-col items-center">
-                        <img 
-                          src={ensureRobustUrl(src || '')} 
-                          alt={alt} 
-                          className="rounded-2xl max-h-[450px] object-cover border border-brand-wood/10" 
-                          referrerPolicy="no-referrer"
-                          {...props} 
-                        />
-                        {alt && <span className="text-[10px] text-gray-400 mt-2 italic font-sans">{alt}</span>}
-                      </div>
-                    )
-                  }}
-                >
-                  {post.content}
-                </ReactMarkdown>
+              <div className="border-t border-brand-wood/5 pt-8 max-w-none text-brand-ink">
+                <MarkdownRenderer content={post.content} variant="blog" />
               </div>
             </div>
           </div>

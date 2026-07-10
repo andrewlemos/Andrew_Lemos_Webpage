@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from './MarkdownRenderer';
 import { 
   ArrowLeft, 
   CheckCircle, 
@@ -482,7 +482,7 @@ export const CourseLandingPage: React.FC<CourseLandingPageProps> = ({
             Apresentação do Curso
           </h2>
           <div className="text-stone-300 text-xs md:text-sm leading-relaxed prose prose-invert prose-stone max-w-none">
-            <ReactMarkdown>{course.description}</ReactMarkdown>
+            <MarkdownRenderer content={course.description} variant="blog" />
           </div>
         </div>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from './MarkdownRenderer';
 import { 
   BookOpen, 
   Layers, 
@@ -1161,7 +1161,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ currentUser, isMasterAdmin =
                               <span className="text-[8px] bg-brand-wood text-white px-1.5 py-0.5 rounded-full">Prose</span>
                             </div>
                             <div className="p-4 overflow-y-auto flex-grow text-xs leading-relaxed text-gray-700 bg-brand-paper/10 whitespace-pre-wrap font-sans prose prose-stone max-w-none">
-                              <ReactMarkdown>{courseForm.description || '_Comece a escrever acima para ver o texto estruturado aqui..._'}</ReactMarkdown>
+                              <MarkdownRenderer content={courseForm.description || '_Comece a escrever acima para ver o texto estruturado aqui..._'} variant="blog" />
                             </div>
                           </div>
                         </div>

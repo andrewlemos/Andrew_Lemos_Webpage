@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from './MarkdownRenderer';
 import { 
   BookOpen, 
   Play, 
@@ -2378,7 +2378,7 @@ DIRETRIZES DE ATENDIMENTO E CONTEXTO DO MENTOR:
                     <div className="space-y-4">
                       <h4 className="font-serif font-bold text-xl text-white">{activeLesson.title}</h4>
                       <div className="text-stone-300 text-xs leading-relaxed prose prose-invert max-w-none font-sans font-normal">
-                        <ReactMarkdown>{activeLesson.description}</ReactMarkdown>
+                        <MarkdownRenderer content={activeLesson.description} variant="blog" />
                       </div>
                     </div>
                   )}
@@ -2495,7 +2495,7 @@ DIRETRIZES DE ATENDIMENTO E CONTEXTO DO MENTOR:
                             <div key={idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
                               <div className={`max-w-[85%] p-3.5 rounded-2xl text-xs leading-relaxed shadow-lg ${isUser ? 'bg-gradient-to-r from-[#D4AF37] to-[#F3CD74] text-neutral-950 rounded-tr-none font-semibold' : 'bg-[#1C1B18] text-stone-200 rounded-tl-none border border-stone-800'}`}>
                                 <p className="font-serif font-bold text-[9px] uppercase tracking-wider mb-1 opacity-75">{isUser ? 'Você' : 'MichelangelIA'}</p>
-                                <p className="whitespace-pre-line leading-relaxed font-normal">{msg.text}</p>
+                                <MarkdownRenderer content={msg.text} variant="chat" />
                               </div>
                             </div>
                           );
