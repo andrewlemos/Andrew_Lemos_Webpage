@@ -4649,12 +4649,19 @@ app.get("/blog/:slug", async (req, res) => {
       }
     }
 
-    // Dynamic content-type based on image URL extension
+    // Dynamic content-type based on image URL extension, supports query parameters (like in Firebase Storage URLs)
     let imageType = "image/jpeg";
-    const imgLower = imageUrl.toLowerCase();
-    if (imgLower.endsWith('.png')) imageType = "image/png";
-    else if (imgLower.endsWith('.webp')) imageType = "image/webp";
-    else if (imgLower.endsWith('.gif')) imageType = "image/gif";
+    try {
+      const decodedUrl = decodeURIComponent(imageUrl).toLowerCase().split('?')[0];
+      if (decodedUrl.endsWith('.png')) imageType = "image/png";
+      else if (decodedUrl.endsWith('.webp')) imageType = "image/webp";
+      else if (decodedUrl.endsWith('.gif')) imageType = "image/gif";
+    } catch (e) {
+      const imgLower = imageUrl.toLowerCase();
+      if (imgLower.endsWith('.png')) imageType = "image/png";
+      else if (imgLower.endsWith('.webp')) imageType = "image/webp";
+      else if (imgLower.endsWith('.gif')) imageType = "image/gif";
+    }
 
     // Read index.html compiled assets safely
     let indexPath = path.join(process.cwd(), 'dist', 'index.html');
@@ -4802,12 +4809,19 @@ app.get("/galeria/:slug", async (req, res) => {
       }
     }
 
-    // Dynamic content-type based on image URL extension
+    // Dynamic content-type based on image URL extension, supports query parameters (like in Firebase Storage URLs)
     let imageType = "image/jpeg";
-    const imgLower = imageUrl.toLowerCase();
-    if (imgLower.endsWith('.png')) imageType = "image/png";
-    else if (imgLower.endsWith('.webp')) imageType = "image/webp";
-    else if (imgLower.endsWith('.gif')) imageType = "image/gif";
+    try {
+      const decodedUrl = decodeURIComponent(imageUrl).toLowerCase().split('?')[0];
+      if (decodedUrl.endsWith('.png')) imageType = "image/png";
+      else if (decodedUrl.endsWith('.webp')) imageType = "image/webp";
+      else if (decodedUrl.endsWith('.gif')) imageType = "image/gif";
+    } catch (e) {
+      const imgLower = imageUrl.toLowerCase();
+      if (imgLower.endsWith('.png')) imageType = "image/png";
+      else if (imgLower.endsWith('.webp')) imageType = "image/webp";
+      else if (imgLower.endsWith('.gif')) imageType = "image/gif";
+    }
 
     // Read index.html compiled assets safely
     let indexPath = path.join(process.cwd(), 'dist', 'index.html');
@@ -4953,12 +4967,19 @@ app.get("/vendas/:slug", async (req, res) => {
       }
     }
 
-    // Dynamic content-type based on image URL extension
+    // Dynamic content-type based on image URL extension, supports query parameters (like in Firebase Storage URLs)
     let imageType = "image/jpeg";
-    const imgLower = imageUrl.toLowerCase();
-    if (imgLower.endsWith('.png')) imageType = "image/png";
-    else if (imgLower.endsWith('.webp')) imageType = "image/webp";
-    else if (imgLower.endsWith('.gif')) imageType = "image/gif";
+    try {
+      const decodedUrl = decodeURIComponent(imageUrl).toLowerCase().split('?')[0];
+      if (decodedUrl.endsWith('.png')) imageType = "image/png";
+      else if (decodedUrl.endsWith('.webp')) imageType = "image/webp";
+      else if (decodedUrl.endsWith('.gif')) imageType = "image/gif";
+    } catch (e) {
+      const imgLower = imageUrl.toLowerCase();
+      if (imgLower.endsWith('.png')) imageType = "image/png";
+      else if (imgLower.endsWith('.webp')) imageType = "image/webp";
+      else if (imgLower.endsWith('.gif')) imageType = "image/gif";
+    }
 
     // Read index.html compiled assets safely
     let indexPath = path.join(process.cwd(), 'dist', 'index.html');
