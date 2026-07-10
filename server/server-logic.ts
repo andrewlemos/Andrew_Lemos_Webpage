@@ -4183,17 +4183,6 @@ function backendEnsureRobustUrl(url: string, baseUrl: string): string {
   if (!url) return "";
   let processedUrl = url.trim();
 
-  if (processedUrl.includes("drive.google.com")) {
-    const fileDMatch = processedUrl.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
-    if (fileDMatch && fileDMatch[1]) {
-      return `https://lh3.googleusercontent.com/d/${fileDMatch[1]}`;
-    }
-    const queryIdMatch = processedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    if (queryIdMatch && queryIdMatch[1]) {
-      return `https://lh3.googleusercontent.com/d/${queryIdMatch[1]}`;
-    }
-  }
-
   if (processedUrl.startsWith("http://") || processedUrl.startsWith("https://")) {
     return processedUrl;
   }
@@ -4626,20 +4615,10 @@ app.get("/blog/:slug", async (req, res) => {
           title = `${postData.title} | Blog Andrew Lemos`;
           description = postData.summary || postData.content?.substring(0, 160) || description;
 
-          // Resolve Drive / Local picture URLs using robust multi-channel resolution
+          // Resolve Local picture URLs using robust multi-channel resolution
           if (postData.imageUrl) {
             const processed = postData.imageUrl.trim();
-            if (processed.includes('drive.google.com')) {
-              const fileDMatch = processed.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
-              if (fileDMatch && fileDMatch[1]) {
-                imageUrl = `https://lh3.googleusercontent.com/d/${fileDMatch[1]}`;
-              } else {
-                const queryIdMatch = processed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-                if (queryIdMatch && queryIdMatch[1]) {
-                  imageUrl = `https://lh3.googleusercontent.com/d/${queryIdMatch[1]}`;
-                }
-              }
-            } else if (processed.startsWith('/arquivos/') || processed.startsWith('arquivos/')) {
+            if (processed.startsWith('/arquivos/') || processed.startsWith('arquivos/')) {
               const filename = processed.replace(/^\/?arquivos\//, '');
               let decodedImg = filename;
               try {
