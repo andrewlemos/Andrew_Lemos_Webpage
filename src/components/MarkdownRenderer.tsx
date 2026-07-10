@@ -6,14 +6,27 @@ interface MarkdownRendererProps {
   content: string;
   className?: string;
   variant?: 'blog' | 'chat' | 'default';
+  isDark?: boolean;
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ 
   content, 
   className = '', 
-  variant = 'default' 
+  variant = 'default',
+  isDark = false
 }) => {
   const isChat = variant === 'chat';
+
+  // Headings color: white/stone on dark, brand-ink on light
+  const hColor = isDark ? "text-stone-100" : "text-brand-ink";
+  // Paragraph/list color: light gray on dark, dark gray on light
+  const pColor = isDark ? "text-stone-300" : "text-gray-600";
+  // Link color: gold on dark, brand wood on light
+  const linkColor = isDark ? "text-[#D4AF37] hover:text-yellow-300" : "text-brand-wood hover:underline";
+  // Blockquote styles
+  const bqStyles = isDark 
+    ? "border-l-4 border-stone-700 italic pl-4 py-1 my-6 bg-stone-900/60 rounded text-stone-300"
+    : "border-l-4 border-brand-wood/30 italic pl-4 py-1 my-6 bg-brand-paper rounded text-gray-650";
 
   return (
     <div className={`markdown-body ${className}`}>
@@ -21,43 +34,43 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         components={{
           h1: ({node, ...props}) => (
             <h1 className={isChat 
-              ? "text-base font-serif font-bold mt-3 mb-1 border-b pb-1 border-stone-800" 
-              : "text-2xl sm:text-3xl font-serif text-brand-ink mt-8 mb-4 font-bold border-b pb-2"} 
+              ? `text-base font-serif font-bold mt-3 mb-1 border-b pb-1 border-stone-800 ${isDark ? 'text-stone-100' : 'text-brand-ink'}` 
+              : `text-2xl sm:text-3xl font-serif ${hColor} mt-8 mb-4 font-bold border-b pb-2`} 
               {...props} 
             />
           ),
           h2: ({node, ...props}) => (
             <h2 className={isChat 
-              ? "text-sm font-serif font-semibold mt-2 mb-1" 
-              : "text-xl sm:text-2xl font-serif text-brand-ink mt-6 mb-3 font-semibold"} 
+              ? `text-sm font-serif font-semibold mt-2 mb-1 ${isDark ? 'text-stone-200' : 'text-brand-ink'}` 
+              : `text-xl sm:text-2xl font-serif ${hColor} mt-6 mb-3 font-semibold`} 
               {...props} 
             />
           ),
           h3: ({node, ...props}) => (
             <h3 className={isChat 
-              ? "text-xs font-serif font-medium mt-2 mb-1" 
-              : "text-lg font-serif text-brand-ink mt-4 mb-2 font-medium"} 
+              ? `text-xs font-serif font-medium mt-2 mb-1 ${isDark ? 'text-stone-300' : 'text-brand-ink'}` 
+              : `text-lg font-serif ${hColor} mt-4 mb-2 font-medium`} 
               {...props} 
             />
           ),
           p: ({node, ...props}) => (
             <p className={isChat 
               ? "leading-relaxed mb-3 font-normal" 
-              : "text-gray-600 leading-relaxed text-sm sm:text-base mb-6 font-normal"} 
+              : `${pColor} leading-relaxed text-sm sm:text-base mb-6 font-normal`} 
               {...props} 
             />
           ),
           ul: ({node, ...props}) => (
             <ul className={isChat 
               ? "list-disc pl-4 mt-1 mb-3 space-y-1" 
-              : "list-disc pl-5 mt-2 mb-6 text-gray-600 text-sm sm:text-base space-y-2"} 
+              : `list-disc pl-5 mt-2 mb-6 ${pColor} text-sm sm:text-base space-y-2`} 
               {...props} 
             />
           ),
           ol: ({node, ...props}) => (
             <ol className={isChat 
               ? "list-decimal pl-4 mt-1 mb-3 space-y-1" 
-              : "list-decimal pl-5 mt-2 mb-6 text-gray-600 text-sm sm:text-base space-y-2"} 
+              : `list-decimal pl-5 mt-2 mb-6 ${pColor} text-sm sm:text-base space-y-2`} 
               {...props} 
             />
           ),
@@ -65,14 +78,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           blockquote: ({node, ...props}) => (
             <blockquote className={isChat 
               ? "border-l-2 border-stone-600 italic pl-3 py-0.5 my-3 bg-stone-900/40 rounded text-stone-300" 
-              : "border-l-4 border-brand-wood/30 italic pl-4 py-1 my-6 bg-brand-paper rounded text-gray-650"} 
+              : bqStyles} 
               {...props} 
             />
           ),
           a: ({node, ...props}) => (
             <a className={isChat 
               ? "text-yellow-400 hover:underline font-semibold" 
-              : "text-brand-wood hover:underline font-semibold"} 
+              : `${linkColor} font-semibold`} 
               {...props} 
             />
           ),

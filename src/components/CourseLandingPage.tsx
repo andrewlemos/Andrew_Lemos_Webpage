@@ -482,7 +482,7 @@ export const CourseLandingPage: React.FC<CourseLandingPageProps> = ({
             Apresentação do Curso
           </h2>
           <div className="text-stone-300 text-xs md:text-sm leading-relaxed prose prose-invert prose-stone max-w-none">
-            <MarkdownRenderer content={course.description} variant="blog" />
+            <MarkdownRenderer content={course.description} variant="blog" isDark={true} />
           </div>
         </div>
 
