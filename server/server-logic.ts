@@ -4238,6 +4238,16 @@ function isBot(userAgent: string): boolean {
   return bots.some(bot => lower.includes(bot));
 }
 
+function escapeHtml(str: string): string {
+  if (!str) return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function backendInjectMetaTags(html: string, options: {
   title: string;
   description: string;
@@ -4264,28 +4274,42 @@ function backendInjectMetaTags(html: string, options: {
   cleanedHtml = cleanedHtml.replace(/<meta\s+[^>]*?name="twitter:[^"]+"[^>]*?>/gi, "");
   cleanedHtml = cleanedHtml.replace(/<meta\s+[^>]*?name='twitter:[^']+'[^>]*?>/gi, "");
 
+  // Remove existing charset and viewport so we can place them at the very top of <head>
+  cleanedHtml = cleanedHtml.replace(/<meta\s+charset="[^"]+"[^>]*?>/gi, "");
+  cleanedHtml = cleanedHtml.replace(/<meta\s+charset='[^']+'[^>]*?>/gi, "");
+  cleanedHtml = cleanedHtml.replace(/<meta\s+name="viewport"[^>]*?>/gi, "");
+  cleanedHtml = cleanedHtml.replace(/<meta\s+name='viewport'[^>]*?>/gi, "");
+
+  const escapedTitle = escapeHtml(title);
+  const escapedDescription = escapeHtml(description);
+  const escapedUrl = escapeHtml(url);
+  const escapedImageUrl = escapeHtml(imageUrl);
+  const escapedImageType = escapeHtml(imageType);
+
   const newMetaTags = `
-    <title>${title}</title>
-    <meta name="description" content="${description}" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapedTitle}</title>
+    <meta name="description" content="${escapedDescription}" />
     
     <!-- Open Graph (Facebook, WhatsApp, Slack, Telegram, LinkedIn) -->
     <meta property="og:type" content="article" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:title" content="${title}" />
-    <meta property="og:description" content="${description}" />
-    <meta property="og:image" content="${imageUrl}" />
-    <meta property="og:image:secure_url" content="${imageUrl}" />
-    <meta property="og:image:type" content="${imageType}" />
+    <meta property="og:url" content="${escapedUrl}" />
+    <meta property="og:title" content="${escapedTitle}" />
+    <meta property="og:description" content="${escapedDescription}" />
+    <meta property="og:image" content="${escapedImageUrl}" />
+    <meta property="og:image:secure_url" content="${escapedImageUrl}" />
+    <meta property="og:image:type" content="${escapedImageType}" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="${title}" />
+    <meta property="og:image:alt" content="${escapedTitle}" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="${url}" />
-    <meta name="twitter:title" content="${title}" />
-    <meta name="twitter:description" content="${description}" />
-    <meta name="twitter:image" content="${imageUrl}" />
+    <meta name="twitter:url" content="${escapedUrl}" />
+    <meta name="twitter:title" content="${escapedTitle}" />
+    <meta name="twitter:description" content="${escapedDescription}" />
+    <meta name="twitter:image" content="${escapedImageUrl}" />
   `;
 
   return cleanedHtml.replace(/<head>/i, () => `<head>${newMetaTags}`);
@@ -4669,6 +4693,12 @@ app.get("/blog/:slug", async (req, res) => {
       indexPath = path.join(process.cwd(), 'index.html');
     }
 
+    const escapedTitle = escapeHtml(title);
+    const escapedDescription = escapeHtml(description);
+    const escapedUrl = escapeHtml(url);
+    const escapedImageUrl = escapeHtml(imageUrl);
+    const escapedImageType = escapeHtml(imageType);
+
     if (!fs.existsSync(indexPath)) {
       // Return a dynamic, visually identical HTML shell to guarantee sitemaps, bots, and shares function perfectly
       console.warn("Template index.html not found, rendering fallback dynamic HTML shell.");
@@ -4679,21 +4709,21 @@ app.get("/blog/:slug", async (req, res) => {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title}</title>
-    <meta name="description" content="${description}" />
+    <title>${escapedTitle}</title>
+    <meta name="description" content="${escapedDescription}" />
     <meta property="og:type" content="article" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:title" content="${title}" />
-    <meta property="og:description" content="${description}" />
-    <meta property="og:image" content="${imageUrl}" />
-    <meta property="og:image:secure_url" content="${imageUrl}" />
-    <meta property="og:image:type" content="${imageType}" />
-    <meta property="og:image:alt" content="${title}" />
+    <meta property="og:url" content="${escapedUrl}" />
+    <meta property="og:title" content="${escapedTitle}" />
+    <meta property="og:description" content="${escapedDescription}" />
+    <meta property="og:image" content="${escapedImageUrl}" />
+    <meta property="og:image:secure_url" content="${escapedImageUrl}" />
+    <meta property="og:image:type" content="${escapedImageType}" />
+    <meta property="og:image:alt" content="${escapedTitle}" />
     <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content="${url}" />
-    <meta property="twitter:title" content="${title}" />
-    <meta property="twitter:description" content="${description}" />
-    <meta property="twitter:image" content="${imageUrl}" />
+    <meta property="twitter:url" content="${escapedUrl}" />
+    <meta property="twitter:title" content="${escapedTitle}" />
+    <meta property="twitter:description" content="${escapedDescription}" />
+    <meta property="twitter:image" content="${escapedImageUrl}" />
   </head>
   <body>
     <div id="root"></div>
@@ -4829,6 +4859,12 @@ app.get("/galeria/:slug", async (req, res) => {
       indexPath = path.join(process.cwd(), 'index.html');
     }
 
+    const escapedTitle = escapeHtml(title);
+    const escapedDescription = escapeHtml(description);
+    const escapedUrl = escapeHtml(url);
+    const escapedImageUrl = escapeHtml(imageUrl);
+    const escapedImageType = escapeHtml(imageType);
+
     if (!fs.existsSync(indexPath)) {
       // Return a dynamic, visually identical HTML shell to guarantee sitemaps, bots, and shares function perfectly
       console.warn("Template index.html not found, rendering fallback dynamic HTML shell.");
@@ -4839,21 +4875,21 @@ app.get("/galeria/:slug", async (req, res) => {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title}</title>
-    <meta name="description" content="${description}" />
+    <title>${escapedTitle}</title>
+    <meta name="description" content="${escapedDescription}" />
     <meta property="og:type" content="article" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:title" content="${title}" />
-    <meta property="og:description" content="${description}" />
-    <meta property="og:image" content="${imageUrl}" />
-    <meta property="og:image:secure_url" content="${imageUrl}" />
-    <meta property="og:image:type" content="${imageType}" />
-    <meta property="og:image:alt" content="${title}" />
+    <meta property="og:url" content="${escapedUrl}" />
+    <meta property="og:title" content="${escapedTitle}" />
+    <meta property="og:description" content="${escapedDescription}" />
+    <meta property="og:image" content="${escapedImageUrl}" />
+    <meta property="og:image:secure_url" content="${escapedImageUrl}" />
+    <meta property="og:image:type" content="${escapedImageType}" />
+    <meta property="og:image:alt" content="${escapedTitle}" />
     <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content="${url}" />
-    <meta property="twitter:title" content="${title}" />
-    <meta property="twitter:description" content="${description}" />
-    <meta property="twitter:image" content="${imageUrl}" />
+    <meta property="twitter:url" content="${escapedUrl}" />
+    <meta property="twitter:title" content="${escapedTitle}" />
+    <meta property="twitter:description" content="${escapedDescription}" />
+    <meta property="twitter:image" content="${escapedImageUrl}" />
   </head>
   <body>
     <div id="root"></div>
@@ -4987,6 +5023,12 @@ app.get("/vendas/:slug", async (req, res) => {
       indexPath = path.join(process.cwd(), 'index.html');
     }
 
+    const escapedTitle = escapeHtml(title);
+    const escapedDescription = escapeHtml(description);
+    const escapedUrl = escapeHtml(url);
+    const escapedImageUrl = escapeHtml(imageUrl);
+    const escapedImageType = escapeHtml(imageType);
+
     if (!fs.existsSync(indexPath)) {
       // Return a dynamic, visually identical HTML shell to guarantee sitemaps, bots, and shares function perfectly
       console.warn("Template index.html not found, rendering fallback dynamic HTML shell.");
@@ -4997,21 +5039,21 @@ app.get("/vendas/:slug", async (req, res) => {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title}</title>
-    <meta name="description" content="${description}" />
+    <title>${escapedTitle}</title>
+    <meta name="description" content="${escapedDescription}" />
     <meta property="og:type" content="article" />
-    <meta property="og:url" content="${url}" />
-    <meta property="og:title" content="${title}" />
-    <meta property="og:description" content="${description}" />
-    <meta property="og:image" content="${imageUrl}" />
-    <meta property="og:image:secure_url" content="${imageUrl}" />
-    <meta property="og:image:type" content="${imageType}" />
-    <meta property="og:image:alt" content="${title}" />
+    <meta property="og:url" content="${escapedUrl}" />
+    <meta property="og:title" content="${escapedTitle}" />
+    <meta property="og:description" content="${escapedDescription}" />
+    <meta property="og:image" content="${escapedImageUrl}" />
+    <meta property="og:image:secure_url" content="${escapedImageUrl}" />
+    <meta property="og:image:type" content="${escapedImageType}" />
+    <meta property="og:image:alt" content="${escapedTitle}" />
     <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content="${url}" />
-    <meta property="twitter:title" content="${title}" />
-    <meta property="twitter:description" content="${description}" />
-    <meta property="twitter:image" content="${imageUrl}" />
+    <meta property="twitter:url" content="${escapedUrl}" />
+    <meta property="twitter:title" content="${escapedTitle}" />
+    <meta property="twitter:description" content="${escapedDescription}" />
+    <meta property="twitter:image" content="${escapedImageUrl}" />
   </head>
   <body>
     <div id="root"></div>
