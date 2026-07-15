@@ -18,6 +18,36 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
 }) => {
   const isChat = variant === 'chat';
 
+  // Preprocess Markdown content to fix table formatting issues (e.g. collapsed rows)
+  const processedContent = React.useMemo(() => {
+    if (!content) return '';
+    // Fix joined GFM table rows: e.g. "| text | | text |" -> "| text |\n| text |"
+    let normalized = content.replace(/\|\s*\|/g, "|\n|");
+
+    // Split into lines to ensure tables are separated from preceding non-table paragraphs
+    const lines = normalized.split('\n');
+    const processedLines: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // If this line starts with a pipe (indicating a table row)
+      if (line.startsWith('|')) {
+        // Check if there's a previous line that is neither empty nor starting with a pipe
+        if (processedLines.length > 0) {
+          const prevLine = processedLines[processedLines.length - 1].trim();
+          if (prevLine !== "" && !prevLine.startsWith('|')) {
+            // Insert a blank line before the table start to satisfy GFM parsing requirements
+            processedLines.push("");
+          }
+        }
+      }
+      processedLines.push(lines[i]);
+    }
+
+    return processedLines.join('\n');
+  }, [content]);
+
   // Headings color: white/stone on dark, brand-ink on light
   const hColor = isDark ? "text-stone-100" : "text-brand-ink";
   // Paragraph/list color: light gray on dark, dark gray on light
@@ -134,7 +164,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           )
         }}
       >
-        {content || ''}
+        {processedContent}
       </ReactMarkdown>
     </div>
   );
