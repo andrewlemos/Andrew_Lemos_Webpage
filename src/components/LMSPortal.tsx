@@ -496,14 +496,14 @@ export const LMSPortal: React.FC<LMSPortalProps> = ({ currentUser, onNavigateToV
       const dummyCourses: Course[] = [
         {
           id: 'curso-madeira-1',
-          title: 'Mestrado em Entalhe em Madeira - Relevos Realistas',
+          title: 'Curso de Entalhe em Madeira - Relevos Realistas',
           description: 'Aprenda do absoluto zero as técnicas clássicas de entalhe em madeira maciça com o mestre Andrew Lemos. Domine o uso de formões, goivas, preparação de madeiras, transferência de desenhos, técnicas de relevo plano e tridimensional, até os acabamentos finos de cera de abelhas e seladoras naturais.',
           imageUrl: '/arquivos/Capa_curso_udemy_game.jpeg',
           professor: 'Andrew Lemos',
           category: 'Entalhe/Escultura em Madeira',
           price: 297.00,
           status: 'Ativo',
-          slug: 'mestrado-entalhe-relevos-realistas',
+          slug: 'curso-entalhe-relevos-realistas',
           metaTitle: 'Curso Completo de Entalhe em Madeira com Andrew Lemos',
           metaDescription: 'Aprenda entalhe em relevo realista e escultura em madeira com técnicas tradicionais de ateliê.',
           duration: 32,
@@ -526,7 +526,7 @@ export const LMSPortal: React.FC<LMSPortalProps> = ({ currentUser, onNavigateToV
         },
         {
           id: 'curso-pirografia-1',
-          title: 'Segredos da Pirografia Profissional em Cedro',
+          title: 'Segredos da Pirografia Profissional',
           description: 'Explore o mundo dos contrastes térmicos. Um infoproduto rico que guia o aluno na queima precisa de madeiras claras de Cedro e Caixeta. Domine sombreamento por pirógrafo, ajuste de calor, ponteiras artesanais, texturas de pelos realistas e vedação à prova de raios UV.',
           imageUrl: '/arquivos/Screenshot_20230425_211524_WhatsAppBusiness.jpg',
           professor: 'Andrew Lemos',
@@ -1523,9 +1523,9 @@ DIRETRIZES DE ATENDIMENTO E CONTEXTO DO MENTOR:
             <div className="space-y-12 animate-fadeIn">
               <div className="bg-gradient-to-b from-[#141311] to-[#0D0C0A] p-8 md:p-12 rounded-[2.5rem] border border-[#D4AF37]/15 text-center max-w-4xl mx-auto shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#D4AF37]/40 to-transparent" />
-                <h2 className="text-3xl md:text-4xl font-serif font-black text-[#FAF9F5] mb-3 leading-tight tracking-tight">Estude Escultura Tradicional no Seu Ritmo</h2>
+                <h2 className="text-3xl md:text-4xl font-serif font-black text-[#FAF9F5] mb-3 leading-tight tracking-tight">Estude Artes Plásticas no Seu Ritmo</h2>
                 <p className="text-stone-400 text-sm md:text-base leading-relaxed max-w-2xl mx-auto mb-8 font-sans">
-                  Cursos práticos gravados em alta definição no ateliê. Suporte individual de dúvidas com envio de fotos dos seus trabalhos e mentoria de Inteligência Artificial exclusiva de contexto.
+                  Cursos práticos gravados em alta definição no ateliê. Suporte individual de dúvidas com envio de fotos dos seus trabalhos e mentoria 24/7 como o MichelangelIA.
                 </p>
                 <div className="flex flex-wrap justify-center gap-6 text-xs text-stone-300 font-semibold">
                   <span className="flex items-center gap-2 bg-[#1A1916] px-4 py-2.5 rounded-2xl border border-stone-800"><CheckCircle className="w-4 h-4 text-[#D4AF37]" /> Certificado Oficial com Hash Único</span>
