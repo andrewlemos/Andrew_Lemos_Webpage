@@ -177,7 +177,7 @@ export default function AdminRecoveryTab() {
   const getWhatsAppLink = (phone: string, name: string) => {
     const cleanPhone = phone.replace(/\D/g, '');
     const standardCountryPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-    const prefillMessage = `Olá, ${name}! Aqui é o mestre Andrew Lemos do Ateliê Recomece. Vi que você salvou algumas obras exclusivas esculpidas em madeira em nosso site, mas não concluiu seu pedido. Gostaria de tirar alguma dúvida sobre o frete, entrega ou formas de pagamento? Estou à disposição para ajudar você a levar essas peças sob medida!`;
+    const prefillMessage = `Olá, ${name}! Aqui é o mestre Andrew Lemos do Ateliê Andrew Lemos. Vi que você salvou algumas obras exclusivas esculpidas em madeira em nosso site, mas não concluiu seu pedido. Gostaria de tirar alguma dúvida sobre o frete, entrega ou formas de pagamento? Estou à disposição para ajudar você a levar essas peças sob medida!`;
     return `https://wa.me/${standardCountryPhone}?text=${encodeURIComponent(prefillMessage)}`;
   };
 

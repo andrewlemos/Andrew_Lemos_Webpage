@@ -1477,7 +1477,7 @@ async function sendRecoveryEmail(
               <!-- Header Brand Banner -->
               <tr>
                 <td style="background-color: #1E1E1C; padding: 30px; text-align: center;">
-                  <h1 style="margin: 0; font-family: Georgia, serif; font-size: 24px; color: #F5F4EE; letter-spacing: 1px; font-weight: normal;">ATELIÊ RECOMECE</h1>
+                  <h1 style="margin: 0; font-family: Georgia, serif; font-size: 24px; color: #F5F4EE; letter-spacing: 1px; font-weight: normal;">ATELIÊ ANDREW LEMOS</h1>
                   <span style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 11px; color: #8F5535; text-transform: uppercase; font-weight: bold; letter-spacing: 2px;">Esculturas & Entalhes em Madeira</span>
                 </td>
               </tr>
@@ -1492,10 +1492,10 @@ async function sendRecoveryEmail(
               <!-- Footer Section -->
               <tr>
                 <td style="background-color: #FAF9F6; border-top: 1px solid #ECEBE6; padding: 30px; text-align: center;">
-                  <p style="margin: 0; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 12px; color: #7B7974; margin-bottom: 6px;">Ateliê Recomece • Obras de Arte por Andrew Lemos</p>
+                  <p style="margin: 0; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 12px; color: #7B7974; margin-bottom: 6px;">Ateliê Andrew Lemos • Obras de Arte por Andrew Lemos</p>
                   <p style="margin: 0; font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 11px; color: #A4A29C;">E-mail: andrewfmlemos@gmail.com • WhatsApp: (21) 98048-4334</p>
                   <div style="margin-top: 15px; border-top: 1px solid #ECEBE6; padding-top: 15px;">
-                    <span style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 10px; color: #A4A29C;">Você recebeu esta mensagem porque iniciou o processo de compra no Ateliê Recomece.</span>
+                    <span style="font-family: 'Inter', Helvetica, Arial, sans-serif; font-size: 10px; color: #A4A29C;">Você recebeu esta mensagem porque iniciou o processo de compra no Ateliê Andrew Lemos.</span>
                   </div>
                 </td>
               </tr>
