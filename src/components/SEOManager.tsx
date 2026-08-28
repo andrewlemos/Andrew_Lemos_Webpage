@@ -145,17 +145,20 @@ export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug, g
 
   // Helper to resolve Drive / Local URLs
   const getFullImageUrl = (url: string) => {
-    if (!url) return 'https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb';
+    if (!url) return 'https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb=w1200-h630-c';
     let processed = url.trim();
-    if (processed.includes('drive.google.com')) {
+    if (processed.includes('drive.google.com') || processed.includes('docs.google.com')) {
       const fileDMatch = processed.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
       if (fileDMatch && fileDMatch[1]) {
-        return `https://lh3.googleusercontent.com/d/${fileDMatch[1]}`;
+        return `https://lh3.googleusercontent.com/d/${fileDMatch[1]}=w1200-h630-c`;
       }
       const queryIdMatch = processed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
       if (queryIdMatch && queryIdMatch[1]) {
-        return `https://lh3.googleusercontent.com/d/${queryIdMatch[1]}`;
+        return `https://lh3.googleusercontent.com/d/${queryIdMatch[1]}=w1200-h630-c`;
       }
+    }
+    if (processed.includes('lh3.googleusercontent.com/d/') && !processed.includes('=')) {
+      return `${processed}=w1200-h630-c`;
     }
     if (processed.startsWith('http://') || processed.startsWith('https://')) {
       return processed;

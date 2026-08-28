@@ -4183,24 +4183,29 @@ function backendEnsureRobustUrl(url: string, baseUrl: string): string {
   if (!url) return "";
   let processedUrl = url.trim();
 
-  // 1. Convert Google Drive URLs to direct lh3 image URLs
+  // 1. Convert Google Drive URLs to direct lh3 image URLs with optimal dimensions (<200KB for WhatsApp & 1200x630 for Facebook)
   if (processedUrl.includes('drive.google.com') || processedUrl.includes('docs.google.com')) {
     const fileDMatch = processedUrl.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
     if (fileDMatch && fileDMatch[1]) {
-      return `https://lh3.googleusercontent.com/d/${fileDMatch[1]}`;
+      return `https://lh3.googleusercontent.com/d/${fileDMatch[1]}=w1200-h630-c`;
     }
     const queryIdMatch = processedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
     if (queryIdMatch && queryIdMatch[1]) {
-      return `https://lh3.googleusercontent.com/d/${queryIdMatch[1]}`;
+      return `https://lh3.googleusercontent.com/d/${queryIdMatch[1]}=w1200-h630-c`;
     }
   }
 
-  // 2. Already an absolute http/https URL and not referencing local /arquivos/
+  // 2. Direct lh3.googleusercontent.com URLs without resize parameters -> optimize to =w1200-h630-c
+  if (processedUrl.includes('lh3.googleusercontent.com/d/') && !processedUrl.includes('=')) {
+    return `${processedUrl}=w1200-h630-c`;
+  }
+
+  // 3. Already an absolute http/https URL and not referencing local /arquivos/
   if ((processedUrl.startsWith("http://") || processedUrl.startsWith("https://")) && !processedUrl.includes("/arquivos/")) {
     return processedUrl;
   }
 
-  // 3. Local /arquivos/ image paths (e.g. /arquivos/anú.jpg, arquivos/entalhe.jpg)
+  // 4. Local /arquivos/ image paths (e.g. /arquivos/anú.jpg, arquivos/entalhe.jpg)
   if (processedUrl.includes("/arquivos/")) {
     try {
       const parts = processedUrl.split("/arquivos/");
@@ -4676,15 +4681,16 @@ app.get("/blog/:slug", async (req, res) => {
     }
 
     // Dynamic content-type based on image URL extension, supports query parameters (like in Firebase Storage URLs)
-    let imageType = "image/png";
+    let imageType = "image/jpeg";
     try {
       const decodedUrl = decodeURIComponent(imageUrl).toLowerCase().split('?')[0];
-      if (decodedUrl.endsWith('.jpg') || decodedUrl.endsWith('.jpeg')) imageType = "image/jpeg";
+      if (decodedUrl.endsWith('.png')) imageType = "image/png";
       else if (decodedUrl.endsWith('.webp')) imageType = "image/webp";
       else if (decodedUrl.endsWith('.gif')) imageType = "image/gif";
+      else if (decodedUrl.endsWith('.jpg') || decodedUrl.endsWith('.jpeg')) imageType = "image/jpeg";
     } catch (e) {
       const imgLower = imageUrl.toLowerCase();
-      if (imgLower.endsWith('.jpg') || imgLower.endsWith('.jpeg')) imageType = "image/jpeg";
+      if (imgLower.endsWith('.png')) imageType = "image/png";
       else if (imgLower.endsWith('.webp')) imageType = "image/webp";
       else if (imgLower.endsWith('.gif')) imageType = "image/gif";
     }
@@ -4842,15 +4848,16 @@ app.get("/galeria/:slug", async (req, res) => {
     }
 
     // Dynamic content-type based on image URL extension, supports query parameters (like in Firebase Storage URLs)
-    let imageType = "image/png";
+    let imageType = "image/jpeg";
     try {
       const decodedUrl = decodeURIComponent(imageUrl).toLowerCase().split('?')[0];
-      if (decodedUrl.endsWith('.jpg') || decodedUrl.endsWith('.jpeg')) imageType = "image/jpeg";
+      if (decodedUrl.endsWith('.png')) imageType = "image/png";
       else if (decodedUrl.endsWith('.webp')) imageType = "image/webp";
       else if (decodedUrl.endsWith('.gif')) imageType = "image/gif";
+      else if (decodedUrl.endsWith('.jpg') || decodedUrl.endsWith('.jpeg')) imageType = "image/jpeg";
     } catch (e) {
       const imgLower = imageUrl.toLowerCase();
-      if (imgLower.endsWith('.jpg') || imgLower.endsWith('.jpeg')) imageType = "image/jpeg";
+      if (imgLower.endsWith('.png')) imageType = "image/png";
       else if (imgLower.endsWith('.webp')) imageType = "image/webp";
       else if (imgLower.endsWith('.gif')) imageType = "image/gif";
     }
@@ -5006,15 +5013,16 @@ app.get("/vendas/:slug", async (req, res) => {
     }
 
     // Dynamic content-type based on image URL extension, supports query parameters (like in Firebase Storage URLs)
-    let imageType = "image/png";
+    let imageType = "image/jpeg";
     try {
       const decodedUrl = decodeURIComponent(imageUrl).toLowerCase().split('?')[0];
-      if (decodedUrl.endsWith('.jpg') || decodedUrl.endsWith('.jpeg')) imageType = "image/jpeg";
+      if (decodedUrl.endsWith('.png')) imageType = "image/png";
       else if (decodedUrl.endsWith('.webp')) imageType = "image/webp";
       else if (decodedUrl.endsWith('.gif')) imageType = "image/gif";
+      else if (decodedUrl.endsWith('.jpg') || decodedUrl.endsWith('.jpeg')) imageType = "image/jpeg";
     } catch (e) {
       const imgLower = imageUrl.toLowerCase();
-      if (imgLower.endsWith('.jpg') || imgLower.endsWith('.jpeg')) imageType = "image/jpeg";
+      if (imgLower.endsWith('.png')) imageType = "image/png";
       else if (imgLower.endsWith('.webp')) imageType = "image/webp";
       else if (imgLower.endsWith('.gif')) imageType = "image/gif";
     }
