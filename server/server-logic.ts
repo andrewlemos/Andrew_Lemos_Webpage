@@ -4183,8 +4183,34 @@ function backendEnsureRobustUrl(url: string, baseUrl: string): string {
   if (!url) return "";
   let processedUrl = url.trim();
 
-  if (processedUrl.startsWith("http://") || processedUrl.startsWith("https://")) {
+  // 1. Convert Google Drive URLs to direct lh3 image URLs
+  if (processedUrl.includes('drive.google.com') || processedUrl.includes('docs.google.com')) {
+    const fileDMatch = processedUrl.match(/\/file\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/);
+    if (fileDMatch && fileDMatch[1]) {
+      return `https://lh3.googleusercontent.com/d/${fileDMatch[1]}`;
+    }
+    const queryIdMatch = processedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (queryIdMatch && queryIdMatch[1]) {
+      return `https://lh3.googleusercontent.com/d/${queryIdMatch[1]}`;
+    }
+  }
+
+  // 2. Already an absolute http/https URL and not referencing local /arquivos/
+  if ((processedUrl.startsWith("http://") || processedUrl.startsWith("https://")) && !processedUrl.includes("/arquivos/")) {
     return processedUrl;
+  }
+
+  // 3. Local /arquivos/ image paths (e.g. /arquivos/anú.jpg, arquivos/entalhe.jpg)
+  if (processedUrl.includes("/arquivos/")) {
+    try {
+      const parts = processedUrl.split("/arquivos/");
+      const filename = parts[parts.length - 1];
+      let decoded = filename;
+      try {
+        decoded = decodeURIComponent(filename);
+      } catch (e) {}
+      return `${baseUrl}/arquivos/${encodeURIComponent(decoded)}`;
+    } catch (e) {}
   }
 
   if (processedUrl.startsWith("/")) {
@@ -4316,7 +4342,7 @@ function backendInjectMetaTags(html: string, options: {
 }
 
 app.get(["/sitemap.xml", "/api/sitemap.xml"], async (req, res) => {
-  const host = req.get("host") || "andrewlemos.com.br";
+  const host = req.get("host") || "andrewlemos.com";
   const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
   const baseUrl = `${protocol}://${host}`;
 
@@ -4571,7 +4597,7 @@ app.get(["/sitemap.xml", "/api/sitemap.xml"], async (req, res) => {
 });
 
 app.get(["/robots.txt", "/api/robots.txt"], (req, res) => {
-  const host = req.get("host") || "andrewlemos.com.br";
+  const host = req.get("host") || "andrewlemos.com";
   const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
   const baseUrl = `${protocol}://${host}`;
 
@@ -4592,7 +4618,7 @@ app.get("/blog/:slug", async (req, res) => {
   console.log(`[SEO-INTERCEPTOR-BOT-CHECK] Route: /blog/${slug}, User-Agent: ${userAgent}, isBot: ${isBotUser}`);
 
   try {
-    const host = req.get("host") || "andrewlemos.com.br";
+    const host = req.get("host") || "andrewlemos.com";
     const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
     const baseUrl = `${protocol}://${host}`;
 
@@ -4639,33 +4665,9 @@ app.get("/blog/:slug", async (req, res) => {
           title = `${postData.title} | Blog Andrew Lemos`;
           description = postData.summary || postData.content?.substring(0, 160) || description;
 
-          // Resolve Local picture URLs using robust multi-channel resolution
+          // Resolve picture URLs using robust multi-channel resolution
           if (postData.imageUrl) {
-            const processed = postData.imageUrl.trim();
-            if (processed.startsWith('/arquivos/') || processed.startsWith('arquivos/')) {
-              const filename = processed.replace(/^\/?arquivos\//, '');
-              let decodedImg = filename;
-              try {
-                decodedImg = decodeURIComponent(filename);
-              } catch (e) {}
-              const lower = decodedImg.toLowerCase();
-              if (lower === 'capa_curso_udemy_game.jpeg') {
-                imageUrl = `https://raw.githubusercontent.com/andrewlemos/Andrew_Lemos_Webpage/main/public/arquivos/${encodeURIComponent(decodedImg)}?v=${Date.now()}`;
-              } else if (
-                lower === 'favicon.png' ||
-                lower === 'ico.png' ||
-                lower === 'banner andrew.png' ||
-                lower === 'dreamina_course_thumbnail.jpeg'
-              ) {
-                imageUrl = `${baseUrl}/arquivos/${encodeURIComponent(decodedImg)}`;
-              } else {
-                imageUrl = `https://cdn.jsdelivr.net/gh/andrewlemos/Andrew_Lemos_Webpage@16eec916efc1342685e03616e5222f2ee1b1c784/public/arquivos/${encodeURIComponent(decodedImg)}`;
-              }
-            } else if (processed.startsWith('http://') || processed.startsWith('https://')) {
-              imageUrl = processed;
-            } else {
-              imageUrl = processed.startsWith('/') ? `${baseUrl}${processed}` : `${baseUrl}/${processed}`;
-            }
+            imageUrl = backendEnsureRobustUrl(postData.imageUrl, baseUrl);
           }
         }
       } catch (dbErr) {
@@ -4788,7 +4790,7 @@ app.get("/galeria/:slug", async (req, res) => {
   console.log(`[SEO-INTERCEPTOR-BOT-CHECK] Route: /galeria/${slug}, User-Agent: ${userAgent}, isBot: ${isBotUser}`);
 
   try {
-    const host = req.get("host") || "andrewlemos.com.br";
+    const host = req.get("host") || "andrewlemos.com";
     const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
     const baseUrl = `${protocol}://${host}`;
 
@@ -4953,7 +4955,7 @@ app.get("/vendas/:slug", async (req, res) => {
   console.log(`[SEO-INTERCEPTOR-BOT-CHECK] Route: /vendas/${slug}, User-Agent: ${userAgent}, isBot: ${isBotUser}`);
 
   try {
-    const host = req.get("host") || "andrewlemos.com.br";
+    const host = req.get("host") || "andrewlemos.com";
     const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
     const baseUrl = `${protocol}://${host}`;
 
@@ -5110,7 +5112,7 @@ app.get("/vendas/:slug", async (req, res) => {
 
 app.get(["/blog", "/blog/"], async (req, res) => {
   try {
-    const host = req.get("host") || "andrewlemos.com.br";
+    const host = req.get("host") || "andrewlemos.com";
     const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
     const baseUrl = `${protocol}://${host}`;
 
@@ -5130,21 +5132,13 @@ app.get(["/blog", "/blog/"], async (req, res) => {
 
     let html = fs.readFileSync(indexPath, 'utf8');
 
-    html = html.replace(/<title>.*?<\/title>/gi, `<title>${title}</title>`);
-    html = html.replace(/<meta name="description" content=".*?"\s*\/?>/gi, `<meta name="description" content="${description}" />`);
-    
-    html = html.replace(/<meta\s+property="og:type"\s+content=".*?"\s*\/?>/gi, `<meta property="og:type" content="website" />`);
-    html = html.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/gi, `<meta property="og:url" content="${url}" />`);
-    html = html.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/gi, `<meta property="og:title" content="${title}" />`);
-    html = html.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/gi, `<meta property="og:description" content="${description}" />`);
-    html = html.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/gi, `<meta property="og:image" content="${imageUrl}" />`);
-    html = html.replace(/<meta\s+property="og:image:secure_url"\s+content=".*?"\s*\/?>/gi, `<meta property="og:image:secure_url" content="${imageUrl}" />`);
-    
-    html = html.replace(/<meta\s+property="twitter:card"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:card" content="summary_large_image" />`);
-    html = html.replace(/<meta\s+property="twitter:url"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:url" content="${url}" />`);
-    html = html.replace(/<meta\s+property="twitter:title"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:title" content="${title}" />`);
-    html = html.replace(/<meta\s+property="twitter:description"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:description" content="${description}" />`);
-    html = html.replace(/<meta\s+property="twitter:image"\s+content=".*?"\s*\/?>/gi, `<meta property="twitter:image" content="${imageUrl}" />`);
+    html = backendInjectMetaTags(html, {
+      title,
+      description,
+      url,
+      imageUrl,
+      imageType: "image/png"
+    });
 
     res.header("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(html);
@@ -5159,7 +5153,7 @@ app.get(["/blog", "/blog/"], async (req, res) => {
 
 app.get(["/politica-devolucao", "/politica-devolucao/"], async (req, res) => {
   try {
-    const host = req.get("host") || "andrewlemos.com.br";
+    const host = req.get("host") || "andrewlemos.com";
     const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
     const baseUrl = `${protocol}://${host}`;
 
@@ -5207,7 +5201,7 @@ app.get(["/politica-devolucao", "/politica-devolucao/"], async (req, res) => {
 
 app.get(["/politica-frete", "/politica-frete/"], async (req, res) => {
   try {
-    const host = req.get("host") || "andrewlemos.com.br";
+    const host = req.get("host") || "andrewlemos.com";
     const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
     const baseUrl = `${protocol}://${host}`;
 
@@ -5255,7 +5249,7 @@ app.get(["/politica-frete", "/politica-frete/"], async (req, res) => {
 
 app.get(["/termos-de-uso", "/termos-de-uso/"], async (req, res) => {
   try {
-    const host = req.get("host") || "andrewlemos.com.br";
+    const host = req.get("host") || "andrewlemos.com";
     const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
     const baseUrl = `${protocol}://${host}`;
 
@@ -5303,7 +5297,7 @@ app.get(["/termos-de-uso", "/termos-de-uso/"], async (req, res) => {
 
 app.get(["/politica-privacidade", "/politica-privacidade/"], async (req, res) => {
   try {
-    const host = req.get("host") || "andrewlemos.com.br";
+    const host = req.get("host") || "andrewlemos.com";
     const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
     const baseUrl = `${protocol}://${host}`;
 
@@ -5379,7 +5373,7 @@ app.get(["/cursos-online", "/cursos-online/"], async (req, res) => {
     }
 
     // Se não for o administrador e o acesso estiver bloqueado, redireciona de volta para a Home com hash informativa
-    const host = req.get("host") || "andrewlemos.com.br";
+    const host = req.get("host") || "andrewlemos.com";
     const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
     const baseUrl = `${protocol}://${host}`;
     return res.redirect(302, `${baseUrl}/#cursos-bloqueado`);
@@ -5413,7 +5407,7 @@ const handlePinterestFeed = async (req: any, res: any) => {
       return res.status(200).end();
     }
 
-    const host = req.get("host") || "andrewlemos.com.br";
+    const host = req.get("host") || "andrewlemos.com";
     const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
     const baseUrl = `${protocol}://${host}`;
 

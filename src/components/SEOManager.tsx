@@ -160,12 +160,14 @@ export const SEOManager: React.FC<SEOManagerProps> = ({ currentView, blogSlug, g
     if (processed.startsWith('http://') || processed.startsWith('https://')) {
       return processed;
     }
-    const origin = window.location.origin || 'https://andrewlemos.com.br';
+    const isDevOrInternal = typeof window !== 'undefined' && (window.location.origin.includes('localhost') || window.location.origin.includes('run.app'));
+    const origin = isDevOrInternal ? 'https://andrewlemos.com' : (window.location.origin || 'https://andrewlemos.com');
     return processed.startsWith('/') ? `${origin}${processed}` : `${origin}/${processed}`;
   };
 
   useEffect(() => {
-    const origin = window.location.origin || 'https://andrewlemos.com.br';
+    const isDevOrInternal = typeof window !== 'undefined' && (window.location.origin.includes('localhost') || window.location.origin.includes('run.app'));
+    const origin = isDevOrInternal ? 'https://andrewlemos.com' : (window.location.origin || 'https://andrewlemos.com');
     let title = 'Andrew Lemos | Artista Plástico & Escultor';
     let description = 'Portfólio de Andrew Lemos, Artista Plástico e Escultor de madeiras nobres. Adquira peças exclusivas ou agende encomendas.';
     let imageUrl = 'https://lh3.googleusercontent.com/d/1iCZEIfCehjOGE167hfelsT2P7zD9DzOb';

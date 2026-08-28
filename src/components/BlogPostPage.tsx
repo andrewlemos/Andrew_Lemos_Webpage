@@ -93,11 +93,29 @@ export const BlogPostPage: React.FC<BlogPostPageProps> = ({ slug, onNavigateToVi
     });
   };
 
+  const getShareUrl = () => {
+    const isDevOrInternal = typeof window !== 'undefined' && (window.location.origin.includes('localhost') || window.location.origin.includes('run.app'));
+    const origin = isDevOrInternal ? 'https://andrewlemos.com' : (window.location.origin || 'https://andrewlemos.com');
+    return `${origin}/blog/${slug}`;
+  };
+
   const handleCopyLink = () => {
-    const shareUrl = `${window.location.origin}/blog/${slug}`;
+    const shareUrl = getShareUrl();
     navigator.clipboard.writeText(shareUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleShareWhatsApp = () => {
+    if (!post) return;
+    const shareUrl = getShareUrl();
+    const text = `${post.title}\n\nConfira este artigo no Blog do Ateliê Andrew Lemos:\n${shareUrl}`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleShareFacebook = () => {
+    const shareUrl = getShareUrl();
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank', 'noopener,noreferrer,width=600,height=450');
   };
 
   const calculateReadTime = (content: string) => {
@@ -117,7 +135,7 @@ export const BlogPostPage: React.FC<BlogPostPageProps> = ({ slug, onNavigateToVi
               <Home className="w-3.5 h-3.5" /> Início
             </button>
             <ChevronRight className="w-3 h-3 text-gray-300" />
-            <button onClick={() => { window.location.hash = '#blog'; }} className="hover:text-brand-wood transition-colors cursor-pointer">
+            <button onClick={() => onNavigateToView('blog')} className="hover:text-brand-wood transition-colors cursor-pointer">
               Blog
             </button>
             <ChevronRight className="w-3 h-3 text-gray-300" />
@@ -127,7 +145,7 @@ export const BlogPostPage: React.FC<BlogPostPageProps> = ({ slug, onNavigateToVi
           </div>
 
           <button
-            onClick={() => { window.location.hash = '#blog'; }}
+            onClick={() => onNavigateToView('blog')}
             className="text-xs uppercase font-bold text-gray-500 hover:text-brand-wood transition-colors flex items-center gap-1 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" /> Voltar ao Feed
@@ -148,7 +166,7 @@ export const BlogPostPage: React.FC<BlogPostPageProps> = ({ slug, onNavigateToVi
             O artigo solicitado não existe ou pode ter sido removido pelo administrador.
           </p>
           <button
-            onClick={() => { window.location.hash = '#blog'; }}
+            onClick={() => onNavigateToView('blog')}
             className="bg-brand-wood hover:bg-brand-wood-dark text-white px-6 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer"
           >
             Ver Outros Artigos
@@ -177,23 +195,55 @@ export const BlogPostPage: React.FC<BlogPostPageProps> = ({ slug, onNavigateToVi
 
             <div className="p-6 sm:p-10">
               {/* Metadata row */}
-              <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-gray-400 mb-6">
-                <span className="bg-brand-paper text-brand-wood px-3SB py-1 rounded-full text-[10px] font-bold flex items-center gap-1">
-                  <Calendar className="w-3 h-3 text-brand-wood" />
-                  {formatDate(post.publishedAt || post.createdAt)}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-gray-400" />
-                  {calculateReadTime(post.content)}
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-4 text-xs font-medium text-gray-400 mb-6 pb-4 border-b border-brand-wood/5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="bg-brand-paper text-brand-wood px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 border border-brand-wood/10">
+                    <Calendar className="w-3 h-3 text-brand-wood" />
+                    {formatDate(post.publishedAt || post.createdAt)}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-gray-400" />
+                    {calculateReadTime(post.content)}
+                  </span>
+                </div>
                 
-                <button
-                  onClick={handleCopyLink}
-                  className="ml-auto hover:text-brand-wood transition-colors flex items-center gap-1.5 cursor-pointer text-gray-500 text-xs font-bold"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  {copiedLink ? 'Link copiado!' : 'Compartilhar'}
-                </button>
+                {/* Social Share Buttons (WhatsApp, Facebook, Copy Link) */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-gray-400 uppercase tracking-wider hidden sm:inline mr-1">Compartilhar:</span>
+                  
+                  {/* WhatsApp */}
+                  <button
+                    onClick={handleShareWhatsApp}
+                    title="Compartilhar no WhatsApp"
+                    className="p-2 rounded-full bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-white transition-all cursor-pointer flex items-center justify-center"
+                  >
+                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                      <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.771-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.312.045-.694.079-2.07-.492-1.636-.679-2.701-2.348-2.782-2.458-.083-.11-1.393-1.854-1.393-3.536 0-1.682.879-2.51 1.192-2.855.313-.344.685-.431.914-.431.229 0 .459.002.661.012.213.01.498-.08.778.594.288.694.981 2.399 1.066 2.572.086.173.143.376.029.605-.115.229-.172.373-.344.575-.172.202-.363.451-.518.605-.172.172-.352.359-.151.705.201.345.895 1.478 1.922 2.393 1.321 1.176 2.435 1.54 2.781 1.712.345.172.546.144.747-.087.202-.23 0.863-1.006 1.093-1.351.23-.345.46-.288.776-.172.316.115 2.011.948 2.356 1.121.345.173.575.259.661.403.086.145.086.834-.058 1.239z"/>
+                      <path d="M12 2C6.477 2 2 6.477 2 12c0 1.891.528 3.66 1.447 5.174L2 22l4.97-1.305A9.957 9.957 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18.167c-1.682 0-3.265-.487-4.606-1.325l-.33-.207-3.054.802.815-2.977-.227-.361A8.136 8.136 0 0 1 3.833 12c0-4.503 3.664-8.167 8.167-8.167 4.503 0 8.167 3.664 8.167 8.167 0 4.503-3.664 8.167-8.167 8.167z"/>
+                    </svg>
+                  </button>
+
+                  {/* Facebook */}
+                  <button
+                    onClick={handleShareFacebook}
+                    title="Compartilhar no Facebook"
+                    className="p-2 rounded-full bg-[#1877F2]/10 text-[#1877F2] hover:bg-[#1877F2] hover:text-white transition-all cursor-pointer flex items-center justify-center"
+                  >
+                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                    </svg>
+                  </button>
+
+                  {/* Copy Link */}
+                  <button
+                    onClick={handleCopyLink}
+                    title="Copiar link permanente"
+                    className="px-3 py-1.5 rounded-full bg-brand-paper hover:bg-brand-wood hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer text-gray-600 text-xs font-semibold border border-brand-wood/10"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    {copiedLink ? 'Copiado!' : 'Copiar Link'}
+                  </button>
+                </div>
               </div>
 
               {/* Title & Summary */}
@@ -220,7 +270,7 @@ export const BlogPostPage: React.FC<BlogPostPageProps> = ({ slug, onNavigateToVi
                 {relatedPosts.map((relatedPost) => (
                   <div
                     key={relatedPost.id}
-                    onClick={() => { window.location.hash = `#blog/${relatedPost.slug}`; }}
+                    onClick={() => onNavigateToView('blog-post', relatedPost.slug)}
                     className="bg-white rounded-2xl border border-brand-wood/10 overflow-hidden cursor-pointer hover:border-brand-wood/30 hover:shadow transition-all flex flex-col group h-full"
                   >
                     <div className="aspect-video w-full overflow-hidden bg-brand-paper relative">

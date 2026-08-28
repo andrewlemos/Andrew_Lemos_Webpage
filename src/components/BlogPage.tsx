@@ -101,9 +101,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onNavigateToView }) => {
                 {/* Feature Image Wrapper */}
                 <div 
                   className="aspect-video w-full overflow-hidden relative bg-brand-paper cursor-pointer"
-                  onClick={() => {
-                    window.location.hash = `#blog/${post.slug}`;
-                  }}
+                  onClick={() => onNavigateToView('blog-post', post.slug)}
                 >
                   {post.imageUrl ? (
                     <img 
@@ -126,9 +124,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onNavigateToView }) => {
                 {/* Body Content */}
                 <div className="p-6 flex flex-col flex-grow">
                   <h2 
-                    onClick={() => {
-                      window.location.hash = `#blog/${post.slug}`;
-                    }}
+                    onClick={() => onNavigateToView('blog-post', post.slug)}
                     className="font-serif text-lg md:text-xl text-brand-ink mb-3 group-hover:text-brand-wood transition-colors leading-snug font-medium line-clamp-2 cursor-pointer"
                   >
                     {post.title}
@@ -140,9 +136,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({ onNavigateToView }) => {
                   <div className="pt-4 border-t border-brand-wood/5 flex items-center justify-between mt-auto">
                     <span className="text-[10px] text-gray-400 font-mono">/blog/{post.slug}</span>
                     <button
-                      onClick={() => {
-                        window.location.hash = `#blog/${post.slug}`;
-                      }}
+                      onClick={() => onNavigateToView('blog-post', post.slug)}
                       className="text-xs font-bold text-brand-wood hover:text-brand-wood-dark transition-colors inline-flex items-center gap-1 group/btn cursor-pointer"
                     >
                       Ler mais
