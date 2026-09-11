@@ -29,6 +29,7 @@ import {
 import { updateProfile, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { Course, CourseModule, Lesson } from '../types';
 import { ensureRobustUrl } from '../App';
+import { validateHumanName } from '../lib/validation';
 
 interface CourseLandingPageProps {
   course: Course;
@@ -86,6 +87,7 @@ export const CourseLandingPage: React.FC<CourseLandingPageProps> = ({
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authConfirmPassword, setAuthConfirmPassword] = useState('');
+  const [authHoneypot, setAuthHoneypot] = useState('');
   const [authError, setAuthError] = useState('');
   
   // Billing details states
@@ -229,6 +231,15 @@ export const CourseLandingPage: React.FC<CourseLandingPageProps> = ({
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCheckoutError('');
+
+    // 0. Fail-Silent Anti-Bot Honeypot
+    if (authHoneypot.trim()) {
+      setCheckoutProcessing(true);
+      setTimeout(() => {
+        onNavigateToView('checkout-pay', "ORD-SIM-" + Math.random().toString(36).substring(2, 8).toUpperCase());
+      }, 1000);
+      return;
+    }
     
     // Check validation fields
     const missingFields: string[] = [];
@@ -242,6 +253,13 @@ export const CourseLandingPage: React.FC<CourseLandingPageProps> = ({
     if (!neighborhood.trim()) missingFields.push("Bairro");
     if (!city.trim()) missingFields.push("Cidade");
     if (!state.trim()) missingFields.push("Estado");
+
+    // Validação de nome humano (Nome + Sobrenome, sem repetições de 3+ letras ou 5+ consoantes seguidas)
+    const nameVal = validateHumanName(name);
+    if (!nameVal.isValid) {
+      setCheckoutError(nameVal.error || "Por favor, informe seu nome e sobrenome completos.");
+      return;
+    }
 
     if (!currentUser) {
       if (authTab === 'register') {
@@ -642,6 +660,17 @@ export const CourseLandingPage: React.FC<CourseLandingPageProps> = ({
               {currentUser ? (
                 // LOGGED-IN REGISTERED USER CHECKOUT VIEW
                 <form onSubmit={handleCheckoutSubmit} className="space-y-4">
+                  {/* Campo Honeypot invisível para travar bots */}
+                  <div style={{ display: 'none' }} aria-hidden="true">
+                    <input 
+                      type="text" 
+                      name="course_logged_hp" 
+                      value={authHoneypot} 
+                      onChange={e => setAuthHoneypot(e.target.value)} 
+                      tabIndex={-1} 
+                      autoComplete="off" 
+                    />
+                  </div>
                   <div className="bg-emerald-950/20 border border-emerald-900/40 text-emerald-300 p-4 rounded-2xl text-xs flex items-start gap-2.5">
                     <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
                     <div>
@@ -864,6 +893,17 @@ export const CourseLandingPage: React.FC<CourseLandingPageProps> = ({
                   ) : (
                     // REGISTER TAB FORM (FULL BILLING DATA REGISTRATION)
                     <form onSubmit={handleCheckoutSubmit} className="space-y-4">
+                      {/* Campo Honeypot invisível para travar bots */}
+                      <div style={{ display: 'none' }} aria-hidden="true">
+                        <input 
+                          type="text" 
+                          name="course_guest_hp" 
+                          value={authHoneypot} 
+                          onChange={e => setAuthHoneypot(e.target.value)} 
+                          tabIndex={-1} 
+                          autoComplete="off" 
+                        />
+                      </div>
                       <h3 className="font-serif text-sm font-bold text-[#D4AF37] border-b border-stone-800 pb-2">1. Dados de Login e Acesso</h3>
 
                       <div className="space-y-3 text-xs font-medium text-stone-300">

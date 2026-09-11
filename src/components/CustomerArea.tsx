@@ -49,6 +49,7 @@ import {
   FileText
 } from 'lucide-react';
 import { EcomOrder, EcomCustomer, EcomProduct } from '../types';
+import { validateHumanName } from '../lib/validation';
 
 export enum OperationType {
   CREATE = 'create',
@@ -130,6 +131,7 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
 
   // Profile Form fields
   const [regName, setRegName] = useState('');
+  const [regHoneypot, setRegHoneypot] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regCpf, setRegCpf] = useState('');
   const [regCep, setRegCep] = useState('');
@@ -347,6 +349,12 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
     setAuthError('');
     setSuccessMsg('');
 
+    // 0. Bloqueio imediato se o Honeypot foi preenchido por um bot (Fail-Silent)
+    if (regHoneypot.trim()) {
+      setSuccessMsg('Cadastro criado com sucesso! Agora você está logado na Área de Cliente.');
+      return;
+    }
+
     // Pre-validations
     if (!authEmail || !authPassword || !authConfirmPassword) {
       setAuthError('E-mail, senha e confirmação de senha são obrigatórios.');
@@ -364,6 +372,13 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
     // Profile field validations
     if (!regName || !regPhone || !regCpf || !regCep || !regStreet || !regNumber || !regNeighborhood || !regCity || !regState) {
       setAuthError('Por favor, preencha todos os campos obrigatórios do seu perfil.');
+      return;
+    }
+
+    // Validação rigorosa de Nome e Sobrenome humanos
+    const nameVal = validateHumanName(regName);
+    if (!nameVal.isValid) {
+      setAuthError(nameVal.error || 'Por favor, informe seu nome e sobrenome completos.');
       return;
     }
 
@@ -667,6 +682,18 @@ export const CustomerArea: React.FC<CustomerAreaProps> = ({ onNavigateToView, in
             
             {isRegisterMode && (
               <div className="space-y-4 border-b border-gray-100 pb-5">
+                {/* Campo Honeypot invisível para proteção anti-bot */}
+                <div style={{ display: 'none' }} aria-hidden="true">
+                  <input 
+                    type="text" 
+                    name="client_area_hp" 
+                    value={regHoneypot} 
+                    onChange={e => setRegHoneypot(e.target.value)} 
+                    tabIndex={-1} 
+                    autoComplete="off" 
+                  />
+                </div>
+
                 <h3 className="text-xs font-bold text-brand-wood uppercase tracking-wider mb-2">Dados Cadastrais de Entrega</h3>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

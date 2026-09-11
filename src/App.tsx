@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { cn } from './lib/utils';
+import { validateHumanName } from './lib/validation';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { 
   auth, 
@@ -985,18 +986,34 @@ const YouTubeSection = () => {
 };
 
 const ClassesSection = () => {
-  const [leadData, setLeadData] = useState({ name: '', email: '' });
+  const [leadData, setLeadData] = useState({ name: '', email: '', honeypot: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 1. Bloqueio imediato se o Honeypot foi preenchido por um bot (Fail-Silent no cliente)
+    if (leadData.honeypot.trim()) {
+      setIsSuccess(true);
+      setLeadData({ name: '', email: '', honeypot: '' });
+      return;
+    }
+
+    // 2. Validação de Nome e Sobrenome humanos
+    const nameVal = validateHumanName(leadData.name);
+    if (!nameVal.isValid) {
+      setErrorMessage(nameVal.error || "Por favor, informe seu nome e sobrenome completos.");
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
     try {
       await addDoc(collection(db, 'leads'), {
-        ...leadData,
+        name: leadData.name.trim(),
+        email: leadData.email.trim(),
         createdAt: serverTimestamp()
       });
 
@@ -1004,7 +1021,11 @@ const ClassesSection = () => {
       const res = await fetch('/api/send-manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(leadData),
+        body: JSON.stringify({
+          name: leadData.name.trim(),
+          email: leadData.email.trim(),
+          honeypot: leadData.honeypot.trim()
+        }),
       });
 
       if (!res.ok) {
@@ -1024,7 +1045,7 @@ const ClassesSection = () => {
       }
 
       setIsSuccess(true);
-      setLeadData({ name: '', email: '' });
+      setLeadData({ name: '', email: '', honeypot: '' });
     } catch (error: any) {
       console.error("Erro ao capturar lead:", error);
       setErrorMessage(error.message || "Ocorreu um erro ao processar seu cadastro. Por favor, tente novamente.");
@@ -1071,6 +1092,18 @@ const ClassesSection = () => {
                 </div>
               ) : (
                 <form onSubmit={handleLeadSubmit} className="space-y-3">
+                  {/* Campo Honeypot invisível para proteção anti-bot */}
+                  <div style={{ display: 'none' }} aria-hidden="true">
+                    <input 
+                      type="text" 
+                      name="lead_website_hp" 
+                      value={leadData.honeypot} 
+                      onChange={e => setLeadData({...leadData, honeypot: e.target.value})} 
+                      tabIndex={-1} 
+                      autoComplete="off" 
+                    />
+                  </div>
+
                   {errorMessage && (
                     <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-100 text-sm font-medium leading-relaxed">
                       {errorMessage}

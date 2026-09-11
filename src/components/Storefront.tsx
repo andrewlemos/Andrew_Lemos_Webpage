@@ -22,6 +22,7 @@ import { db, auth, setDoc, collection, query, onSnapshot, orderBy, handleFiresto
 import { doc, getDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { EcomProduct, CartItem, EcomCustomer } from '../types';
+import { validateHumanName } from '../lib/validation';
 
 // Helper to handle Google Drive image links and path conversion
 const ensureRobustUrl = (url: string) => {
@@ -154,7 +155,8 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
     complement: '',
     neighborhood: '',
     city: '',
-    state: ''
+    state: '',
+    honeypot: ''
   });
 
   const [checkoutPassword, setCheckoutPassword] = useState('');
@@ -202,7 +204,8 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
             complement: profileData.complement || '',
             neighborhood: profileData.neighborhood || '',
             city: profileData.city || '',
-            state: profileData.state || ''
+            state: profileData.state || '',
+            honeypot: ''
           });
         }
       } catch (err) {
@@ -379,7 +382,8 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
     phone: '',
     cep: '',
     notes: '',
-    quantity: 1
+    quantity: 1,
+    honeypot: ''
   });
   const [isSubmittingQuote, setIsSubmittingQuote] = useState(false);
   const [quoteSuccessMessage, setQuoteSuccessMessage] = useState('');
@@ -408,6 +412,20 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
   const handleQuoteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProduct) return;
+
+    // Proteção Fail-Silent anti-bot (Honeypot)
+    if (quoteFormData.honeypot.trim()) {
+      setQuoteSuccessMessage("Sua solicitação de cotação de frete foi registrada com sucesso! Nosso mestre avaliador entrará em contato por e-mail com as propostas de transporte o quanto antes.");
+      return;
+    }
+
+    // Validação de nome humano (Nome + Sobrenome, sem repetições anômalas ou excesso de consoantes)
+    const nameVal = validateHumanName(quoteFormData.name);
+    if (!nameVal.isValid) {
+      alert(nameVal.error || "Por favor, informe seu nome e sobrenome completos.");
+      return;
+    }
+
     setIsSubmittingQuote(true);
     setQuoteSuccessMessage('');
 
@@ -439,7 +457,8 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
         phone: '',
         cep: '',
         notes: '',
-        quantity: 1
+        quantity: 1,
+        honeypot: ''
       });
       setResolvedCity('');
       setResolvedState('');
@@ -659,7 +678,24 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
       e.preventDefault();
     }
     
+    // 0. Proteção Fail-Silent anti-bot (Honeypot)
+    if (customerInfo.honeypot.trim()) {
+      setCheckoutStep('submitting');
+      setTimeout(() => {
+        onNavigateToView('checkout-pay', "ORD-SIM-" + Math.random().toString(36).substring(2, 8).toUpperCase());
+      }, 1000);
+      return;
+    }
+
     setCheckoutValidationError('');
+
+    // Validação de nome humano (Nome + Sobrenome, sem repetições de 3+ letras ou 5+ consoantes seguidas)
+    const nameVal = validateHumanName(customerInfo.name);
+    if (!nameVal.isValid) {
+      setCheckoutValidationError(nameVal.error || "Por favor, informe seu nome e sobrenome completos.");
+      alert(nameVal.error || "Por favor, informe seu nome e sobrenome completos.");
+      return;
+    }
 
     const missingFields: string[] = [];
     if (!customerInfo.name || !customerInfo.name.trim()) missingFields.push("Nome Completo");
@@ -1293,6 +1329,17 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                   ) : checkoutStep === 'details' ? (
                     // STEP 2: DETAILS FORM
                     <form onSubmit={handleCheckoutSubmit} className="space-y-3 prose pr-1">
+                      {/* Honeypot invisível para travar bots no checkout */}
+                      <div style={{ display: 'none' }} aria-hidden="true">
+                        <input 
+                          type="text" 
+                          name="checkout_store_hp" 
+                          value={customerInfo.honeypot} 
+                          onChange={e => setCustomerInfo({...customerInfo, honeypot: e.target.value})} 
+                          tabIndex={-1} 
+                          autoComplete="off" 
+                        />
+                      </div>
                       {!userId && (
                         <div className="bg-amber-50 text-amber-800 border border-amber-200 p-3 rounded-xl text-[11px] leading-snug flex items-center justify-between mb-3">
                           <span>Já é nosso cliente com conta cadastrada?</span>
@@ -1806,6 +1853,17 @@ export const Storefront: React.FC<StorefrontProps> = ({ onBackToMain, onNavigate
                 </div>
               ) : (
                 <form onSubmit={handleQuoteSubmit} className="space-y-4 text-xs font-medium">
+                  {/* Campo Honeypot invisível para travar bots */}
+                  <div style={{ display: 'none' }} aria-hidden="true">
+                    <input 
+                      type="text" 
+                      name="quote_store_hp" 
+                      value={quoteFormData.honeypot} 
+                      onChange={e => setQuoteFormData({...quoteFormData, honeypot: e.target.value})} 
+                      tabIndex={-1} 
+                      autoComplete="off" 
+                    />
+                  </div>
                   <div>
                     <h3 className="font-serif font-bold text-lg text-brand-ink leading-tight">Solicitar Cotação de Envio</h3>
                     <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-1">Este item possui dimensões especiais e requer cotação personalizada</p>

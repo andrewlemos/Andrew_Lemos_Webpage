@@ -5,6 +5,7 @@ import { ArrowLeft, Home, Calendar, ExternalLink, ShieldCheck, Heart, ShoppingBa
 import { motion, AnimatePresence } from 'motion/react';
 import { ensureRobustUrl } from '../App';
 import { slugify } from './GalleryItemPage';
+import { validateHumanName } from '../lib/validation';
 
 // Get the slug for an ecom product (database slug, or slugify name fallback, or ID fallback)
 export function getProductSlug(p: EcomProduct): string {
@@ -30,6 +31,7 @@ export const VendasItemPage: React.FC<VendasItemPageProps> = ({ slug, onNavigate
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authConfirmPassword, setAuthConfirmPassword] = useState('');
+  const [authHoneypot, setAuthHoneypot] = useState('');
   const [authError, setAuthError] = useState('');
 
   // Billing details states
@@ -147,6 +149,15 @@ export const VendasItemPage: React.FC<VendasItemPageProps> = ({ slug, onNavigate
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCheckoutError('');
+
+    // 0. Fail-Silent Anti-Bot Honeypot
+    if (authHoneypot.trim()) {
+      setCheckoutProcessing(true);
+      setTimeout(() => {
+        onNavigateToView('checkout-pay', "ORD-SIM-" + Math.random().toString(36).substring(2, 8).toUpperCase());
+      }, 1000);
+      return;
+    }
     
     // Check validation fields
     const missingFields: string[] = [];
@@ -160,6 +171,13 @@ export const VendasItemPage: React.FC<VendasItemPageProps> = ({ slug, onNavigate
     if (!neighborhood.trim()) missingFields.push("Bairro");
     if (!city.trim()) missingFields.push("Cidade");
     if (!state.trim()) missingFields.push("Estado");
+
+    // Validação de nome humano (Nome + Sobrenome, sem repetições de 3+ letras ou 5+ consoantes seguidas)
+    const nameVal = validateHumanName(name);
+    if (!nameVal.isValid) {
+      setCheckoutError(nameVal.error || "Por favor, informe seu nome e sobrenome completos.");
+      return;
+    }
 
     if (!currentUser) {
       if (authTab === 'register') {
@@ -565,6 +583,17 @@ export const VendasItemPage: React.FC<VendasItemPageProps> = ({ slug, onNavigate
               {/* Standard checkout billing form if registered tab or logged in */}
               {(!currentUser && authTab === 'register') || currentUser ? (
                 <form onSubmit={handleCheckoutSubmit} className="space-y-4">
+                  {/* Campo Honeypot invisível para travar bots */}
+                  <div style={{ display: 'none' }} aria-hidden="true">
+                    <input 
+                      type="text" 
+                      name="vendas_checkout_hp" 
+                      value={authHoneypot} 
+                      onChange={e => setAuthHoneypot(e.target.value)} 
+                      tabIndex={-1} 
+                      autoComplete="off" 
+                    />
+                  </div>
                   <h4 className="font-serif text-xs font-bold text-brand-ink uppercase tracking-wider border-b border-gray-100 pb-2">
                     Informações Pessoais & Faturamento
                   </h4>

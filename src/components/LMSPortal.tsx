@@ -79,6 +79,7 @@ import {
   SystemNotification 
 } from '../types';
 import { ensureRobustUrl } from '../App';
+import { validateHumanName } from '../lib/validation';
 import { CourseLandingPage } from './CourseLandingPage';
 
 // Setup local cookies or local storage for referral code
@@ -135,6 +136,7 @@ export const LMSPortal: React.FC<LMSPortalProps> = ({ currentUser, onNavigateToV
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [authConfirmPassword, setAuthConfirmPassword] = useState('');
+  const [authHoneypot, setAuthHoneypot] = useState('');
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [authError, setAuthError] = useState('');
   const [authSuccess, setAuthSuccess] = useState('');
@@ -1214,10 +1216,25 @@ DIRETRIZES DE ATENDIMENTO E CONTEXTO DO MENTOR:
 
   const handleLMSRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 1. Bloqueio silencioso se o bot preencheu o honeypot
+    if (authHoneypot.trim()) {
+      setAuthSuccess('Conta criada com sucesso!');
+      return;
+    }
+
     if (!authEmail || !authPassword || !authName) {
       setAuthError('Por favor, preencha todos os campos.');
       return;
     }
+
+    // 2. Validação rigorosa de Nome e Sobrenome humanos
+    const nameVal = validateHumanName(authName);
+    if (!nameVal.isValid) {
+      setAuthError(nameVal.error || 'Por favor, informe seu nome e sobrenome completos.');
+      return;
+    }
+
     if (authPassword !== authConfirmPassword) {
       setAuthError('As senhas não coincidem.');
       return;
@@ -3052,17 +3069,29 @@ DIRETRIZES DE ATENDIMENTO E CONTEXTO DO MENTOR:
               className="space-y-4 text-xs font-medium text-gray-600"
             >
               {isRegisterMode && (
-                <div className="space-y-1">
-                  <label className="text-gray-500 ml-1">Nome Completo</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={authName}
-                    onChange={(e) => setAuthName(e.target.value)}
-                    placeholder="Seu nome artístico ou completo"
-                    className="w-full px-4 py-3 bg-gray-50/50 border border-brand-wood/10 hover:border-brand-wood/20 focus:border-brand-wood/50 focus:bg-white rounded-xl outline-none transition-all text-sm font-normal text-brand-ink"
-                  />
-                </div>
+                <>
+                  <div style={{ display: 'none' }} aria-hidden="true">
+                    <input 
+                      type="text" 
+                      name="student_lms_hp" 
+                      value={authHoneypot} 
+                      onChange={(e) => setAuthHoneypot(e.target.value)} 
+                      tabIndex={-1} 
+                      autoComplete="off" 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-gray-500 ml-1">Nome Completo</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={authName}
+                      onChange={(e) => setAuthName(e.target.value)}
+                      placeholder="Seu nome artístico ou completo"
+                      className="w-full px-4 py-3 bg-gray-50/50 border border-brand-wood/10 hover:border-brand-wood/20 focus:border-brand-wood/50 focus:bg-white rounded-xl outline-none transition-all text-sm font-normal text-brand-ink"
+                    />
+                  </div>
+                </>
               )}
 
               <div className="space-y-1">

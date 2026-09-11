@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import nodemailer from "nodemailer";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -135,6 +136,20 @@ Erro técnico: ${message}`;
 }
 
 const app = express();
+
+// Trust reverse proxies (Cloud Run, Nginx, Vercel) for accurate client IP resolution
+app.set("trust proxy", 1);
+
+// Rate limiter para proteger formulários públicos de contato e download contra floods/spam de robôs
+const publicFormsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // Janela de 15 minutos
+  max: 5, // No máximo 5 envios por IP a cada 15 minutos
+  standardHeaders: true, // Retorna cabeçalhos padronizados RateLimit-* (RFC)
+  legacyHeaders: false, // Desabilita cabeçalhos legados X-RateLimit-*
+  message: {
+    error: "Muitas solicitações a partir deste endereço IP. Por favor, aguarde alguns minutos antes de tentar novamente."
+  }
+});
 
 app.use(express.json());
 
@@ -304,17 +319,40 @@ function parseSMTPError(error: any): string {
   return error.message || String(error);
 }
 
+// Helper to validate human names on server (Nome + Sobrenome, sem 3+ letras repetidas e sem 5+ consoantes seguidas)
+function isValidHumanName(name: any): boolean {
+  if (!name || typeof name !== 'string') return false;
+  const trimmed = name.trim();
+  const words = trimmed.split(/\s+/).filter(w => w.length > 0);
+  if (words.length < 2 || words.some(w => w.length < 2)) return false;
+  if (/(.)\1{2,}/i.test(trimmed)) return false;
+  if (/([bcdfghjklmnpqrstvwxz]){5,}/i.test(trimmed)) return false;
+  return true;
+}
+
 // API Health Check Route
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", env: process.env.NODE_ENV || "unknown" });
 });
 
 // API Route to send the manual
-app.post("/api/send-manual", async (req, res) => {
-  const { email, name } = req.body;
+app.post("/api/send-manual", publicFormsLimiter, async (req, res) => {
+  const { email, name, honeypot } = req.body;
+
+  // 1. Proteção Anti-Bot: Honeypot (Fail-Silent)
+  if (honeypot && String(honeypot).trim().length > 0) {
+    console.warn(`[Anti-Bot Honeypot] Bloqueio silencioso em /api/send-manual. Nome: "${name}"`);
+    return res.json({ success: true, message: "Manual enviado com sucesso!" });
+  }
 
   if (!email || !name) {
     return res.status(400).json({ error: "Email and name are required" });
+  }
+
+  // 2. Proteção Anti-Bot: Validação de Nome (Fail-Silent)
+  if (!isValidHumanName(name)) {
+    console.warn(`[Anti-Bot Nome] Bloqueio silencioso em /api/send-manual para o nome suspeito: "${name}"`);
+    return res.json({ success: true, message: "Manual enviado com sucesso!" });
   }
 
   try {
@@ -365,7 +403,7 @@ app.post("/api/send-manual", async (req, res) => {
 });
 
 // API Route to handle contact form submissions securely via SMTP Gmail
-app.post("/api/send-contact", async (req, res) => {
+app.post("/api/send-contact", publicFormsLimiter, async (req, res) => {
   const { name, email, subject, message, honeypot } = req.body;
 
   // 1. Proteção Anti-Bot: Honeypot (Fail-Silent)
@@ -1770,7 +1808,32 @@ setInterval(() => {
 
 // 2. Checkout Creation Endpoint (PagSeguro integration or virtual sandbox)
 app.post("/api/vendas/checkout", async (req, res) => {
-  const { userId, customerInfo, items, shippingMethod, shippingCost, couponCode, cartId } = req.body;
+  const { userId, customerInfo, items, shippingMethod, shippingCost, couponCode, cartId, honeypot } = req.body;
+
+  // 1. Proteção Anti-Bot: Honeypot (Fail-Silent)
+  const rawHoneypot = honeypot || customerInfo?.honeypot;
+  if (rawHoneypot && String(rawHoneypot).trim().length > 0) {
+    console.warn(`[Anti-Bot Honeypot] Bloqueio silencioso em /api/vendas/checkout. Nome: "${customerInfo?.name}"`);
+    const fakeOrderId = "ORD-SIM-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+    return res.json({
+      success: true,
+      orderId: fakeOrderId,
+      gateway: "Virtual Simulator Gateway",
+      redirectUrl: `/vendas/checkout/pay?id=${fakeOrderId}`
+    });
+  }
+
+  // 2. Proteção Anti-Bot: Validação de Nome Humano (Fail-Silent)
+  if (customerInfo?.name && !isValidHumanName(customerInfo.name)) {
+    console.warn(`[Anti-Bot Nome] Bloqueio silencioso em /api/vendas/checkout para o nome: "${customerInfo.name}"`);
+    const fakeOrderId = "ORD-SIM-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+    return res.json({
+      success: true,
+      orderId: fakeOrderId,
+      gateway: "Virtual Simulator Gateway",
+      redirectUrl: `/vendas/checkout/pay?id=${fakeOrderId}`
+    });
+  }
   
   if (!customerInfo || !items || !Array.isArray(items) || items.length === 0 || !shippingMethod) {
     return res.status(400).json({ error: "Dados de checkout incompletos." });
@@ -1977,6 +2040,20 @@ app.post("/api/vendas/checkout/transparent-pay", async (req, res) => {
     return res.status(400).json({ error: "Faltando orderId ou método de pagamento." });
   }
 
+  // 1. Tratamento Fail-Silent para pedidos simulados/capturados no Honeypot
+  if (orderId && String(orderId).startsWith("ORD-SIM-")) {
+    console.warn(`[Anti-Bot Fail-Silent] Simulação aprovada para ordem fake: "${orderId}"`);
+    return res.json({
+      success: true,
+      paymentMethodType: paymentMethodType || 'pix',
+      qrCode: "00020101021126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913Atelie Lemos6008Brasilia62070503***6304E2CA",
+      qrCodeBase64: "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=ORD-SIM",
+      barcode: "34191.79001 01043.513184 91020.150008 7 9345000001000",
+      pdfUrl: "https://www.mercadopago.com.br/payments/boleto/simulator",
+      status: paymentMethodType === 'card' ? 'approved' : 'pending'
+    });
+  }
+
   try {
     if (!adminDb) {
       throw new Error("Banco de dados Firestore não inicializado.");
@@ -1995,6 +2072,17 @@ app.post("/api/vendas/checkout/transparent-pay", async (req, res) => {
 
     const customerInfo = orderData.customerInfo;
     const total = Number(orderData.total);
+
+    // 2. Proteção Anti-Bot: Validação de Nome Humano (Fail-Silent)
+    if (customerInfo?.name && !isValidHumanName(customerInfo.name)) {
+      console.warn(`[Anti-Bot Nome] Bloqueio silencioso em transparent-pay para: "${customerInfo.name}"`);
+      return res.json({
+        success: true,
+        paymentMethodType: paymentMethodType || 'pix',
+        status: 'approved'
+      });
+    }
+
     const mpToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
 
     // Detect if we are in Mock/Simulation mode or producing Real transactions
@@ -2057,7 +2145,7 @@ app.post("/api/vendas/checkout/transparent-pay", async (req, res) => {
     const rawName = (customerInfo.name || "Cliente E-commerce").trim();
     const nameParts = rawName.split(/\s+/);
     const firstName = nameParts[0] || "Cliente";
-    const lastName = nameParts.slice(1).join(" ") || "Lemos";
+    const lastName = nameParts.slice(1).join(" ") || firstName;
 
     const idempotencyKey = `idemp-transp-${orderId}-${paymentMethodType}-${Date.now()}`;
 
