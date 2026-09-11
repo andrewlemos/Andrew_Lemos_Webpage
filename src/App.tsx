@@ -2524,13 +2524,38 @@ const Contact = () => {
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('Encomenda de Obra');
   const [message, setMessage] = useState('');
+  const [honeypot, setHoneypot] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleSendContact = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 1. Bloqueio imediato caso o campo Honeypot tenha sido preenchido por um bot
+    if (honeypot.trim()) {
+      return;
+    }
+
     if (!name.trim() || !email.trim() || !message.trim()) {
       setStatus({ type: 'error', text: 'Por favor, preencha todos os campos obrigatórios (Nome, E-mail e Mensagem).' });
+      return;
+    }
+
+    // 2. Validação do campo Nome (Nome + Sobrenome, sem 3+ letras repetidas e sem 5+ consoantes seguidas)
+    const trimmedName = name.trim();
+    const nameWords = trimmedName.split(/\s+/).filter(w => w.length > 0);
+    if (nameWords.length < 2 || nameWords.some(w => w.length < 2)) {
+      setStatus({ type: 'error', text: 'Por favor, informe seu nome e sobrenome completos.' });
+      return;
+    }
+
+    if (/(.)\1{2,}/i.test(trimmedName)) {
+      setStatus({ type: 'error', text: 'O nome informado contém letras repetidas em excesso.' });
+      return;
+    }
+
+    if (/([bcdfghjklmnpqrstvwxz]){5,}/i.test(trimmedName)) {
+      setStatus({ type: 'error', text: 'Por favor, informe um nome válido.' });
       return;
     }
 
@@ -2542,10 +2567,11 @@ const Contact = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: name.trim(),
+          name: trimmedName,
           email: email.trim(),
           subject,
-          message: message.trim()
+          message: message.trim(),
+          honeypot: honeypot.trim()
         })
       });
 
@@ -2554,6 +2580,7 @@ const Contact = () => {
         setName('');
         setEmail('');
         setMessage('');
+        setHoneypot('');
       } else {
         let errorText = '';
         try {
@@ -2637,6 +2664,18 @@ const Contact = () => {
           </div>
 
           <form onSubmit={handleSendContact} className="bg-brand-paper p-10 md:p-12 rounded-[2.5rem] space-y-6 shadow-sm border border-brand-wood/5">
+            {/* Campo Honeypot invisível para proteção anti-bot */}
+            <div style={{ display: 'none' }} aria-hidden="true">
+              <input 
+                type="text" 
+                name="contact_honeypot_check" 
+                value={honeypot} 
+                onChange={e => setHoneypot(e.target.value)} 
+                tabIndex={-1} 
+                autoComplete="off" 
+              />
+            </div>
+
             <div className="grid md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-500 ml-1">Nome *</label>

@@ -366,10 +366,31 @@ app.post("/api/send-manual", async (req, res) => {
 
 // API Route to handle contact form submissions securely via SMTP Gmail
 app.post("/api/send-contact", async (req, res) => {
-  const { name, email, subject, message } = req.body;
+  const { name, email, subject, message, honeypot } = req.body;
+
+  // 1. Proteção Anti-Bot: Honeypot (Fail-Silent)
+  if (honeypot && String(honeypot).trim().length > 0) {
+    console.warn(`[Anti-Bot Honeypot] Bloqueio silencioso em /api/send-contact. Nome: "${name}"`);
+    return res.json({ success: true, message: "Mensagem recebida com sucesso!" });
+  }
 
   if (!name || !email || !message) {
     return res.status(400).json({ error: "Nome, e-mail e mensagem são campos obrigatórios." });
+  }
+
+  // 2. Proteção Anti-Bot: Validação do Nome (Nome+Sobrenome, sem 3+ caracteres repetidos, sem 5+ consoantes seguidas)
+  const trimmedName = String(name).trim();
+  const nameWords = trimmedName.split(/\s+/).filter(w => w.length > 0);
+  const isInvalidName = 
+    nameWords.length < 2 || 
+    nameWords.some(w => w.length < 2) || 
+    /(.)\1{2,}/i.test(trimmedName) || 
+    /([bcdfghjklmnpqrstvwxz]){5,}/i.test(trimmedName);
+
+  if (isInvalidName) {
+    console.warn(`[Anti-Bot Nome] Bloqueio silencioso em /api/send-contact para o nome suspeito: "${name}"`);
+    // Fail-Silent: Retorna sucesso fictício para o bot encerrar a tentativa, mas não envia o e-mail
+    return res.json({ success: true, message: "Mensagem recebida com sucesso!" });
   }
 
   try {
